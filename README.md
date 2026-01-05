@@ -1,4 +1,4 @@
-# ATLAS Sandbox Router
+# ATLAS Sandbox Router.
 
 ATLAS Sandbox Router, 4 katmanlı niyet sınıflandırma, dinamik model yönlendirme ve paralel görev yürütme (DAG) yeteneklerine sahip modüler bir yapay zeka yönlendirme sistemidir.
 
