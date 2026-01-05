@@ -369,6 +369,7 @@
             justify-content: center;
             font-weight: 800;
             transition: 0.2s;
+            flex-shrink: 0;
         }
 
         .send-btn:hover {
@@ -535,9 +536,9 @@
             }
 
             .send-btn {
-                width: 36px;
-                height: 36px;
-                border-radius: 8px;
+                width: 42px;
+                height: 42px;
+                border-radius: 10px;
             }
 
             .notif-panel {
@@ -619,7 +620,7 @@
             <input type="file" id="fileInput" multiple accept="image/jpeg,image/png,image/webp,image/gif"
                 style="display: none;">
             <button class="action-btn" onclick="document.getElementById('fileInput').click()"
-                style="background:transparent; border:none; cursor:pointer; font-size:1.2rem; margin-right:10px; color: var(--text-dim); transition: 0.2s;"
+                style="background:transparent; border:none; cursor:pointer; font-size:1.2rem; margin-right:8px; color: var(--text-dim); transition: 0.2s; flex-shrink: 0;"
                 onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--text-dim)'">📎</button>
             <input type="text" id="userInput" placeholder="Sisteme bir komut ver..." autocomplete="off">
             <button class="send-btn" onclick="handleSend()" id="sendBtn">▶</button>
