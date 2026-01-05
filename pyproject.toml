@@ -16,6 +16,7 @@ dependencies = [
     "aiofiles",
     "python-multipart",
     "marked",
+    "apscheduler",
 ]
 
 [build-system]
