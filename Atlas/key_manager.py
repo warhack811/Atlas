@@ -263,5 +263,5 @@ class KeyManager:
     @classmethod
     def _auto_initialize(cls) -> None:
         """Otomatik initialize (config'den key'leri al)."""
-        from .config import get_groq_api_keys, get_gemini_api_keys
+        from Atlas.config import get_groq_api_keys, get_gemini_api_keys
         cls.initialize(groq_keys=get_groq_api_keys(), gemini_keys=get_gemini_api_keys())

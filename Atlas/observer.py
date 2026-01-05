@@ -2,9 +2,9 @@ import logging
 import asyncio
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from .memory.neo4j_manager import neo4j_manager
-from .config import API_CONFIG, MODEL_GOVERNANCE
-from .prompts import OBSERVER_REASONING_PROMPT
+from Atlas.memory.neo4j_manager import neo4j_manager
+from Atlas.config import API_CONFIG, MODEL_GOVERNANCE
+from Atlas.prompts import OBSERVER_REASONING_PROMPT
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ class Observer:
 
     async def _reason_with_llm(self, user_id: str, memory: str, external_data: str) -> Optional[str]:
         """LLM kullanarak iki veri seti arasındaki çelişkiyi veya riski analiz eder."""
-        from .key_manager import KeyManager
+        from Atlas.key_manager import KeyManager
         api_key = KeyManager.get_best_key()
         if not api_key:
             return None

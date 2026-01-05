@@ -14,9 +14,9 @@ import json
 import httpx
 import logging
 from typing import List, Dict, Any
-from ..config import Config, API_CONFIG
-from ..prompts import EXTRACTOR_SYSTEM_PROMPT
-from .neo4j_manager import neo4j_manager
+from Atlas.config import Config, API_CONFIG
+from Atlas.prompts import EXTRACTOR_SYSTEM_PROMPT
+from Atlas.memory.neo4j_manager import neo4j_manager
 
 logger = logging.getLogger(__name__)
 

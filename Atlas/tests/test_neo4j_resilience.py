@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 from unittest.mock import MagicMock, patch, AsyncMock
-from memory.neo4j_manager import Neo4jManager
+from Atlas.memory.neo4j_manager import Neo4jManager
 from neo4j.exceptions import ServiceUnavailable
 
 class TestNeo4jResilience(unittest.IsolatedAsyncioTestCase):

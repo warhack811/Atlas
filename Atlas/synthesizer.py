@@ -15,9 +15,9 @@ Temel Sorumluluklar:
 
 from typing import List, Dict, Any, Optional
 import httpx
-from config import API_CONFIG, MODEL_GOVERNANCE, STYLE_TEMPERATURE_MAP
-from key_manager import KeyManager
-from prompts import SYNTHESIZER_PROMPT
+from Atlas.config import API_CONFIG, MODEL_GOVERNANCE, STYLE_TEMPERATURE_MAP
+from Atlas.key_manager import KeyManager
+from Atlas.prompts import SYNTHESIZER_PROMPT
 
 class Synthesizer:
     """Uzman çıktılarını nihai yanıta dönüştüren sentez katmanı."""
@@ -40,11 +40,11 @@ class Synthesizer:
         print(f"[HATA AYIKLAMA] Sentezleyici {len(raw_results)} uzman sonucunu işliyor")
         
         # 2. Üslup Talimatlarını Getir (Style Injector)
-        from style_injector import get_system_instruction, STYLE_PRESETS
+        from Atlas.style_injector import get_system_instruction, STYLE_PRESETS
         style_instruction = get_system_instruction(mode)
         
         # 3. Konuşma Geçmişi Bağlamı: Tekrarı önlemek için güncel mesajı geçmişten ayıklar
-        from memory import MessageBuffer
+        from Atlas.memory import MessageBuffer
         history = MessageBuffer.get_llm_messages(session_id, limit=6)
         
         # Eğer son mesaj kullanıcının şu anki mesajıyla aynıysa onu geçmişten ayır
@@ -125,8 +125,8 @@ class Synthesizer:
         """
         Expert sonuçlarını birleştirir ve final yanıtı stream (akış) olarak üretir.
         """
-        from generator import generate_stream
-        from style_injector import get_system_instruction
+        from Atlas.generator import generate_stream
+        from Atlas.style_injector import get_system_instruction
         
         # 1. Uzman verilerini hazırla
         formatted_data = ""
@@ -140,7 +140,7 @@ class Synthesizer:
         # 2. Sistem talimatı ve prompt
         style_instruction = get_system_instruction(mode)
         
-        from .memory import MessageBuffer
+        from Atlas.memory import MessageBuffer
         history = MessageBuffer.get_llm_messages(session_id, limit=6)
         history_text = "\n".join([f"{m['role']}: {m['content']}" for m in history if m['content'] != user_message])
 

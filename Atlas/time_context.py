@@ -139,7 +139,7 @@ class TimeContext:
         """
         System prompt'a zaman bağlamı ekle.
         """
-        from .prompts import LANGUAGE_DISCIPLINE_PROMPT
+        from Atlas.prompts import LANGUAGE_DISCIPLINE_PROMPT
         addition = self.get_system_prompt_addition(user_message)
         # Dil disiplini ekle - prompts.py'den merkezi import
         return system_prompt + addition + "\n" + LANGUAGE_DISCIPLINE_PROMPT

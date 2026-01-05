@@ -12,7 +12,7 @@ Temel Sorumluluklar:
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from .observer import observer
+from Atlas.observer import observer
 
 logger = logging.getLogger(__name__)
 

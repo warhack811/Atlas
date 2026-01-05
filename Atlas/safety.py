@@ -69,8 +69,9 @@ class SafetyGate:
         Kullanıcı girişini güvenlik sorunları için kontrol et.
         Dönüş: (güvenli_mi, temizlenmiş_metin, sorunlar_listesi)
         """
-        from .config import MODEL_GOVERNANCE, API_CONFIG
-        from .key_manager import KeyManager
+        from Atlas.config import MODEL_GOVERNANCE, API_CONFIG
+        from Atlas.key_manager import KeyManager
+        from Atlas.prompts import LLAMA_GUARD_PROMPT
         import httpx
         
         issues = []
@@ -117,7 +118,7 @@ class SafetyGate:
                     continue
 
                 # AI Guard modeline gönderilecek promptu hazırla
-                from .prompts import LLAMA_GUARD_PROMPT
+                from Atlas.prompts import LLAMA_GUARD_PROMPT
                 full_safety_prompt = f"{LLAMA_GUARD_PROMPT}\n\nAnaliz Edilecek Mesaj: {text}"
 
                 async with httpx.AsyncClient(timeout=5.0) as client:

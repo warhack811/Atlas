@@ -29,7 +29,7 @@ from pydantic import BaseModel
 logger = logging.getLogger("api")
 
 # Döngüsel içe aktarmayı (circular import) önlemek için burada tanımlanmıştır
-import rdr
+from Atlas import rdr
 
 app = FastAPI(
     title="ATLAS Router Sandbox",
@@ -69,7 +69,7 @@ async def keep_alive_pulse():
     Ücretsiz veritabanı oturumlarının (AuraDB) uykuya dalmasını önlemek için 
     düzenli aralıklarla (9 dakika) hafif bir sorgu gönderir.
     """
-    from memory.neo4j_manager import neo4j_manager
+    from Atlas.memory.neo4j_manager import neo4j_manager
     while True:
         try:
             await asyncio.sleep(540) # 9 dakikalık bekleme süresi
@@ -99,12 +99,15 @@ async def shutdown_event():
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     """Standart blok yanıt üreten ana sohbet endpoint'i."""
-    from memory import SessionManager, MessageBuffer
+    from Atlas.memory import SessionManager, MessageBuffer
+    import Atlas.orchestrator as orchestrator
+    import Atlas.dag_executor as dag_executor
+    import Atlas.synthesizer as synthesizer
     
     start_time = time.time()
     
     # 0. GÜVENLİK DENETİMİ: Girdide zararlı içerik veya hassas veri (PII) kontrolü
-    from safety import safety_gate
+    from Atlas.safety import safety_gate
     is_safe, sanitized_text, issues = await safety_gate.check_input_safety(request.message)
     safety_ms = int((time.time() - start_time) * 1000)
     
@@ -136,7 +139,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         MessageBuffer.add_user_message(session_id, user_message)
         
         # GRAF VERİTABANI BAĞLAMI: Kullanıcı geçmişini ve ilişkili bilgileri Neo4j'den getirir
-        from memory.context import ContextBuilder
+        from Atlas.memory.context import ContextBuilder
         cb = ContextBuilder(session_id)
         neo4j_context = await cb.get_neo4j_context(session_id, user_message)
         cb.with_neo4j_context(neo4j_context)
@@ -144,7 +147,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         record = rdr.RDR.create(user_message)
         
         # 1. PLANLAMA (ORKESTRASYON): Kullanıcı niyetini anlar ve bir iş planı oluşturur
-        import orchestrator
+        from Atlas import orchestrator
         classify_start = time.time()
         plan = await orchestrator.orchestrator.plan(
             session_id, 
@@ -158,7 +161,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         record.classification_ms = classify_ms
         record.safety_ms = safety_ms
 
-        from time_context import time_context
+        from Atlas.time_context import time_context
         
         record.time_context = time_context.get_context_injection()
         record.rewritten_query = plan.rewritten_query if plan.rewritten_query else user_message
@@ -167,13 +170,13 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         record.orchestrator_prompt = plan.orchestrator_prompt
         
         # 2. YÜRÜTME (EXECUTION): Planlanan görevleri (araç kullanımı, LLM çağrıları) çalıştırır
-        import dag_executor
+        from Atlas import dag_executor
         exec_start = time.time()
         raw_results = await dag_executor.dag_executor.execute_plan(plan, session_id, user_message)
         exec_ms = int((time.time() - exec_start) * 1000)
         
         # 3. HARMANLAMA (SENTEZ): Uzmanlardan gelen ham çıktıları tutarlı bir yanıta dönüştürür
-        import synthesizer
+        from Atlas import synthesizer
         synth_start = time.time()
         response_text, synth_model, synth_prompt, synth_metadata = await synthesizer.synthesizer.synthesize(
             raw_results, session_id, plan.active_intent, user_message, mode=request.mode
@@ -187,7 +190,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         record.style_preset = synth_metadata.get("mode", "")
             
         # 4. KALİTE DENETİMİ: Oluşturulan yanıtın dil ve format kurallarına uygunluğunu ölçer
-        from quality import quality_gate
+        from Atlas.quality import quality_gate
         quality_start = time.time()
         is_passed, issues = quality_gate.check_quality(response_text, plan.active_intent)
         quality_ms = int((time.time() - quality_start) * 1000)
@@ -210,7 +213,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         rdr.save_rdr(record)
         
         # Arka planda bilgi çıkarımı yaparak graf veritabanını günceller
-        from memory.extractor import extract_and_save as extract_and_save_task
+        from Atlas.memory.extractor import extract_and_save as extract_and_save_task
         background_tasks.add_task(extract_and_save_task, user_message, session_id)
 
         return ChatResponse(
@@ -226,8 +229,8 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
     """SSE (Server-Sent Events) kullanarak akış formatında yanıt üretir."""
-    from memory import SessionManager, MessageBuffer
-    import orchestrator, dag_executor, synthesizer
+    from Atlas.memory import SessionManager, MessageBuffer
+    from Atlas import orchestrator, dag_executor, synthesizer
 
     async def event_generator():
         """Süreç adımlarını ve metin parçalarını ileten jeneratör."""
@@ -236,7 +239,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
         session_id = session.id
         MessageBuffer.add_user_message(session_id, request.message)
 
-        import rdr, safety
+        from Atlas import rdr, safety
         record = rdr.RDR.create(request.message)
 
         try:
@@ -296,7 +299,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             record.generation_ms = record.total_ms
             record.response_length = len(full_response)
             
-            from memory.extractor import extract_and_save as extract_and_save_task
+            from Atlas.memory.extractor import extract_and_save as extract_and_save_task
             background_tasks.add_task(extract_and_save_task, request.message, session_id)
 
             rdr.save_rdr(record)
@@ -327,9 +330,9 @@ async def get_recent_rdrs(limit: int = 10):
 @app.post("/api/upload")
 async def upload_image(session_id: str, file: UploadFile = File(...)):
     """Görsel yükleme ve analiz endpoint'i."""
-    from vision_engine import analyze_image
-    from safety import safety_gate
-    from memory import MessageBuffer, SessionManager
+    from Atlas.vision_engine import analyze_image
+    from Atlas.safety import safety_gate
+    from Atlas.memory import MessageBuffer, SessionManager
     
     try:
         session = SessionManager.get_or_create(session_id)
@@ -356,7 +359,7 @@ async def upload_image(session_id: str, file: UploadFile = File(...)):
 @app.get("/api/health")
 async def health():
     """Sistem sağlığı ve API anahtarı durumlarını döndürür."""
-    from key_manager import KeyManager
+    from Atlas.key_manager import KeyManager
     return {
         "status": "ok",
         "available_keys": KeyManager.get_available_count(),
@@ -366,14 +369,14 @@ async def health():
 
 @app.get("/api/arena/leaderboard")
 async def get_arena_leaderboard():
-    from benchmark.store import arena_store
+    from Atlas.benchmark.store import arena_store
     results = arena_store.get_results()
     return {"results": results}
 
 
 @app.get("/api/arena/questions")
 async def get_arena_questions():
-    from benchmark.store import arena_store
+    from Atlas.benchmark.store import arena_store
     return arena_store.get_questions()
 
 

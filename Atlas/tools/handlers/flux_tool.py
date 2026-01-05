@@ -18,8 +18,8 @@ import httpx
 import logging
 from typing import Any, Dict
 from pydantic import BaseModel, Field
-from tools.base import BaseTool
-from config import Config
+from Atlas.tools.base import BaseTool
+from Atlas.config import Config
 
 logger = logging.getLogger(__name__)
 

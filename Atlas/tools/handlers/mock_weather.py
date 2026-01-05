@@ -14,7 +14,7 @@ Not: Üretim ortamında gerçek bir hava durumu API'si ile değiştirilmelidir.
 import random
 from typing import Any
 from pydantic import BaseModel, Field
-from tools.base import BaseTool
+from Atlas.tools.base import BaseTool
 
 # --- GİRDİ ŞEMASI ---
 class WeatherInput(BaseModel):

@@ -11,8 +11,8 @@ Temel Sorumluluklar:
 """
 from google import genai
 from google.genai import types
-from .config import Config
-from .prompts import VISION_SYSTEM_PROMPT
+from Atlas.config import Config
+from Atlas.prompts import VISION_SYSTEM_PROMPT
 import asyncio
 import logging
 from google.api_core import exceptions

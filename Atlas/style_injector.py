@@ -91,7 +91,7 @@ class StyleInjector:
     """
     
     # Persona tanımları (base_prompt'lar prompts.py'den import edilir)
-    from .prompts import PERSONA_PROMPTS as _PERSONA_PROMPTS
+    from Atlas.prompts import PERSONA_PROMPTS as _PERSONA_PROMPTS
     PERSONAS: Dict[str, PersonaDefinition] = {
         "professional": PersonaDefinition(
             name="Professional",
@@ -152,7 +152,7 @@ class StyleInjector:
     }
     
     # Ton direktifleri (prompts.py'den import)
-    from .prompts import TONE_DIRECTIVES as _TONE_DIRECTIVES
+    from Atlas.prompts import TONE_DIRECTIVES as _TONE_DIRECTIVES
     TONE_DIRECTIVES = {
         Tone.FORMAL: _TONE_DIRECTIVES["formal"],
         Tone.CASUAL: _TONE_DIRECTIVES["casual"],
@@ -160,7 +160,7 @@ class StyleInjector:
     }
     
     # Uzunluk direktifleri (prompts.py'den import)
-    from .prompts import LENGTH_DIRECTIVES as _LENGTH_DIRECTIVES
+    from Atlas.prompts import LENGTH_DIRECTIVES as _LENGTH_DIRECTIVES
     LENGTH_DIRECTIVES = {
         Length.SHORT: _LENGTH_DIRECTIVES["short"],
         Length.MEDIUM: _LENGTH_DIRECTIVES["medium"],
@@ -168,7 +168,7 @@ class StyleInjector:
     }
     
     # Emoji direktifleri (prompts.py'den import)
-    from .prompts import EMOJI_DIRECTIVES as _EMOJI_DIRECTIVES
+    from Atlas.prompts import EMOJI_DIRECTIVES as _EMOJI_DIRECTIVES
     EMOJI_DIRECTIVES = {
         EmojiLevel.NONE: _EMOJI_DIRECTIVES["none"],
         EmojiLevel.MINIMAL: _EMOJI_DIRECTIVES["minimal"],
@@ -176,7 +176,7 @@ class StyleInjector:
     }
     
     # Detay direktifleri (prompts.py'den import)
-    from .prompts import DETAIL_DIRECTIVES as _DETAIL_DIRECTIVES
+    from Atlas.prompts import DETAIL_DIRECTIVES as _DETAIL_DIRECTIVES
     DETAIL_DIRECTIVES = {
         DetailLevel.SUMMARY: _DETAIL_DIRECTIVES["summary"],
         DetailLevel.BALANCED: _DETAIL_DIRECTIVES["balanced"],
@@ -229,15 +229,15 @@ class StyleInjector:
         
         # 7. Mirror Hitap (samimi modlarda)
         if style.mirror_hitap and style.tone in [Tone.CASUAL, Tone.KANKA]:
-            from .prompts import MIRROR_HITAP_PROMPT
+            from Atlas.prompts import MIRROR_HITAP_PROMPT
             parts.append("\n" + MIRROR_HITAP_PROMPT)
         
         # 8. SAF TÜRKÇE DİREKTİFİ (prompts.py'den import)
-        from .prompts import PURE_TURKISH_DIRECTIVE
+        from Atlas.prompts import PURE_TURKISH_DIRECTIVE
         parts.append(PURE_TURKISH_DIRECTIVE)
         
         # 9. Zaman Bağlamı
-        from .time_context import TimeContext
+        from Atlas.time_context import TimeContext
         tc = TimeContext()
         parts.append(f"\n{tc.get_context_injection()}")
         

@@ -14,7 +14,7 @@ Temel Sorumluluklar:
 """
 
 from typing import Optional
-from .buffer import MessageBuffer
+from Atlas.memory.buffer import MessageBuffer
 
 
 # Yaklaşık token limitleri ve tahminleri
@@ -57,7 +57,7 @@ class ContextBuilder:
         Neo4j'den mesajla ilgili bilgileri çeker.
         """
         import re
-        from .neo4j_manager import neo4j_manager
+        from Atlas.memory.neo4j_manager import neo4j_manager
 
         # 1. Basit anahtar kelime çıkarımı (Stop-wordleri atlamıyoruz şimdilik)
         # 3 karakterden büyük kelimeleri al
@@ -108,7 +108,7 @@ class ContextBuilder:
             
             # User facts (Eğer varsa)
             if self._user_facts:
-                from .facts import UserFact
+                from Atlas.memory.facts import UserFact
                 facts_list = []
                 if isinstance(self._user_facts, list):
                     for f in self._user_facts:

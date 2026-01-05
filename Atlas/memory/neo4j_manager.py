@@ -4,7 +4,7 @@ import time
 from typing import List, Dict, Any, Optional
 from neo4j import AsyncGraphDatabase
 from neo4j.exceptions import ServiceUnavailable, SessionExpired
-from ..config import Config
+from Atlas.config import Config
 
 logger = logging.getLogger(__name__)
 
