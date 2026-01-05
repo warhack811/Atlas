@@ -22,8 +22,8 @@ from dataclasses import dataclass
 from google import genai
 from google.genai import types
 
-from .config import API_CONFIG
-from .time_context import time_context
+from config import API_CONFIG
+from time_context import time_context
 
 logger = logging.getLogger(__name__)
 
@@ -100,12 +100,12 @@ async def generate_response(
     if not current_key:
         return GeneratorResult(ok=False, text=f"{model_id} için anahtar bulunamadı", error_code="MOCK", retryable=True, model=model_id)
     
-    from .budget_tracker import budget_tracker
+    from budget_tracker import budget_tracker
     budget_ok, budget_error = budget_tracker.check_budget(model_id)
     if not budget_ok:
         return GeneratorResult(ok=False, text=budget_error, error_code="BUDGET", retryable=False, model=model_id)
     
-    from .prompts import INTENT_SYSTEM_PROMPTS, COT_SUPPRESSION_PROMPT
+    from prompts import INTENT_SYSTEM_PROMPTS, COT_SUPPRESSION_PROMPT
     intent_to_category = {"coding": "coding", "debug": "coding", "creative": "creative", "analysis": "analysis"}
     category = intent_to_category.get(intent, "general")
     system_prompt = INTENT_SYSTEM_PROMPTS.get(category, INTENT_SYSTEM_PROMPTS["general"])
@@ -116,7 +116,7 @@ async def generate_response(
 
     # Oturum geçmişi varsa bağlamı oluştur, yoksa sadece güncel mesajı kullan
     if session_id:
-        from .memory import ContextBuilder
+        from memory import ContextBuilder
         messages = ContextBuilder(session_id).with_system_prompt(system_prompt).build(message, history_limit=5, signal_only=signal_only)
     else:
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": message}]
@@ -139,8 +139,8 @@ async def generate_stream(
     api_key: Optional[str] = None
 ) -> AsyncGenerator[str, None]:
     """Token'ları üretildiği anda döndüren asenkron akış (streaming) üretimi."""
-    from .key_manager import KeyManager
-    from .prompts import INTENT_SYSTEM_PROMPTS, COT_SUPPRESSION_PROMPT
+    from key_manager import KeyManager
+    from prompts import INTENT_SYSTEM_PROMPTS, COT_SUPPRESSION_PROMPT
     
     current_key = api_key or KeyManager.get_best_key(model_id=model_id)
     if not current_key:
@@ -155,7 +155,7 @@ async def generate_stream(
         system_prompt += "\n" + COT_SUPPRESSION_PROMPT
 
     if session_id:
-        from .memory import ContextBuilder
+        from memory import ContextBuilder
         messages = ContextBuilder(session_id).with_system_prompt(system_prompt).build(message, history_limit=5)
     else:
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": message}]
@@ -172,8 +172,8 @@ async def generate_stream(
 
 
 async def _call_groq(model_id: str, api_key: str, messages: list, intent: str) -> GeneratorResult:
-    from .config import INTENT_TEMPERATURE
-    from .key_manager import KeyManager
+    from config import INTENT_TEMPERATURE
+    from key_manager import KeyManager
     
     temperature = INTENT_TEMPERATURE.get(intent, API_CONFIG["default_temperature"])
     payload = {
@@ -261,7 +261,7 @@ async def _stream_gemini(model_id: str, api_key: str, messages: list):
 
 
 async def _stream_groq(model_id: str, api_key: str, messages: list, intent: str):
-    from .config import INTENT_TEMPERATURE
+    from config import INTENT_TEMPERATURE
     temperature = INTENT_TEMPERATURE.get(intent, API_CONFIG["default_temperature"])
     payload = {"model": model_id, "messages": messages, "temperature": temperature, "stream": True}
     

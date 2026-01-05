@@ -20,10 +20,10 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 import httpx
 
-from .config import API_CONFIG, MODEL_GOVERNANCE
-from .memory import MessageBuffer
-from .memory.state import state_manager
-from .time_context import time_context
+from config import API_CONFIG, MODEL_GOVERNANCE
+from memory import MessageBuffer
+from memory.state import state_manager
+from time_context import time_context
 
 
 @dataclass
@@ -37,7 +37,7 @@ class OrchestrationPlan:
     resilience_data: Dict[str, Any] = field(default_factory=dict) # Hata yönetim verileri
     orchestrator_prompt: str = ""      # Karar verilirken kullanılan tam prompt
 
-from .prompts import ORCHESTRATOR_PROMPT
+from prompts import ORCHESTRATOR_PROMPT
 
 class Orchestrator:
     """Niyet analizi ve görev planlamasından sorumlu sınıf."""
@@ -97,7 +97,7 @@ class Orchestrator:
         Orkestrasyon kararı için modelli çağrı yapar. 
         Gemini 2.0 Flash birincil tercihtir; başarısızlık durumunda Llama modellerine döner.
         """
-        from .key_manager import KeyManager
+        from key_manager import KeyManager
         
         models = MODEL_GOVERNANCE.get("orchestrator", [
             "llama-3.3-70b-versatile",
@@ -125,7 +125,7 @@ class Orchestrator:
                     try:
                         from google import genai
                         from google.genai import types
-                        from .config import get_gemini_api_key
+                        from config import get_gemini_api_key
                         
                         gemini_key = get_gemini_api_key()
                         if not gemini_key:

@@ -1,7 +1,7 @@
 import asyncio
 import logging
-from sandbox_router.api import keep_alive_pulse
-from sandbox_router.memory.neo4j_manager import neo4j_manager
+from api import keep_alive_pulse
+from memory.neo4j_manager import neo4j_manager
 from unittest.mock import patch, AsyncMock
 
 # Setup logging to see output

@@ -10,7 +10,7 @@ import json
 import importlib
 import logging
 from typing import Dict, Optional, Type
-from sandbox_router.tools.base import BaseTool
+from .base import BaseTool
 
 # Logging ayarları
 logging.basicConfig(level=logging.INFO)
@@ -28,7 +28,7 @@ class ToolRegistry:
             cls._instance = super(ToolRegistry, cls).__new__(cls)
         return cls._instance
 
-    def load_tools(self, definitions_path: str, handlers_package: str = "sandbox_router.tools.handlers"):
+    def load_tools(self, definitions_path: str, handlers_package: str = "tools.handlers"):
         """
         Tanımlanan dizindeki JSON dosyalarını tarar ve ilgili handler'ları yükler.
         """

@@ -19,8 +19,8 @@ import httpx
 import logging
 from typing import Any, Dict
 from pydantic import BaseModel, Field
-from sandbox_router.tools.base import BaseTool
-from sandbox_router.config import Config
+from tools.base import BaseTool
+from config import Config
 
 logger = logging.getLogger(__name__)
 

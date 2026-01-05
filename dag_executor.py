@@ -18,9 +18,9 @@ import sys
 import traceback
 import logging
 from typing import List, Dict, Any, Optional, Union
-from .config import MODEL_GOVERNANCE
-from .tools.registry import ToolRegistry
-from .schemas import OrchestrationPlan, TaskSpec
+from config import MODEL_GOVERNANCE
+from tools.registry import ToolRegistry
+from schemas import OrchestrationPlan, TaskSpec
 
 logger = logging.getLogger(__name__)
 
@@ -169,12 +169,12 @@ class DAGExecutor:
 
     async def _run_generation(self, task_id: str, role_key: str, prompt: str, instruction: str, session_id: str, intent: str = "general", signal_only: bool = False) -> Dict:
         """Özel bir uzman model (expert) çağrısı yapar ve hata durumunda yedeklere geçer."""
-        from .generator import generate_response, GeneratorResult
+        from generator import generate_response, GeneratorResult
         full_message = f"{instruction}\n\nVeri/Mesaj: {prompt}" if instruction else prompt
         
         models = MODEL_GOVERNANCE.get(role_key, MODEL_GOVERNANCE["logic"])
         
-        from .key_manager import KeyManager
+        from key_manager import KeyManager
         total_keys = KeyManager.get_total_key_count() or 4
         
         last_error = None

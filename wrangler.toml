@@ -1,7 +1,7 @@
 # =============================================================================
 # ATLAS Sandbox - Cloudflare Workers Yapılandırması
 # =============================================================================
-# Bu dosya, sandbox_router'ın Cloudflare Workers üzerinde çalışması için
+# Bu dosya, ATLAS Router'ın Cloudflare Workers üzerinde çalışması için
 # gerekli ayarları içerir.
 #
 # Deployment: uv run pywrangler deploy

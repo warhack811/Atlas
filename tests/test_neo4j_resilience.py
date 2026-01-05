@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 from unittest.mock import MagicMock, patch, AsyncMock
-from sandbox_router.memory.neo4j_manager import Neo4jManager
+from memory.neo4j_manager import Neo4jManager
 from neo4j.exceptions import ServiceUnavailable
 
 class TestNeo4jResilience(unittest.IsolatedAsyncioTestCase):
@@ -10,7 +10,7 @@ class TestNeo4jResilience(unittest.IsolatedAsyncioTestCase):
         Neo4jManager._instance = None
         self.manager = Neo4jManager()
 
-    @patch("sandbox_router.memory.neo4j_manager.AsyncGraphDatabase.driver")
+    @patch("memory.neo4j_manager.AsyncGraphDatabase.driver")
     async def test_retry_logic_on_service_unavailable(self, mock_driver_factory):
         # Setup: First call to run fails, second succeeds
         mock_driver = MagicMock()
@@ -42,7 +42,7 @@ class TestNeo4jResilience(unittest.IsolatedAsyncioTestCase):
             mock_reconnect.assert_called()
             self.assertEqual(mock_session.run.call_count, 2)
 
-    @patch("sandbox_router.memory.neo4j_manager.AsyncGraphDatabase.driver")
+    @patch("memory.neo4j_manager.AsyncGraphDatabase.driver")
     async def test_max_retries_exhausted(self, mock_driver_factory):
         mock_driver = MagicMock()
         mock_session = AsyncMock()

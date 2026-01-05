@@ -11,7 +11,7 @@ Temel Sorumluluklar:
 """
 from google import genai
 from google.genai import types
-from sandbox_router.config import Config
+from .config import Config
 from .prompts import VISION_SYSTEM_PROMPT
 import asyncio
 import logging
