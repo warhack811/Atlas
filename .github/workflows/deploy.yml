@@ -1,0 +1,22 @@
+name: Deploy Atlas to Oracle VM
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/Atlas
+            git pull
+            /home/ubuntu/Atlas/.venv/bin/pip install -r requirements.txt
+            sudo systemctl restart atlas
+            sudo systemctl status atlas --no-pager -l
