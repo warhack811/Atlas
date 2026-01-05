@@ -1,0 +1,5 @@
+{
+    "name": "search_tool",
+    "handler_module": "search_tool",
+    "handler_class": "SerperTool"
+}

@@ -1,0 +1,5 @@
+{
+    "name": "flux_tool",
+    "handler_module": "flux_tool",
+    "handler_class": "FluxTool"
+}

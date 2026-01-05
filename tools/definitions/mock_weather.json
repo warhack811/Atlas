@@ -1,0 +1,5 @@
+{
+    "name": "mock_weather",
+    "handler_module": "mock_weather",
+    "handler_class": "MockWeatherTool"
+}

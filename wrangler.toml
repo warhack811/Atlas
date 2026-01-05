@@ -1,0 +1,36 @@
+# =============================================================================
+# ATLAS Sandbox - Cloudflare Workers Yapılandırması
+# =============================================================================
+# Bu dosya, sandbox_router'ın Cloudflare Workers üzerinde çalışması için
+# gerekli ayarları içerir.
+#
+# Deployment: uv run pywrangler deploy
+# Local Test: uv run pywrangler dev
+# =============================================================================
+
+name = "atlas-sandbox"
+main = "src/entry.py"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["python_workers"]
+
+# =============================================================================
+# Environment Variables
+# API anahtarlarını buraya YAZMAYIN! Dashboard'dan Secret olarak ekleyin.
+# Workers & Pages → atlas-sandbox → Settings → Variables → Add
+# =============================================================================
+[vars]
+ENVIRONMENT = "production"
+
+# =============================================================================
+# Cron Triggers - Neo4j Heartbeat için (9 dakikada bir)
+# APScheduler yerine bunu kullanıyoruz
+# =============================================================================
+[triggers]
+crons = ["*/9 * * * *"]
+
+# =============================================================================
+# Routes (Opsiyonel - Custom domain kullanacaksan)
+# =============================================================================
+# routes = [
+#   { pattern = "api.yourdomain.com/*", zone_name = "yourdomain.com" }
+# ]

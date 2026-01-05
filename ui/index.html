@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATLAS | Deep Inspector Panel</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&family=Inter:wght@300;400;600;800&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0b10;
+            --surface: #161b22;
+            --surface-accent: #21262d;
+            --matrix-green: #00ff41;
+            --cyan: #00e5ff;
+            --danger: #ff003c;
+            --text-main: #e6edf3;
+            --text-dim: #8b949e;
+            --border: #30363d;
+            --glow: 0 0 15px rgba(0, 255, 65, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- Header --- */
+        .header {
+            height: 60px;
+            background: rgba(13, 17, 23, 0.95);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: var(--matrix-green);
+            text-transform: uppercase;
+        }
+
+        .engine-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-dim);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--matrix-green);
+            border-radius: 50%;
+            box-shadow: var(--glow);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.5;
+                transform: scale(1.2);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .notification-bell {
+            position: relative;
+            cursor: pointer;
+            font-size: 1.4rem;
+            transition: transform 0.2s;
+        }
+
+        .notification-bell:hover {
+            transform: scale(1.1);
+            color: var(--cyan);
+        }
+
+        .notification-count {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            background: var(--danger);
+            color: white;
+            font-size: 0.6rem;
+            padding: 2px 5px;
+            border-radius: 10px;
+            display: none;
+        }
+
+        /* --- Main Layout --- */
+        .main-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .chat-view {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        /* --- Messages --- */
+        .message-wrapper {
+            max-width: 90%;
+            margin-bottom: 24px;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-wrapper.user {
+            align-self: flex-end;
+        }
+
+        .message-wrapper.ai {
+            align-self: flex-start;
+        }
+
+        .bubble {
+            padding: 16px 20px;
+            border-radius: 16px;
+            line-height: 1.6;
+            font-size: 0.95rem;
+            position: relative;
+        }
+
+        .user .bubble {
+            background: var(--surface-accent);
+            color: var(--cyan);
+            border: 1px solid var(--cyan);
+            border-bottom-right-radius: 4px;
+        }
+
+        .ai .bubble {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .ai .bubble h1,
+        .ai .bubble h2,
+        .ai .bubble h3 {
+            color: var(--matrix-green);
+            margin: 10px 0;
+        }
+
+        .ai .bubble pre {
+            background: #000;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 10px 0;
+            border: 1px solid #333;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+        }
+
+        /* --- RDR Inspector --- */
+        .rdr-trigger {
+            margin-top: 8px;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .rdr-trigger:hover {
+            background: var(--surface-accent);
+            color: var(--matrix-green);
+        }
+
+        .inspector-panel {
+            margin-top: 12px;
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .inspector-tabs {
+            display: flex;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 10px 16px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-dim);
+            cursor: pointer;
+            border-right: 1px solid var(--border);
+            white-space: nowrap;
+            text-transform: uppercase;
+        }
+
+        .tab.active {
+            background: var(--surface-accent);
+            color: var(--matrix-green);
+        }
+
+        .tab-content {
+            padding: 16px;
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .rdr-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .stat-card {
+            background: var(--surface-accent);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .stat-label {
+            font-size: 0.6rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--cyan);
+        }
+
+        pre.code-block {
+            background: #000;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            line-height: 1.4;
+            color: #d1d5db;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: 'Fira Code', monospace;
+        }
+
+        /* --- Footer / Input --- */
+        .footer {
+            padding: 24px;
+            background: rgba(13, 17, 23, 0.9);
+            border-top: 1px solid var(--border);
+        }
+
+        .input-wrapper {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+            transition: border-color 0.2s;
+        }
+
+        .input-wrapper:focus-within {
+            border-color: var(--matrix-green);
+        }
+
+        .persona-select {
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            margin-right: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            outline: none;
+        }
+
+        input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            padding: 12px;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .send-btn {
+            background: var(--matrix-green);
+            color: #000;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            transition: 0.2s;
+        }
+
+        .send-btn:hover {
+            transform: scale(1.05);
+            filter: brightness(1.2);
+        }
+
+        /* --- Notifications Panel --- */
+        .notif-panel {
+            position: absolute;
+            top: 70px;
+            right: 20px;
+            width: 350px;
+            max-height: 500px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+            display: none;
+            z-index: 2000;
+            overflow-y: auto;
+        }
+
+        .notif-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 700;
+            color: var(--cyan);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .notif-item {
+            padding: 16px;
+            border-bottom: 1px solid #1f2937;
+            animation: slideIn 0.3s;
+        }
+
+        .notif-item:last-child {
+            border-bottom: none;
+        }
+
+        .notif-item .time {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+
+        .notif-item .msg {
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: var(--matrix-green);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .arena-link {
+            background: linear-gradient(135deg, #4f46e5, #9333ea);
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .arena-link:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.1);
+            box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+        }
+
+        .arena-link i {
+            font-size: 1rem;
+        }
+
+        /* Scrollbar styles */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-dark);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #484f58;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <div class="brand">
+            <span>⚡ ATLAS</span>
+            <div style="width: 1px; height: 20px; background: var(--border);"></div>
+            <span style="font-size: 0.7rem; opacity: 0.8;">Obs Panel v7.0</span>
+        </div>
+        <div class="engine-status">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusLabel">ENGINE STANDBY</span>
+        </div>
+        <div class="header-actions">
+            <a href="/arena" class="arena-link">
+                🏟️ Arena
+            </a>
+            <div class="notification-bell" onclick="toggleNotifications()">
+                🔔<span class="notification-count" id="notifCount">0</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="chat-view" id="chatView">
+            <div class="message-wrapper ai">
+                <div class="bubble">
+                    <h3>Sisteme Hoş Geldin, Observer.</h3>
+                    <p>ATLAS motoru tüm katmanlarıyla aktif. Analiz raporlarını görmek için mesajların altındaki
+                        <strong>[RDR]</strong> butonlarını kullanabilirsin.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="notif-panel" id="notifPanel">
+            <div class="notif-header">
+                PROAKTİF UYARILAR
+                <span style="cursor:pointer" onclick="toggleNotifications()">×</span>
+            </div>
+            <div id="notifList">
+                <p style="padding: 20px; color: var(--text-dim); font-size: 0.8rem; text-align:center;">Yeni bildirim
+                    bulunmuyor.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="input-wrapper">
+            <select id="personaSelect" class="persona-select">
+                <option value="standard">Standart</option>
+                <option value="professional">Kurumsal / Ciddi</option>
+                <option value="sincere">İçten Dost</option>
+                <option value="kanka">Kanka</option>
+                <option value="creative">Sanatçı / Şair</option>
+                <option value="concise">Net & Öz (Uzman)</option>
+                <option value="detailed">Eğitmen / Öğretmen</option>
+                <option value="girlfriend">Sevgili</option>
+                <option value="friendly">Yardımsever</option>
+            </select>
+            <input type="file" id="fileInput" multiple accept="image/jpeg,image/png,image/webp,image/gif"
+                style="display: none;">
+            <button class="action-btn" onclick="document.getElementById('fileInput').click()"
+                style="background:transparent; border:none; cursor:pointer; font-size:1.2rem; margin-right:10px; color: var(--text-dim); transition: 0.2s;"
+                onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--text-dim)'">📎</button>
+            <input type="text" id="userInput" placeholder="Sisteme bir komut ver..." autocomplete="off">
+            <button class="send-btn" onclick="handleSend()" id="sendBtn">▶</button>
+        </div>
+    </div>
+
+    <script>
+        // =============================================================================
+        // Cloudflare Deployment Konfigürasyonu
+        // LOCAL: API_BASE = '' (same origin)
+        // PRODUCTION: Aynı Workers'ta frontend ve backend varsa boş bırak
+        // =============================================================================
+        const API_BASE = '';
+
+        const chatView = document.getElementById('chatView');
+        const userInput = document.getElementById('userInput');
+        const personaSelect = document.getElementById('personaSelect');
+        const statusLabel = document.getElementById('statusLabel');
+        const statusDot = document.getElementById('statusDot');
+        const notifCountBadge = document.getElementById('notifCount');
+        const notifList = document.getElementById('notifList');
+        const notifPanel = document.getElementById('notifPanel');
+        const fileInput = document.getElementById('fileInput');
+
+        let isProcessing = false;
+
+        // Auto-refresh notifications
+        setInterval(refreshNotifications, 60000); // 1 min
+        refreshNotifications();
+
+        async function refreshNotifications() {
+            try {
+                const res = await fetch(`${API_BASE}/api/notifications/test_user`);
+                const data = await res.json();
+                const list = data.notifications || [];
+
+                if (list.length > 0) {
+                    notifCountBadge.innerText = list.length;
+                    notifCountBadge.style.display = 'block';
+                    notifList.innerHTML = list.map(n => `
+                        <div class="notif-item">
+                            <div class="time">${new Date(n.timestamp).toLocaleTimeString()}</div>
+                            <div class="msg">⚠️ ${n.message}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    notifCountBadge.style.display = 'none';
+                }
+            } catch (e) {
+                console.error("Notif fetch error", e);
+            }
+        }
+
+        function toggleNotifications() {
+            const current = notifPanel.style.display;
+            notifPanel.style.display = current === 'block' ? 'none' : 'block';
+        }
+
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSend();
+        });
+
+        fileInput.addEventListener('change', async (e) => {
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+
+            for (const file of files) {
+                try {
+                    appendSystemNotification(`📸 Görsel Analiz Ediliyor: ${file.name}...`);
+
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    const res = await fetch(`${API_BASE}/api/upload?session_id=sandbox-session`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        // Check if the backend returned a structural error message
+                        if (data.analysis && data.analysis.includes("Sistem Yoğunluğu/Kota")) {
+                            appendSystemNotification(`⚠️ Görsel İşlenemedi: (${file.name}) - Kota Dolu`);
+                        } else {
+                            appendSystemNotification(`📸 Görsel Analiz Edildi: ${file.name}`);
+                        }
+                    } else {
+                        appendSystemNotification(`⚠️ Görsel İşlenemedi: ${file.name}`);
+                    }
+                } catch (err) {
+                    appendSystemNotification(`❌ Yükleme Hatası (Sunucu Bağlantısı): ${file.name}`);
+                }
+            }
+            e.target.value = ''; // Reset
+        });
+
+        async function handleSend() {
+            const msg = userInput.value.trim();
+            if (!msg || isProcessing) return;
+
+            setLoading(true);
+            appendMessage('user', msg);
+            userInput.value = '';
+
+            const aiMsgId = Date.now();
+            const wrapper = document.createElement('div');
+            wrapper.className = `message-wrapper ai`;
+            wrapper.innerHTML = `<div class="bubble" id="bubble-${aiMsgId}">...</div>`;
+            chatView.appendChild(wrapper);
+            chatView.scrollTop = chatView.scrollHeight;
+
+            let fullText = "";
+            try {
+                const response = await fetch(`${API_BASE}/api/chat/stream`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: msg,
+                        mode: personaSelect.value,
+                        session_id: "sandbox-session"
+                    })
+                });
+
+                if (!response.body) throw new Error("Stream not supported");
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                const bubble = document.getElementById(`bubble-${aiMsgId}`);
+                bubble.innerHTML = ""; // Clear loader
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.substring(6));
+                                if (data.type === 'plan') {
+                                    statusLabel.innerText = "PLANNING: " + data.intent.toUpperCase();
+                                } else if (data.type === 'tasks_done') {
+                                    statusLabel.innerText = "SYNTHESIZING...";
+                                } else if (data.type === 'chunk') {
+                                    fullText += data.content;
+                                    bubble.innerHTML = marked.parse(fullText);
+                                    chatView.scrollTop = chatView.scrollHeight;
+                                } else if (data.type === 'done') {
+                                    if (data.rdr) {
+                                        appendRDRTrigger(aiMsgId, data.rdr);
+                                    }
+                                }
+                            } catch (e) {
+                                console.error("JSON parse error", e, line);
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                const bubble = document.getElementById(`bubble-${aiMsgId}`);
+                bubble.innerHTML = `<span style="color:var(--danger)">🚨 Sistem hatası: ${err.message}</span>`;
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function appendRDRTrigger(msgId, rdr) {
+            const bubble = document.getElementById(`bubble-${msgId}`);
+            const wrapper = bubble.parentElement;
+
+            const trigger = document.createElement('div');
+            trigger.className = "rdr-trigger";
+            trigger.onclick = () => toggleInspector(msgId);
+            trigger.innerHTML = `<span>⚡ RDR Raporu [Observability]</span>`;
+
+            const insp = document.createElement('div');
+            insp.className = "inspector-panel";
+            insp.id = `insp-${msgId}`;
+            insp.innerHTML = `
+                <div class="inspector-tabs">
+                    <div class="tab active" onclick="switchTab(event, '${msgId}', 'summ')">Özet</div>
+                    <div class="tab" onclick="switchTab(event, '${msgId}', 'orch')">🧠 Orhc</div>
+                    <div class="tab" onclick="switchTab(event, '${msgId}', 'tool')">🛠️ Tools</div>
+                    <div class="tab" onclick="switchTab(event, '${msgId}', 'safe')">🛡️ Safe</div>
+                    <div class="tab" onclick="switchTab(event, '${msgId}', 'synth')">🎭 Synth</div>
+                </div>
+                
+                <div class="tab-content active" id="summ-${msgId}">
+                    <div class="rdr-grid">
+                        <div class="stat-card"><div class="stat-label">Toplam Süre</div><div class="stat-value">${rdr.total_ms || 0}ms</div></div>
+                        <div class="stat-card"><div class="stat-label">Sentezleyici</div><div class="stat-value" style="font-size:0.6rem">${rdr.synthesizer_model || "N/A"}</div></div>
+                        <div class="stat-card">
+                            <div class="stat-label">Güvenlik</div>
+                            <div class="stat-value" style="color:${rdr.safety_passed ? 'var(--matrix-green)' : 'var(--danger)'}">
+                                ${rdr.safety_passed ? 'TEMİZ' : 'İHLAL'}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top:15px; background:rgba(0,0,0,0.2); border-radius:8px; padding:10px; border:1px solid var(--border);">
+                        <div style="font-size:0.7rem; color:var(--text-dim); margin-bottom:8px; font-weight:700; text-transform:uppercase; letter-spacing:1px;">Performans Kırılımı</div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; font-size:0.75rem;">
+                            <div class="timing-item">🛡️ Güvenlik: <span style="color:var(--matrix-green)">${rdr.safety_ms || 0}ms</span></div>
+                            <div class="timing-item">🧠 Orkestrasyon: <span style="color:var(--matrix-green)">${rdr.classification_ms || 0}ms</span></div>
+                            <div class="timing-item">⚙️ Yürütme (Tool): <span style="color:var(--matrix-green)">${rdr.dag_execution_ms || 0}ms</span></div>
+                            <div class="timing-item">🎭 Sentez: <span style="color:var(--matrix-green)">${rdr.synthesis_ms || 0}ms</span></div>
+                            <div class="timing-item">✅ Kalite: <span style="color:var(--matrix-green)">${rdr.quality_ms || 0}ms</span></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="orch-${msgId}">
+                    <div class="stat-label">Intent: <span style="color:var(--cyan)">${rdr.intent || "Unknown"}</span></div>
+                    <div class="stat-label" style="margin-top:10px">Raw Orchestrator Prompt:</div>
+                    <pre class="code-block">${rdr.orchestrator_prompt || "Loglanmadı"}</pre>
+                </div>
+
+                <div class="tab-content" id="tool-${msgId}">
+                    <div id="toolList-${msgId}">
+                        ${(rdr.task_details || []).map(t => `
+                            <div style="margin-bottom:12px; border-left: 2px solid var(--matrix-green); padding-left:10px;">
+                                <div style="font-size:0.75rem; font-weight:700;">Task ID: ${t.id} - ${t.status === 'failed' ? '❌' : '✅'}</div>
+                                <div style="font-size:0.65rem; color:var(--text-dim)">Model: ${t.model || "N/A"} | Süre: <span style="color:var(--matrix-green)">${t.duration_ms || 0}ms</span></div>
+                                <pre class="code-block" style="margin-top:5px; max-height:100px;">${JSON.stringify(t.result || {}, null, 2)}</pre>
+                            </div>
+                        `).join('') || "Hiçbir araç tetiklenmedi."}
+                    </div>
+                </div>
+
+                <div class="tab-content" id="safe-${msgId}">
+                    <div class="stat-label">Safety Status: <span style="color:${rdr.safety_passed ? 'var(--matrix-green)' : 'var(--danger)'}">${rdr.safety_passed ? 'PASSED' : 'BLOCKED'}</span></div>
+                    <div class="stat-label" style="margin-top:10px">Security Logs:</div>
+                    <pre class="code-block">${(rdr.safety_issues || []).map(i => `[${i.type}] ${i.details}`).join('\n') || "No safety issues detected."}</pre>
+                    <div class="stat-label" style="margin-top:10px">PII Filter:</div>
+                    <div class="stat-value" style="font-size:0.7rem; color:var(--text-dim)">${rdr.pii_redacted ? '⚠️ Redaction Applied' : '✅ Clear'}</div>
+                </div>
+
+                <div class="tab-content" id="synth-${msgId}">
+                    <div class="stat-label">Seçilen Persona: <span style="color:var(--cyan)">${rdr.style_persona || "N/A"}</span></div>
+                    <div class="stat-label">Style Preset: <span style="color:var(--cyan)">${rdr.style_preset || "N/A"}</span></div>
+                    <div class="stat-label" style="margin-top:10px">Sentezleyici Prompt:</div>
+                    <pre class="code-block">${rdr.synthesizer_prompt || "Bilinmiyor"}</pre>
+                </div>
+             `;
+
+            wrapper.appendChild(trigger);
+            wrapper.appendChild(insp);
+        }
+
+        function setLoading(loading) {
+            isProcessing = loading;
+            document.getElementById('sendBtn').disabled = loading;
+            statusLabel.innerText = loading ? "REASONING..." : "ENGINE STANDBY";
+            statusDot.style.background = loading ? "var(--cyan)" : "var(--matrix-green)";
+        }
+
+        function appendMessage(role, text) {
+            const wrapper = document.createElement('div');
+            wrapper.className = `message-wrapper ${role} `;
+            wrapper.innerHTML = `<div class="bubble">${marked.parse(text)}</div>`;
+            chatView.appendChild(wrapper);
+            chatView.scrollTop = chatView.scrollHeight;
+        }
+
+        function appendSystemNotification(text) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'message-wrapper ai';
+            wrapper.innerHTML = `
+                <div class="bubble" style="background:rgba(255,255,255,0.05); color:var(--text-dim); border:1px solid var(--border); font-style:italic; font-size:0.8rem; padding:8px 12px; border-radius:8px; align-self:flex-start;">
+                    ${text}
+                </div>
+            `;
+            chatView.appendChild(wrapper);
+            chatView.scrollTop = chatView.scrollHeight;
+        }
+
+
+
+        function toggleInspector(id) {
+            const insp = document.getElementById(`insp-${id}`);
+            insp.style.display = insp.style.display === 'block' ? 'none' : 'block';
+            chatView.scrollTop = chatView.scrollHeight;
+        }
+
+        function switchTab(event, msgId, tabName) {
+            // Deactivate all tabs in this message
+            const parent = event.target.parentElement;
+            parent.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Hide all content blocks
+            const insp = document.getElementById(`insp-${msgId}`);
+            insp.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            // Show selected
+            document.getElementById(`${tabName}-${msgId}`).classList.add('active');
+        }
+    </script>
+</body>
+
+</html>

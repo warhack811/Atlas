@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+httpx
+python-dotenv
+google-genai
+neo4j
+pydantic
+pydantic-settings
+google-cloud-aiplatform
+python-multipart
+jinja2
+aiofiles

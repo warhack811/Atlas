@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATLAS Model Arena 🏟️</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0F172A;
+            color: #E2E8F0;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1E293B;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748B;
+        }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .blind-mode .model-name,
+        .blind-mode .ai-score-val,
+        .blind-mode .ai-reason {
+            filter: blur(5px);
+            pointer-events: none;
+            user-select: none;
+            transition: filter 0.5s ease;
+        }
+
+        .blind-mode .model-name:hover {
+            filter: blur(2px);
+        }
+
+        /* Revealed state overrides blur */
+        .revealed.response-card .model-name,
+        .revealed.response-card .ai-score-val,
+        .revealed.response-card .ai-reason {
+            filter: none !important;
+            pointer-events: auto !important;
+            user-select: auto !important;
+        }
+
+        .markdown-body pre {
+            background: #1E293B;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+        }
+
+        .markdown-body code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+        }
+
+        .markdown-body p {
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+
+<body class="h-screen flex overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <div class="w-80 flex-shrink-0 border-r border-slate-700 bg-slate-900 flex flex-col">
+        <div class="p-4 border-b border-slate-700 flex justify-between items-center">
+            <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                🏟️ Model Arena
+            </h1>
+            <a href="/" class="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition">
+                <i data-lucide="home" class="w-5 h-5"></i>
+            </a>
+        </div>
+
+        <!-- TABS -->
+        <div class="flex border-b border-slate-700">
+            <button onclick="switchTab('leaderboard')" id="tab-leaderboard"
+                class="flex-1 p-3 text-sm font-medium border-b-2 border-blue-500 text-blue-400 bg-slate-800">
+                🏆 Liderlik
+            </button>
+            <button onclick="switchTab('questions')" id="tab-questions"
+                class="flex-1 p-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-300">
+                📚 Sorular
+            </button>
+        </div>
+
+        <!-- TAB CONTENT: LEADERBOARD -->
+        <div id="view-leaderboard" class="flex-1 overflow-y-auto p-4 space-y-4">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-sm font-semibold text-slate-400">GENEL SIRALAMA</h3>
+                <span class="text-xs bg-green-900 text-green-300 px-2 py-1 rounded">Canlı</span>
+            </div>
+
+            <!-- Model Rankings (Dynamic) -->
+            <div class="mb-3 px-1">
+                <select id="leaderboard-category-select" onchange="loadLeaderboard()"
+                    class="w-full bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 hover:border-blue-400 transition-colors">
+                    <option value="all">🏆 Genel Sıralama</option>
+                    <option value="coding">💻 Coding</option>
+                    <option value="roleplay">💬 Samimi / Roleplay</option>
+                    <option value="creative">✨ Creative</option>
+                    <option value="tr_quality">🇹🇷 Türkçe</option>
+                    <option value="reasoning">🧠 Mantık</option>
+                    <option value="security">🛡️ Security</option>
+                </select>
+            </div>
+            <div id="leaderboard-list" class="space-y-2">
+                <div class="animate-pulse space-y-2">
+                    <div class="h-12 bg-slate-800 rounded-lg"></div>
+                    <div class="h-12 bg-slate-800 rounded-lg"></div>
+                    <div class="h-12 bg-slate-800 rounded-lg"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB CONTENT: QUESTIONS -->
+        <div id="view-questions" class="flex-1 overflow-y-auto p-4 space-y-4 hidden">
+            <div class="flex gap-2 mb-4">
+                <button onclick="loadQuestions()"
+                    class="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-2 rounded text-xs"> Yenile</button>
+                <button
+                    class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-2 rounded text-xs flex items-center justify-center gap-1">
+                    <i data-lucide="play" class="w-3 h-3"></i> Tümünü Çalıştır
+                </button>
+            </div>
+
+            <div id="questions-list" class="space-y-3">
+                <!-- Soru kartları buraya gelecek -->
+            </div>
+        </div>
+
+        <!-- SETTINGS FOOTER -->
+        <div class="p-4 border-t border-slate-700 bg-slate-900 text-xs text-slate-500">
+            <label class="flex items-center gap-2 mb-2 cursor-pointer">
+                <input type="checkbox" id="blind-test-mode"
+                    class="rounded bg-slate-800 border-slate-600 text-blue-500 focus:ring-0">
+                <span>🙈 Kör Test Modu (Blind Test)</span>
+            </label>
+
+            <!-- Reset Scores Button -->
+            <button onclick="resetAllScores()"
+                class="w-full bg-red-600/20 hover:bg-red-600/30 text-red-400 py-1.5 px-3 rounded text-xs font-bold border border-red-500/30 transition-all mb-2 flex items-center justify-center gap-2">
+                <i data-lucide="trash-2" class="w-3 h-3"></i> Tüm Skorları Sıfırla
+            </button>
+
+            <div class="flex justify-between items-center">
+                <span>v1.0.0 Alpha</span>
+                <span id="key-status" class="text-green-500">API Hazır</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN AREA -->
+    <div class="flex-1 flex flex-col relative bg-[#0B1121]">
+
+        <!-- BENCHMARK OUTPUT -->
+        <div id="output-area" class="flex-1 overflow-y-auto p-8 space-y-8 pb-32">
+
+            <!-- Welcome State -->
+            <div id="welcome-state" class="text-center mt-20 opacity-50">
+                <i data-lucide="swords" class="w-24 h-24 mx-auto mb-4 text-slate-600"></i>
+                <h2 class="text-2xl font-bold text-slate-400">Arena Hazır</h2>
+                <p class="text-slate-500 mt-2">Sol menüden bir soru seçin veya aşağıya yazın.</p>
+                <div class="flex justify-center gap-4 mt-8">
+                    <div class="p-4 bg-slate-800 rounded-lg border border-slate-700 w-48">
+                        <div class="text-2xl font-bold text-white mb-1">9</div>
+                        <div class="text-xs text-slate-400">Model Hazır</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Responses will be injected here -->
+
+        </div>
+
+        <!-- INPUT AREA -->
+        <div
+            class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#0B1121] via-[#0B1121]/95 to-transparent">
+            <div class="max-w-4xl mx-auto">
+                <div
+                    class="bg-slate-800/80 backdrop-blur-xl rounded-2xl border border-slate-700/50 shadow-2xl overflow-hidden">
+                    <!-- Input Row -->
+                    <div class="flex items-end gap-3 p-4">
+                        <!-- Text Input -->
+                        <div class="flex-1 relative">
+                            <textarea id="prompt-input" rows="1"
+                                class="w-full bg-slate-900/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 resize-none text-sm py-3 px-4 pr-12 transition-all"
+                                placeholder="Modellere zorlu bir soru sor... (örn: Python'da asenkron bir web crawler yaz)"
+                                style="min-height: 48px; max-height: 120px;"></textarea>
+                        </div>
+
+                        <!-- Controls -->
+                        <div class="flex items-center gap-2">
+                            <select id="category-select"
+                                class="bg-slate-900/70 border border-slate-600/50 text-white text-xs rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 cursor-pointer">
+                                <option value="coding">💻 Kodlama</option>
+                                <option value="roleplay">💬 Roleplay</option>
+                                <option value="creative">✨ Yaratıcılık</option>
+                                <option value="tr_quality">🇹🇷 Türkçe</option>
+                                <option value="reasoning">🧠 Mantık</option>
+                                <option value="security">🛡️ Güvenlik</option>
+                            </select>
+
+                            <button onclick="runBenchmark()"
+                                class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 px-5 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg hover:shadow-blue-500/25 hover:scale-[1.02]">
+                                <i data-lucide="zap" class="w-4 h-4"></i>
+                                <span class="text-sm">Başlat</span>
+                            </button>
+
+                            <!-- Copy All Button -->
+                            <button id="copy-all-btn" onclick="copyAllResponses()" title="Tüm Cevapları Kopyala"
+                                class="bg-slate-700/80 hover:bg-slate-600 p-3 rounded-xl flex items-center justify-center transition-all border border-slate-600/50 hover:border-slate-500">
+                                <i data-lucide="clipboard-copy" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TEMPLATES -->
+        <template id="response-card-template">
+            <div
+                class="response-card border border-slate-700 bg-slate-800/50 rounded-xl overflow-hidden mb-6 transition-all hover:border-slate-600">
+                <!-- Header -->
+                <div class="flex justify-between items-center p-3 bg-slate-800/80 border-b border-slate-700 text-xs">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                        <span class="model-name font-mono font-bold text-blue-300">MODEL_NAME</span>
+                        <span class="text-slate-500 latency-ms">1240ms</span>
+                    </div>
+                    <div class="flex items-center gap-2 stats-badges">
+                        <!-- Copy Button -->
+                        <button onclick="copyResponse(this)" title="Yanıtı Kopyala"
+                            class="copy-response-btn p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-all">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                        </button>
+                        <span class="bg-slate-700 px-2 py-0.5 rounded text-slate-300 tps-stat">45 tok/s</span>
+                        <span class="bg-slate-700 px-2 py-0.5 rounded text-slate-300 cost-stat">$0.002</span>
+                    </div>
+                </div>
+
+                <!-- Content -->
+                <div class="p-4 markdown-body text-sm text-slate-200 leading-relaxed max-h-[500px] overflow-y-auto">
+                    LOADING_ANIMATION...
+                </div>
+
+                <!-- Evaluation Footer -->
+                <div class="p-3 bg-slate-900/50 border-t border-slate-700 flex justify-between items-center gap-4">
+
+                    <!-- Manual Scoring -->
+                    <div class="flex items-center gap-1 manual-scoring scale-90 origin-left">
+                        <span class="text-xs text-slate-500 mr-2">Senin Puanın:</span>
+                        <!-- Buttons 1-10 generated via JS -->
+                        <div class="flex bg-slate-800 rounded-lg p-1 gap-0.5 score-buttons">
+                            <!-- JS injects buttons here -->
+                        </div>
+                    </div>
+
+                    <!-- AI Scoring -->
+                    <div class="flex items-center gap-2 ai-score-panel">
+                        <div class="text-right">
+                            <div class="text-[10px] text-slate-500 uppercase tracking-wider">Adalet Divanı (Gemini)
+                            </div>
+                            <div class="text-xs text-slate-300 ai-reason max-w-[250px] leading-snug" title="">Henüz
+                                puanlanmadı...</div>
+
+                            <!-- Judge Verification UI -->
+                            <div
+                                class="judge-verification-ui hidden items-center justify-end gap-1 mt-1 opacity-60 hover:opacity-100 transition-opacity">
+                                <button onclick="window.rateJudge(this, 'MODEL_ID', 1)"
+                                    class="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-900/20 transition-all"
+                                    title="Katılmıyorum (Kötü)">
+                                    <i data-lucide="thumbs-down" class="w-3.5 h-3.5"></i>
+                                </button>
+                                <button onclick="window.rateJudge(this, 'MODEL_ID', 5)"
+                                    class="p-1 rounded text-slate-500 hover:text-green-400 hover:bg-green-900/20 transition-all"
+                                    title="Katılıyorum (İyi)">
+                                    <i data-lucide="thumbs-up" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div
+                            class="w-12 h-12 bg-slate-800 rounded-lg flex items-center justify-center border border-slate-700 shadow-lg">
+                            <span
+                                class="text-2xl font-black text-slate-600 ai-score-val transition-all duration-500">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- QUESTION EDIT MODAL -->
+        <div id="question-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50">
+            <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 w-96 shadow-2xl">
+                <h3 class="text-lg font-bold text-white mb-4" id="modal-title">Soru Ekle</h3>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-1">Başlık</label>
+                        <input type="text" id="q-title-input"
+                            class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white focus:border-blue-500 outline-none">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-1">Kategori</label>
+                        <select id="q-category-input"
+                            class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white focus:border-blue-500 outline-none">
+                            <option value="coding">Coding</option>
+                            <option value="math">Math</option>
+                            <option value="creative">Creative</option>
+                            <option value="tr_quality">TR Quality</option>
+                            <option value="reasoning">Reasoning</option>
+                            <option value="security">Security</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-1">Soru Metni</label>
+                        <textarea id="q-text-input" rows="4"
+                            class="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white focus:border-blue-500 outline-none resize-none"></textarea>
+                    </div>
+
+                    <div class="flex gap-2 pt-2">
+                        <button onclick="closeModal()"
+                            class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded text-sm transition-colors">İptal</button>
+                        <button onclick="saveQuestionInput()"
+                            class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded text-sm font-bold transition-colors">Kaydet</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // DOM Elements
+            const categorySelect = document.getElementById('category-select');
+            const promptInput = document.getElementById('prompt-input');
+            const outputArea = document.getElementById('output-area');
+            const welcomeState = document.getElementById('welcome-state');
+            const blindTestCheckbox = document.getElementById('blind-test-mode');
+            const leaderboardList = document.getElementById('leaderboard-list');
+            const questionsList = document.getElementById('questions-list');
+            const questionModal = document.getElementById('question-modal');
+
+            // State
+            let currentResults = [];
+            let isRunning = false;
+            let blindTestMode = true; // Default ON
+            let localQuestions = [];
+            let editingQuestionId = null;
+            let currentTurnId = null;
+
+            // Initialize
+            document.addEventListener('DOMContentLoaded', () => {
+                // Configure Marked for Beautiful Responses
+                const renderer = new marked.Renderer();
+
+                // Enter Key Listener (Send on Enter, Newline on Shift+Enter)
+                const promptInput = document.getElementById('prompt-input');
+                if (promptInput) {
+                    promptInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            runBenchmark();
+                        }
+                    });
+                }
+
+                // 1. Tables (Comprehensive fix for Modern/Legacy Signed-APIs)
+                renderer.table = function (tokenOrHeader, body) {
+                    let headerContent = '';
+                    let bodyContent = '';
+
+                    if (typeof tokenOrHeader === 'object' && tokenOrHeader.header) {
+                        // Modern API (Token based)
+                        headerContent = tokenOrHeader.header.map(cell => this.tablecell(cell)).join('');
+                        bodyContent = tokenOrHeader.rows.map(row => this.tablerow({
+                            content: row.map(cell => this.tablecell(cell)).join('')
+                        })).join('');
+                    } else {
+                        // Legacy API (String based)
+                        headerContent = tokenOrHeader;
+                        bodyContent = body;
+                    }
+
+                    return `
+                    <div class="overflow-x-auto my-4 rounded-lg border border-slate-700">
+                        <table class="min-w-full text-sm text-left divider-slate-700">
+                            <thead class="bg-slate-800 text-slate-300 font-bold uppercase text-xs">
+                                ${headerContent}
+                            </thead>
+                            <tbody class="divide-y divide-slate-700 bg-slate-900/50">
+                                ${bodyContent}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                };
+
+                renderer.tablerow = function (tokenOrContent) {
+                    const content = typeof tokenOrContent === 'object' ? (tokenOrContent.content || tokenOrContent.text) : tokenOrContent;
+                    return `<tr class="hover:bg-slate-800/50 transition-colors">${content}</tr>`;
+                };
+
+                renderer.tablecell = function (tokenOrContent, flags) {
+                    let content = '';
+                    let isHeader = false;
+
+                    if (typeof tokenOrContent === 'object') {
+                        content = tokenOrContent.text;
+                        isHeader = tokenOrContent.header;
+                    } else {
+                        content = tokenOrContent;
+                        isHeader = flags && flags.header;
+                    }
+
+                    const tag = isHeader ? 'th' : 'td';
+                    const cls = isHeader ? 'px-4 py-3' : 'px-4 py-2 text-slate-400';
+                    return `<${tag} class="${cls}">${content}</${tag}>`;
+                };
+
+                // 2. Code Blocks
+                renderer.code = function (tokenOrCode, language) {
+                    const code = typeof tokenOrCode === 'object' ? tokenOrCode.text : tokenOrCode;
+                    const lang = language || (typeof tokenOrCode === 'object' ? tokenOrCode.lang : 'plaintext');
+
+                    return `
+                    <div class="relative group my-4">
+                        <div class="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onclick="navigator.clipboard.writeText(decodeURIComponent('${encodeURIComponent(code || '')}')); this.innerText='Kopyalandı!'" class="text-[10px] bg-slate-700 text-slate-300 px-2 py-1 rounded hover:bg-slate-600">
+                                Kopyala
+                            </button>
+                        </div>
+                        <pre class="bg-[#0d1117] text-slate-300 p-4 rounded-lg text-xs font-mono overflow-x-auto border border-slate-700/50"><code class="language-${lang}">${code}</code></pre>
+                    </div>
+                `;
+                };
+
+                // 3. Blockquotes
+                renderer.blockquote = function (tokenOrQuote) {
+                    const quote = typeof tokenOrQuote === 'object' ? tokenOrQuote.text : tokenOrQuote;
+                    return `<blockquote class="border-l-4 border-blue-500 pl-4 py-1 my-4 text-slate-400 italic bg-slate-800/30 rounded-r">${quote}</blockquote>`;
+                };
+
+                // 4. Headers
+                renderer.heading = function (tokenOrText, levelOrToken) {
+                    const text = typeof tokenOrText === 'object' ? tokenOrText.text : tokenOrText;
+                    const level = typeof tokenOrText === 'object' ? tokenOrText.depth : (levelOrToken || 1);
+
+                    const sizes = { 1: 'text-2xl', 2: 'text-xl', 3: 'text-lg' };
+                    const cls = sizes[level] || 'text-base';
+                    return `<h${level} class="${cls} font-bold text-slate-200 mt-6 mb-3 pb-1 border-b border-slate-700/50">${text}</h${level}>`;
+                };
+
+                // 5. Lists
+                renderer.list = function (tokenOrBody, ordered) {
+                    let itemsHtml = '';
+                    let isOrdered = false;
+
+                    if (typeof tokenOrBody === 'object') {
+                        isOrdered = tokenOrBody.ordered;
+                        itemsHtml = (tokenOrBody.items || []).map(item => `<li>${marked.parseInline(item.text)}</li>`).join('');
+                    } else {
+                        isOrdered = ordered;
+                        itemsHtml = tokenOrBody;
+                    }
+
+                    const type = isOrdered ? 'ol' : 'ul';
+                    const style = isOrdered ? 'list-decimal' : 'list-disc';
+                    return `<${type} class="${style} list-outside ml-5 space-y-1 my-3 text-slate-400 text-sm">${itemsHtml}</${type}>`;
+                };
+
+                marked.use({ renderer });
+
+                loadLeaderboard();
+                loadQuestions();
+
+                // Sync Checkbox UI
+                if (blindTestCheckbox) {
+                    blindTestCheckbox.checked = blindTestMode;
+                    document.body.classList.toggle('blind-mode', blindTestMode);
+                }
+
+                // Global scope binding
+                window.switchTab = switchTab;
+                window.runBenchmark = runBenchmark;
+                window.loadQuestions = loadQuestions;
+                window.setPrompt = setPrompt;
+                window.openAddModal = openAddModal;
+                window.deleteQuestion = deleteQuestion;
+                window.editQuestion = editQuestion;
+                window.editQuestion = editQuestion;
+                window.closeModal = closeModal;
+                window.saveQuestionInput = saveQuestionInput;
+                window.rateJudge = rateJudge;
+                window.loadLeaderboard = loadLeaderboard;
+
+                console.log("Arena JS Loaded (Inline + CRUD + Judge + Filtering + Beautiful Response)");
+            });
+
+
+            // Switch Sidebar Tabs
+            function switchTab(tabName) {
+                document.getElementById('view-leaderboard').classList.add('hidden');
+                document.getElementById('view-questions').classList.add('hidden');
+                document.getElementById(`view-${tabName}`).classList.remove('hidden');
+
+                document.getElementById('tab-leaderboard').classList.remove('text-blue-400', 'bg-slate-800', 'border-blue-500');
+                document.getElementById('tab-questions').classList.remove('text-blue-400', 'bg-slate-800', 'border-blue-500');
+
+                document.getElementById(`tab-${tabName}`).classList.add('text-blue-400', 'bg-slate-800', 'border-blue-500');
+            }
+
+            // Check Blind Test Mode
+            if (blindTestCheckbox) {
+                blindTestCheckbox.addEventListener('change', (e) => {
+                    blindTestMode = e.target.checked;
+                    document.body.classList.toggle('blind-mode', blindTestMode);
+                });
+            }
+
+            // --- API CALLS ---
+
+            async function fetchLeaderboard() {
+                try {
+                    const res = await fetch('/api/arena/leaderboard');
+                    return await res.json();
+                } catch (e) { console.error(e); return { results: [] }; }
+            }
+
+            async function fetchQuestions() {
+                try {
+                    const res = await fetch('/api/arena/questions');
+                    return await res.json();
+                } catch (e) { console.error(e); return []; }
+            }
+
+            async function saveQuestionsToBackend(questions) {
+                try {
+                    await fetch('/api/arena/questions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(questions)
+                    });
+                } catch (e) { console.error("Save failed", e); alert("Kaydetme başarısız!"); }
+            }
+
+            async function runBenchmarkApi(prompt, category) {
+                const res = await fetch('/api/arena/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt, category })
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return await res.json();
+            }
+
+            async function submitScore(result) {
+                await fetch('/api/arena/result', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(result)
+                });
+            }
+
+            // --- CRUD LOGIC ---
+
+            function openAddModal() {
+                editingQuestionId = null;
+                document.getElementById('modal-title').innerText = "Yeni Soru Ekle";
+                document.getElementById('q-title-input').value = "";
+                document.getElementById('q-text-input').value = "";
+                document.getElementById('q-category-input').value = "coding";
+                questionModal.classList.remove('hidden');
+                questionModal.classList.add('flex');
+            }
+
+            function closeModal() {
+                questionModal.classList.add('hidden');
+                questionModal.classList.remove('flex');
+            }
+
+            function editQuestion(id) {
+                const q = localQuestions.find(x => x.id === id);
+                if (!q) return;
+
+                editingQuestionId = id;
+                document.getElementById('modal-title').innerText = "Soruyu Düzenle";
+                document.getElementById('q-title-input').value = q.title;
+                document.getElementById('q-text-input').value = q.text;
+                document.getElementById('q-category-input').value = q.category;
+                questionModal.classList.remove('hidden');
+                questionModal.classList.add('flex');
+            }
+
+            async function saveQuestionInput() {
+                const title = document.getElementById('q-title-input').value.trim();
+                const text = document.getElementById('q-text-input').value.trim();
+                const category = document.getElementById('q-category-input').value;
+
+                if (!title || !text) {
+                    alert("Başlık ve soru metni gereklidir.");
+                    return;
+                }
+
+                if (editingQuestionId) {
+                    // Update
+                    const idx = localQuestions.findIndex(x => x.id === editingQuestionId);
+                    if (idx > -1) {
+                        localQuestions[idx] = { ...localQuestions[idx], title, text, category };
+                    }
+                } else {
+                    // Create
+                    const newQ = {
+                        id: uuidv4(),
+                        title,
+                        text,
+                        category
+                    };
+                    localQuestions.push(newQ);
+                }
+
+                // Sync & UI
+                await saveQuestionsToBackend(localQuestions);
+                renderQuestionsList();
+                closeModal();
+            }
+
+            async function deleteQuestion(id) {
+                if (!confirm("Bu soruyu silmek istediğine emin misin?")) return;
+
+                localQuestions = localQuestions.filter(x => x.id !== id);
+                await saveQuestionsToBackend(localQuestions);
+                renderQuestionsList();
+            }
+
+            async function loadQuestions() {
+                localQuestions = await fetchQuestions();
+                // Ensure every question has an ID
+                localQuestions.forEach(q => { if (!q.id) q.id = uuidv4(); });
+                renderQuestionsList();
+            }
+
+            function renderQuestionsList() {
+                // Add 'New Question' button at top
+                let html = `
+                <button onclick="openAddModal()" class="w-full py-2 mb-3 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 border-dashed rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="plus" class="w-3 h-3"></i> Yeni Soru Ekle
+                </button>
+            `;
+
+                html += localQuestions.map(q => `
+                <div class="group bg-slate-800 p-3 rounded-lg border border-slate-700 hover:border-blue-500 transition-colors cursor-pointer relative"
+                     onclick="window.setPrompt('${q.text.replace(/'/g, "\\'")}', '${q.category}')">
+                    <div class="flex justify-between items-start mb-1 pr-12">
+                        <h4 class="text-sm font-bold text-slate-300 truncate" title="${q.title}">${q.title}</h4>
+                        <span class="text-[10px] bg-slate-700 px-1.5 py-0.5 rounded text-slate-400 capitalize shrink-0">${q.category}</span>
+                    </div>
+                    <p class="text-xs text-slate-500 line-clamp-2 mb-1">${q.text}</p>
+                    
+                    <!-- Action Buttons -->
+                    <div class="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onclick="event.stopPropagation(); window.editQuestion('${q.id}')" 
+                            class="p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-white" title="Düzenle">
+                            <i data-lucide="edit-2" class="w-3 h-3"></i>
+                        </button>
+                        <button onclick="event.stopPropagation(); window.deleteQuestion('${q.id}')" 
+                            class="p-1 hover:bg-red-900/50 rounded text-slate-400 hover:text-red-400" title="Sil">
+                            <i data-lucide="trash-2" class="w-3 h-3"></i>
+                        </button>
+                    </div>
+                    
+                    <button onclick="event.stopPropagation(); window.runBenchmark('${q.text.replace(/'/g, "\\'")}')" 
+                        class="absolute right-2 bottom-2 bg-blue-600 hover:bg-blue-500 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity" title="Çalıştır">
+                        <i data-lucide="play" class="w-3 h-3"></i>
+                    </button>
+                </div>
+            `).join('');
+
+                questionsList.innerHTML = html;
+                lucide.createIcons();
+            }
+
+            // --- CORE FUNCTIONALITY ---
+
+            async function runBenchmark(customPrompt = null, clearOutput = true) {
+                if (isRunning) return;
+
+                const prompt = customPrompt || promptInput.value.trim();
+                if (!prompt) return;
+
+                // UI Reset
+                isRunning = true;
+                currentTurnId = uuidv4(); // Start a NEW session
+                welcomeState.style.display = 'none';
+                if (clearOutput) outputArea.innerHTML = '';
+                currentResults = [];
+
+                // Add User Bubble (Question)
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-8 text-slate-300 italic break-words whitespace-pre-wrap';
+                questionDiv.innerText = `Soru: "${prompt}"`;
+                outputArea.appendChild(questionDiv);
+
+                // Loading Indicator
+                const loadingDiv = document.createElement('div');
+                loadingDiv.id = 'loading-indicator';
+                loadingDiv.className = 'text-center text-slate-500 animate-pulse mt-12';
+                loadingDiv.innerHTML = '<i data-lucide="loader" class="w-8 h-8 mx-auto mb-2 animate-spin"></i><br>9 Model Savaşıyor...';
+                outputArea.appendChild(loadingDiv);
+                lucide.createIcons();
+
+                try {
+                    const category = categorySelect.value;
+                    const results = await runBenchmarkApi(prompt, category);
+
+                    // Remove loading
+                    loadingDiv.remove();
+
+                    // Shuffle Results (Fisher-Yates) - Prevent guessing by position
+                    for (let i = results.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [results[i], results[j]] = [results[j], results[i]];
+                    }
+
+                    // Render Results
+                    for (const res of results) {
+                        renderResponseCard(res, prompt, category);
+                        // OLD: triggerJudge(res, prompt, category); -> Removed for Batch Logic
+                    }
+
+                    // Show Batch Judge Button
+                    showBatchJudgeButton(prompt, results, category);
+
+                } catch (e) {
+                    console.error(e);
+                    loadingDiv.innerHTML = `<div class="text-red-400 bg-red-900/20 p-4 rounded-lg border border-red-800">
+                    <div class="font-bold">❌ Hata Oluştu</div>
+                    <div class="text-sm mt-1">${e.message}</div>
+                </div>`;
+                } finally {
+                    isRunning = false;
+                }
+            }
+
+
+
+            function showBatchJudgeButton(question, results, category) {
+                const btnDiv = document.createElement('div');
+                btnDiv.className = 'w-full flex justify-center my-6';
+                btnDiv.innerHTML = `
+                <button onclick="callBlindJudgeBatch(this, '${category}')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-full shadow-lg flex items-center gap-3 transition-all transform hover:scale-105 ring-4 ring-indigo-900/30">
+                    <i data-lucide="gavel" class="w-6 h-6"></i>
+                    <span>ADALET DIVANINI ÇAĞIR (Adil Hakem)</span>
+                </button>
+            `;
+                // Insert after question, before cards (or at bottom? Let's put at top of list)
+                // outputArea is container. questionDiv is first.
+                // Let's append to bottom so user sees it after scrolling results? OR top.
+                // User flow: they see results stream... then button appears.
+                outputArea.insertBefore(btnDiv, outputArea.children[1]); // After Question Div
+                lucide.createIcons();
+
+                // Allow calling from verify context
+                window.lastBatchContext = { question, results, category };
+            }
+
+            async function callBlindJudgeBatch(btn, category) {
+                const ctx = window.lastBatchContext;
+                if (!ctx) return;
+
+                // UI Loading state
+                btn.disabled = true;
+                btn.innerHTML = `<i data-lucide="loader" class="w-6 h-6 animate-spin"></i><span>Hakemler Toplanıyor...</span>`;
+                lucide.createIcons();
+
+                // Prepare Payload
+                const responsesMap = {};
+                ctx.results.forEach(r => {
+                    if (!r.error) responsesMap[r.model_id] = r.response;
+                });
+
+                try {
+                    const res = await fetch('/api/arena/judge-batch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            question: ctx.question,
+                            responses: responsesMap,
+                            category: category
+                        })
+                    });
+
+                    const judgeResults = await res.json(); // { model_id: { score, reason } }
+
+                    // Update UI Cards
+                    ctx.results.forEach(r => {
+                        const jRes = judgeResults[r.model_id];
+                        if (jRes) {
+                            // Update Data
+                            r.ai_score = jRes.score;
+                            r.ai_reason = jRes.reason;
+
+                            // Update UI
+                            const cardId = `card-${r.model_id.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                            const card = document.getElementById(cardId);
+                            if (card) {
+                                const reasonEl = card.querySelector('.ai-reason');
+                                const scoreValEl = card.querySelector('.ai-score-val');
+                                const verifUi = card.querySelector('.judge-verification-ui');
+
+                                reasonEl.innerText = jRes.reason;
+                                reasonEl.title = jRes.reason;
+                                scoreValEl.innerText = jRes.score;
+                                scoreValEl.className = `text-2xl font-black ai-score-val transition-all duration-500 ${getScoreColor(jRes.score)}`;
+
+                                if (verifUi) {
+                                    verifUi.classList.remove('hidden');
+                                    verifUi.classList.add('flex');
+                                    verifUi.dataset.modelId = r.model_id;
+                                }
+                            }
+
+                            // SILENT AUTO-SAVE TO PERSISTENT DATABASE
+                            const autoResult = {
+                                model_id: r.model_id,
+                                category: category,
+                                turn_id: currentTurnId, // Use session ID
+                                question_id: uuidv4(),
+                                timestamp: new Date().toISOString(),
+                                latency_ms: r.latency_ms,
+                                tokens_per_sec: r.tokens_per_sec,
+                                human_score: r.human_score || 0,
+                                ai_score: jRes.score,
+                                ai_reason: jRes.reason
+                            };
+                            submitScore(autoResult);
+                        }
+                    });
+
+                    // Update Button to Done
+                    btn.className = "bg-green-600 text-white font-bold py-3 px-8 rounded-full shadow-lg flex items-center gap-3 cursor-default";
+                    btn.innerHTML = `<i data-lucide="check-circle" class="w-6 h-6"></i><span>Karar Verildi</span>`;
+                    lucide.createIcons();
+
+                    // Refresh Leaderboard to show AI scores immediately
+                    loadLeaderboard();
+
+                } catch (e) {
+                    console.error(e);
+                    btn.innerHTML = `<span>Hata Oluştu :(</span>`;
+                    btn.className = "bg-red-600 text-white font-bold py-3 px-8 rounded-full";
+                }
+            }
+
+            // Expose
+            window.callBlindJudgeBatch = callBlindJudgeBatch;
+
+            function renderResponseCard(res, question, category) {
+                const template = document.getElementById('response-card-template');
+                const clone = template.content.cloneNode(true);
+
+                const card = clone.querySelector('.response-card');
+                card.id = `card-${res.model_id.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                card.classList.add('overflow-hidden', 'w-full'); // Prevent expansion
+
+                // Blind Mode
+                if (blindTestMode) card.classList.add('blind');
+
+                // Header Info
+                clone.querySelector('.model-name').innerText = res.model_id;
+                clone.querySelector('.latency-ms').innerText = `${Math.round(res.latency_ms)}ms`;
+                clone.querySelector('.tps-stat').innerText = `${res.tokens_per_sec.toFixed(1)} t/s`;
+
+                // Content (Markdown)
+                const contentDiv = clone.querySelector('.markdown-body');
+                contentDiv.classList.add('break-words', 'overflow-x-auto', 'max-w-full'); // Fix flow
+                if (res.error) {
+                    contentDiv.innerHTML = `<span class="text-red-400">Hata: ${res.error}</span>`;
+                } else {
+                    contentDiv.innerHTML = marked.parse(res.response);
+                }
+
+                // Score Buttons
+                const buttonsContainer = clone.querySelector('.score-buttons');
+                for (let i = 1; i <= 10; i++) {
+                    const btn = document.createElement('button');
+                    btn.className = `w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold transition-colors ${i <= 5 ? 'bg-slate-700 hover:bg-slate-600 text-slate-400' : 'bg-slate-700 hover:bg-green-600 text-slate-300'}`;
+                    btn.innerText = i;
+                    btn.onclick = () => handleManualScore(res, question, category, i, btn, card);
+                    buttonsContainer.appendChild(btn);
+                }
+
+                // Judge Buttons Logic (Explicit Bind)
+                const verifUi = clone.querySelector('.judge-verification-ui');
+                if (verifUi) {
+                    verifUi.dataset.modelId = res.model_id;
+                    const judgeBtns = verifUi.querySelectorAll('button');
+                    if (judgeBtns.length >= 2) {
+                        judgeBtns[0].onclick = () => window.rateJudge(judgeBtns[0], res.model_id, 1); // Thumbs Down
+                        judgeBtns[1].onclick = () => window.rateJudge(judgeBtns[1], res.model_id, 5); // Thumbs Up
+                    }
+                }
+
+                outputArea.appendChild(clone);
+            }
+
+            // Judge Logic
+            async function triggerJudge(res, question, category) {
+                if (res.error) return;
+
+                const cardId = `card-${res.model_id.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                const card = document.getElementById(cardId);
+                if (!card) return;
+
+                const reasonEl = card.querySelector('.ai-reason');
+                const scoreValEl = card.querySelector('.ai-score-val');
+
+                reasonEl.innerText = "Hakem düşünüyor...";
+
+                try {
+                    const resApi = await fetch('/api/arena/judge', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            question,
+                            response: res.response,
+                            category
+                        })
+                    });
+                    const judgeResult = await resApi.json();
+
+                    reasonEl.innerText = judgeResult.reason || "Puanlandı";
+                    reasonEl.title = judgeResult.reason;
+                    scoreValEl.innerText = judgeResult.score;
+
+                    // Show Verification UI
+                    const verifUi = card.querySelector('.judge-verification-ui');
+                    if (verifUi) {
+                        verifUi.classList.remove('hidden');
+                        verifUi.classList.add('flex');
+                        // Store Model ID for verification context
+                        verifUi.dataset.modelId = res.model_id;
+                    }
+
+                    // Colorize Score
+                    if (scoreValEl) {
+                        scoreValEl.className = `text-2xl font-black ai-score-val transition-all duration-500 ${getScoreColor(judgeResult.score)}`;
+                    }
+
+                    // Save Auto Score locally to result object
+                    res.ai_score = judgeResult.score;
+                    res.ai_reason = judgeResult.reason;
+
+                } catch (e) {
+                    reasonEl.innerText = "Hakem hatası";
+                }
+            }
+
+            function getScoreColor(score) {
+                if (score >= 8) return "text-green-400";
+                if (score >= 5) return "text-yellow-400";
+                return "text-red-400";
+            }
+
+            async function rateJudge(btn, modelId, score) {
+                // Find result object
+                if (modelId === 'MODEL_ID') {
+                    modelId = btn.closest('.judge-verification-ui').dataset.modelId;
+                }
+
+                const res = currentResults.find(r => r.model_id === modelId);
+                if (!res) { console.error("Result not found for", modelId); return; }
+
+                res.judge_verification = score; // 1 or 5
+
+                // UI Feedback
+                const uiContainer = btn.parentElement;
+                const allBtns = uiContainer.querySelectorAll('button');
+
+                // Reset all
+                allBtns.forEach(b => {
+                    b.classList.remove('text-green-400', 'bg-green-900/30', 'text-red-400', 'bg-red-900/30', 'scale-110', 'opacity-100');
+                    b.classList.add('opacity-40', 'grayscale');
+                });
+
+                // Highlight selected
+                btn.classList.remove('opacity-40', 'grayscale');
+                btn.classList.add('scale-110', 'opacity-100');
+
+                if (score === 5) { // Good
+                    btn.classList.add('text-green-400', 'bg-green-900/30');
+                } else { // Bad
+                    btn.classList.add('text-red-400', 'bg-red-900/30');
+                }
+
+                const finalResult = {
+                    model_id: res.model_id,
+                    category: categorySelect.value,
+                    turn_id: currentTurnId, // Use session ID
+                    question_id: uuidv4(),
+                    timestamp: new Date().toISOString(),
+                    latency_ms: res.latency_ms,
+                    tokens_per_sec: res.tokens_per_sec,
+                    human_score: res.human_score || 0,
+                    ai_score: res.ai_score || 0,
+                    ai_reason: res.ai_reason || "",
+                    judge_verification: score
+                };
+
+                await submitScore(finalResult);
+                console.log("Judge rated:", score, "for", modelId);
+            }
+
+            // Manual Score Logic
+            async function handleManualScore(res, question, category, score, btn, card) {
+                // UI Update
+                const allBtns = card.querySelectorAll('.score-buttons button');
+                allBtns.forEach(b => {
+                    b.classList.remove('bg-blue-600', 'text-white', 'ring-2', 'ring-blue-400');
+                    b.classList.add('bg-slate-700', 'text-slate-400');
+                });
+
+                btn.classList.remove('bg-slate-700', 'text-slate-400');
+                btn.classList.add('bg-blue-600', 'text-white', 'ring-2', 'ring-blue-400');
+
+                // Reveal if blind mode
+                if (blindTestMode) {
+                    card.classList.add('revealed');
+                }
+
+                // Save
+                const finalResult = {
+                    model_id: res.model_id,
+                    category: category,
+                    turn_id: currentTurnId, // Use session ID
+                    question_id: uuidv4(),
+                    timestamp: new Date().toISOString(),
+                    latency_ms: res.latency_ms,
+                    tokens_per_sec: res.tokens_per_sec,
+                    human_score: score,
+                    ai_score: res.ai_score || 0,
+                    ai_reason: res.ai_reason || "",
+                    judge_verification: res.judge_verification || 0 // Keep judge verification if set
+                };
+
+                await submitScore(finalResult);
+
+                // Refresh Leaderboard
+                loadLeaderboard();
+            }
+
+            // --- SIDEBAR FUNCTIONS ---
+
+            async function loadQuestions() {
+                localQuestions = await fetchQuestions();
+                renderQuestions();
+            }
+
+            function renderQuestions() {
+                // Check active filter from somewhere? For now use a simple local filter or just show all grouped by category
+                // But UI has no filter dropdown for questions tab in the template earlier? 
+                // Let's check... in the template there is no input.
+                // Let's just group them or list them.
+                // Best: Use the main category select to filter? Or just list all?
+                // User request: "farklı kategorilerde 50 soru ekle" -> Sidebar should probably show them.
+
+                // Let's group by category
+                const categories = ['coding', 'roleplay', 'creative', 'tr_quality', 'reasoning', 'security'];
+
+                // Map keys to display names (Same as Input Dropdown)
+                const categoryNames = {
+                    coding: '💻 Kodlama',
+                    roleplay: '💬 Samimi / Roleplay',
+                    creative: '✨ Yaratıcılık',
+                    tr_quality: '🇹🇷 Türkçe Kalitesi',
+                    reasoning: '🧠 Mantık & Akıl',
+                    security: '🛡️ Güvenlik'
+                };
+
+                let html = '';
+
+                // Run All Button (Global)
+                html += `
+                <div class="mb-4">
+                    <button onclick="runAllQuestions()" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 rounded flex items-center justify-center gap-2 transition-colors">
+                        <i data-lucide="play" class="w-4 h-4"></i> Tümünü Çalıştır
+                    </button>
+                </div>
+            `;
+
+                categories.forEach(cat => {
+                    const catQuestions = localQuestions.filter(q => q.category === cat);
+                    if (catQuestions.length === 0) return;
+
+                    const displayName = categoryNames[cat] || cat.toUpperCase();
+
+                    html += `
+                    <div class="mb-4">
+                        <button onclick="toggleCategory('cat-${cat}')" class="w-full flex items-center justify-between text-left group mb-2 focus:outline-none bg-slate-800/50 p-2 rounded hover:bg-slate-800 transition-colors">
+                            <h4 class="text-xs font-bold text-slate-400 uppercase flex items-center gap-2 group-hover:text-white transition-colors">
+                                ${displayName} <span class="text-[10px] text-slate-600">(${catQuestions.length})</span>
+                            </h4>
+                            <i id="icon-cat-${cat}" data-lucide="chevron-right" class="w-3 h-3 text-slate-600 group-hover:text-white transition-transform duration-200"></i>
+                        </button>
+                        
+                        <div id="cat-${cat}" class="hidden space-y-1 pl-1 pt-1 transition-all">
+                `;
+
+                    catQuestions.forEach(q => {
+                        html += `
+                        <div class="group/item flex items-center justify-between p-2 rounded hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-700 transition-all">
+                            <div class="flex-1 overflow-hidden" onclick="setPrompt('${q.text.replace(/'/g, "\\'")}', '${q.category}')">
+                                <div class="text-xs font-bold text-slate-300 truncate">${q.title}</div>
+                                <div class="text-[10px] text-slate-500 truncate group-hover/item:text-slate-400">${q.text}</div>
+                            </div>
+                            <div class="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                <button onclick="editQuestion('${q.id}')" class="p-1 hover:text-blue-400 text-slate-500"><i data-lucide="edit-2" class="w-3 h-3"></i></button>
+                                <button onclick="deleteQuestion('${q.id}')" class="p-1 hover:text-red-400 text-slate-500"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+                            </div>
+                        </div>
+                    `;
+                    });
+
+                    html += `</div></div>`;
+                });
+
+                questionsList.innerHTML = html;
+                lucide.createIcons();
+            }
+
+            function toggleCategory(id) {
+                const el = document.getElementById(id);
+                const icon = document.getElementById(`icon-${id}`);
+                if (!el) return;
+
+                if (el.classList.contains('hidden')) {
+                    el.classList.remove('hidden');
+                    if (icon) icon.style.transform = 'rotate(90deg)';
+                } else {
+                    el.classList.add('hidden');
+                    if (icon) icon.style.transform = 'rotate(0deg)';
+                }
+
+                // Optional: Close others? User didn't specify accordion (one-at-a-time). 
+                // "tekrar tıkladığında kapansın" implies toggle.
+            }
+
+
+
+            async function runAllQuestions() {
+                if (isRunning) return;
+                if (!confirm("Tüm 50 soruyu sırayla çalıştırmak üzeresir. Bu işlem uzun sürebilir ve ekranı temizleyecektir. Devam edilsin mi?")) return;
+
+                // Clear once at start
+                outputArea.innerHTML = '';
+
+                // Get questions - maybe filter by active category if we implement filter later? 
+                // For now, run ALL localQuestions as requested.
+
+                // We need to bypass the 'isRunning' check in runBenchmark? 
+                // runBenchmark sets isRunning=true at start, false at end.
+                // So awaiting it should be fine.
+
+                for (let i = 0; i < localQuestions.length; i++) {
+                    const q = localQuestions[i];
+
+                    // Visual feedback
+                    setPrompt(q.text, q.category);
+
+                    // Scroll to bottom to show new entry being added
+                    // Actually top is better for the start, but as lists grows...
+                    // Let's scroll to the new question element once added.
+
+                    await runBenchmark(q.text, false); // false = append mode
+
+                    // Small pause
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+
+                alert("Tüm testler tamamlandı!");
+            }
+
+            async function loadLeaderboard() {
+                const data = await fetchLeaderboard();
+                const allResults = data.results || [];
+
+                // Category Filter
+                const catSelect = document.getElementById('leaderboard-category-select');
+                const catFilter = catSelect ? catSelect.value : 'all';
+
+                const filteredResults = (catFilter === 'all')
+                    ? allResults
+                    : allResults.filter(r => r.category === catFilter);
+
+                // Aggregate Scores
+                const modelStats = {};
+
+                filteredResults.forEach(r => {
+                    if (!modelStats[r.model_id]) {
+                        modelStats[r.model_id] = {
+                            human_total: 0, human_count: 0,
+                            ai_total: 0, ai_count: 0,
+                            total_entries: 0
+                        };
+                    }
+                    const stats = modelStats[r.model_id];
+                    stats.total_entries++;
+
+                    if (r.human_score > 0) {
+                        stats.human_total += r.human_score;
+                        stats.human_count++;
+                    }
+                    if (r.ai_score > 0) {
+                        stats.ai_total += r.ai_score;
+                        stats.ai_count++;
+                    }
+                });
+
+                // Convert to array and sort
+                const leaderboard = Object.keys(modelStats).map(mid => {
+                    const s = modelStats[mid];
+                    const hAvg = s.human_count > 0 ? (s.human_total / s.human_count).toFixed(1) : "0.0";
+                    const aAvg = s.ai_count > 0 ? (s.ai_total / s.ai_count).toFixed(1) : "0.0";
+
+                    // Sorting by weighted average or just human score? 
+                    // Let's sort by human score primarily, then AI.
+                    return {
+                        id: mid,
+                        human_avg: hAvg,
+                        ai_avg: aAvg,
+                        count: s.human_count || s.ai_count || s.total_entries
+                    };
+                }).sort((a, b) => {
+                    const scoreA = (parseFloat(a.human_avg) + parseFloat(a.ai_avg)) / (a.human_avg > 0 && a.ai_avg > 0 ? 2 : 1);
+                    const scoreB = (parseFloat(b.human_avg) + parseFloat(b.ai_avg)) / (b.human_avg > 0 && b.ai_avg > 0 ? 2 : 1);
+                    return scoreB - scoreA;
+                });
+
+                // Render
+                leaderboardList.innerHTML = leaderboard.map((m, idx) => `
+                <div class="flex items-center justify-between bg-slate-800/40 p-2 rounded-lg border border-slate-700/50 hover:border-slate-600 transition-all group">
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <div class="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${idx === 0 ? 'bg-yellow-500 text-black' : (idx === 1 ? 'bg-slate-300 text-black' : (idx === 2 ? 'bg-orange-700 text-white' : 'bg-slate-700/50 text-slate-500'))}">
+                            ${idx + 1}
+                        </div>
+                        <span class="text-[11px] font-medium text-slate-300 truncate" title="${m.id}">${m.id.split('/').pop()}</span>
+                    </div>
+                    
+                    <div class="flex items-center gap-3">
+                        <div class="flex flex-col items-end">
+                            <span class="text-[8px] text-slate-500 uppercase leading-none mb-0.5">SİZ</span>
+                            <span class="text-[11px] font-bold text-blue-400">${m.human_avg}</span>
+                        </div>
+                        <div class="flex flex-col items-end">
+                            <span class="text-[8px] text-slate-500 uppercase leading-none mb-0.5">HAKEM</span>
+                            <span class="text-[11px] font-bold text-indigo-400">${m.ai_avg}</span>
+                        </div>
+                        <div class="min-w-[20px] text-center text-[10px] text-slate-600 font-mono bg-slate-900/50 px-1 rounded border border-slate-800">
+                            ${m.count}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+                // Fallback for empty
+                if (leaderboard.length === 0) {
+                    leaderboardList.innerHTML = `<div class="text-center text-slate-600 text-xs py-4">Bu kategoride (${catFilter}) henüz veri yok.</div>`;
+                }
+
+                lucide.createIcons();
+            }
+
+            function setPrompt(text, category) {
+                promptInput.value = text;
+                categorySelect.value = category || 'general';
+            }
+
+            function uuidv4() {
+                // Simple UUID generator
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+                    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            }
+
+            async function resetAllScores() {
+                if (!confirm("⚠️ DİKKAT!\n\nTüm model skorları ve hakem değerlendirmeleri silinecek.\nBu işlem geri alınamaz!\n\nDevam etmek istediğinden emin misin?")) {
+                    return;
+                }
+
+                try {
+                    const res = await fetch('/api/arena/reset', { method: 'DELETE' });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        alert("✅ " + data.message);
+                        // Reload leaderboard to reflect changes
+                        loadLeaderboard();
+                    } else {
+                        alert("❌ Hata: " + data.message);
+                    }
+                } catch (e) {
+                    alert("❌ Sıfırlama başarısız: " + e.message);
+                }
+            }
+
+            function copyResponse(btn) {
+                // Find the response card containing this button
+                const card = btn.closest('.response-card');
+                if (!card) return;
+
+                // Extract text from markdown-body div
+                const contentDiv = card.querySelector('.markdown-body');
+                if (!contentDiv) return;
+
+                const textToCopy = contentDiv.innerText;
+
+                // Copy to clipboard
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    // Visual feedback
+                    const icon = btn.querySelector('i');
+                    const originalClass = icon.getAttribute('data-lucide');
+
+                    icon.setAttribute('data-lucide', 'check');
+                    btn.classList.add('text-green-400');
+                    lucide.createIcons();
+
+                    setTimeout(() => {
+                        icon.setAttribute('data-lucide', originalClass);
+                        btn.classList.remove('text-green-400');
+                        lucide.createIcons();
+                    }, 1500);
+                }).catch(err => {
+                    console.error('Copy failed:', err);
+                    alert('Kopyalama başarısız!');
+                });
+            }
+
+            function copyAllResponses() {
+                const cards = document.querySelectorAll('.response-card');
+                if (cards.length === 0) {
+                    alert('Henüz sonuç yok!');
+                    return;
+                }
+
+                let allText = '';
+                cards.forEach((card, index) => {
+                    const modelName = card.querySelector('.model-name').textContent.trim();
+                    const content = card.querySelector('.markdown-body').innerText.trim();
+
+                    allText += `==================== ${modelName} ====================\n\n`;
+                    allText += content;
+                    allText += '\n\n\n';
+                });
+
+                navigator.clipboard.writeText(allText.trim()).then(() => {
+                    const btn = document.getElementById('copy-all-btn');
+                    btn.classList.add('bg-green-600');
+                    btn.classList.remove('bg-slate-700');
+
+                    setTimeout(() => {
+                        btn.classList.remove('bg-green-600');
+                        btn.classList.add('bg-slate-700');
+                    }, 1500);
+                }).catch(err => {
+                    console.error('Copy all failed:', err);
+                    alert('Toplu kopyalama başarısız: ' + err.message);
+                });
+            }
+
+            lucide.createIcons();
+        </script>
+</body>
+
+</html>
