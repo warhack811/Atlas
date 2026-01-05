@@ -82,7 +82,7 @@ async def keep_alive_pulse():
 @app.on_event("startup")
 async def startup_event():
     """Uygulama başladığında çalışacak görevler."""
-    from scheduler import start_scheduler
+    from Atlas.scheduler import start_scheduler
     start_scheduler()
     
     # Arka plan görevlerini ve veritabanı canlılık sinyalini başlat
@@ -92,7 +92,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Uygulama kapandığında çalışacak görevler."""
-    from scheduler import stop_scheduler
+    from Atlas.scheduler import stop_scheduler
     stop_scheduler()
 
 
