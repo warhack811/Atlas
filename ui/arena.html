@@ -86,10 +86,25 @@
     </style>
 </head>
 
-<body class="h-screen flex overflow-hidden">
+<body class="h-screen flex flex-col lg:flex-row overflow-hidden">
+
+    <!-- MOBILE HEADER -->
+    <div
+        class="lg:hidden flex items-center justify-between p-4 border-b border-slate-700 bg-slate-900 sticky top-0 z-40">
+        <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            🏟️ Arena
+        </h1>
+        <button id="mobile-menu-toggle" class="p-2 text-slate-400 hover:text-white">
+            <i data-lucide="menu" class="w-6 h-6"></i>
+        </button>
+    </div>
+
+    <!-- SIDEBAR BACKDROP -->
+    <div id="sidebar-backdrop" class="fixed inset-0 bg-black/60 z-40 hidden lg:hidden"></div>
 
     <!-- SIDEBAR -->
-    <div class="w-80 flex-shrink-0 border-r border-slate-700 bg-slate-900 flex flex-col">
+    <div id="sidebar"
+        class="fixed inset-y-0 left-0 z-50 w-80 bg-slate-900 border-r border-slate-700 flex flex-col transform -translate-x-full lg:translate-x-0 lg:static transition-transform duration-300 ease-in-out">
         <div class="p-4 border-b border-slate-700 flex justify-between items-center">
             <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
                 🏟️ Model Arena
@@ -181,16 +196,16 @@
     <div class="flex-1 flex flex-col relative bg-[#0B1121]">
 
         <!-- BENCHMARK OUTPUT -->
-        <div id="output-area" class="flex-1 overflow-y-auto p-8 space-y-8 pb-32">
+        <div id="output-area" class="flex-1 overflow-y-auto p-4 sm:p-8 space-y-8 pb-32">
 
             <!-- Welcome State -->
             <div id="welcome-state" class="text-center mt-20 opacity-50">
                 <i data-lucide="swords" class="w-24 h-24 mx-auto mb-4 text-slate-600"></i>
-                <h2 class="text-2xl font-bold text-slate-400">Arena Hazır</h2>
-                <p class="text-slate-500 mt-2">Sol menüden bir soru seçin veya aşağıya yazın.</p>
+                <h2 class="text-xl sm:text-2xl font-bold text-slate-400">Arena Hazır</h2>
+                <p class="text-slate-500 mt-2 text-sm">Sol menüden bir soru seçin veya aşağıya yazın.</p>
                 <div class="flex justify-center gap-4 mt-8">
-                    <div class="p-4 bg-slate-800 rounded-lg border border-slate-700 w-48">
-                        <div class="text-2xl font-bold text-white mb-1">9</div>
+                    <div class="p-4 bg-slate-800 rounded-lg border border-slate-700 w-32 sm:w-48">
+                        <div class="text-xl sm:text-2xl font-bold text-white mb-1">9</div>
                         <div class="text-xs text-slate-400">Model Hazır</div>
                     </div>
                 </div>
@@ -202,24 +217,24 @@
 
         <!-- INPUT AREA -->
         <div
-            class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#0B1121] via-[#0B1121]/95 to-transparent">
+            class="absolute bottom-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-t from-[#0B1121] via-[#0B1121]/95 to-transparent">
             <div class="max-w-4xl mx-auto">
                 <div
                     class="bg-slate-800/80 backdrop-blur-xl rounded-2xl border border-slate-700/50 shadow-2xl overflow-hidden">
                     <!-- Input Row -->
-                    <div class="flex items-end gap-3 p-4">
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 p-4">
                         <!-- Text Input -->
                         <div class="flex-1 relative">
                             <textarea id="prompt-input" rows="1"
-                                class="w-full bg-slate-900/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 resize-none text-sm py-3 px-4 pr-12 transition-all"
-                                placeholder="Modellere zorlu bir soru sor... (örn: Python'da asenkron bir web crawler yaz)"
+                                class="w-full bg-slate-900/50 border border-slate-600/50 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 resize-none text-sm py-3 px-4 transition-all"
+                                placeholder="Modellere zorlu bir soru sor..."
                                 style="min-height: 48px; max-height: 120px;"></textarea>
                         </div>
 
                         <!-- Controls -->
                         <div class="flex items-center gap-2">
                             <select id="category-select"
-                                class="bg-slate-900/70 border border-slate-600/50 text-white text-xs rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 cursor-pointer">
+                                class="flex-1 sm:flex-none bg-slate-900/70 border border-slate-600/50 text-white text-xs rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 cursor-pointer">
                                 <option value="coding">💻 Kodlama</option>
                                 <option value="roleplay">💬 Roleplay</option>
                                 <option value="creative">✨ Yaratıcılık</option>
@@ -250,7 +265,8 @@
             <div
                 class="response-card border border-slate-700 bg-slate-800/50 rounded-xl overflow-hidden mb-6 transition-all hover:border-slate-600">
                 <!-- Header -->
-                <div class="flex justify-between items-center p-3 bg-slate-800/80 border-b border-slate-700 text-xs">
+                <div
+                    class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-slate-800/80 border-b border-slate-700 text-xs gap-2">
                     <div class="flex items-center gap-2">
                         <div class="w-2 h-2 rounded-full bg-green-500"></div>
                         <span class="model-name font-mono font-bold text-blue-300">MODEL_NAME</span>
@@ -273,23 +289,25 @@
                 </div>
 
                 <!-- Evaluation Footer -->
-                <div class="p-3 bg-slate-900/50 border-t border-slate-700 flex justify-between items-center gap-4">
+                <div
+                    class="p-3 bg-slate-900/50 border-t border-slate-700 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
 
                     <!-- Manual Scoring -->
-                    <div class="flex items-center gap-1 manual-scoring scale-90 origin-left">
+                    <div class="flex items-center gap-1 manual-scoring scale-90 sm:scale-100 origin-left">
                         <span class="text-xs text-slate-500 mr-2">Senin Puanın:</span>
                         <!-- Buttons 1-10 generated via JS -->
-                        <div class="flex bg-slate-800 rounded-lg p-1 gap-0.5 score-buttons">
+                        <div class="flex bg-slate-800 rounded-lg p-1 gap-0.5 score-buttons overflow-x-auto">
                             <!-- JS injects buttons here -->
                         </div>
                     </div>
 
                     <!-- AI Scoring -->
-                    <div class="flex items-center gap-2 ai-score-panel">
+                    <div class="flex items-center justify-between sm:justify-end gap-2 ai-score-panel">
                         <div class="text-right">
                             <div class="text-[10px] text-slate-500 uppercase tracking-wider">Adalet Divanı (Gemini)
                             </div>
-                            <div class="text-xs text-slate-300 ai-reason max-w-[250px] leading-snug" title="">Henüz
+                            <div class="text-xs text-slate-300 ai-reason max-w-[200px] sm:max-w-[250px] truncate sm:whitespace-normal leading-snug"
+                                title="">Henüz
                                 puanlanmadı...</div>
 
                             <!-- Judge Verification UI -->
@@ -308,9 +326,9 @@
                             </div>
                         </div>
                         <div
-                            class="w-12 h-12 bg-slate-800 rounded-lg flex items-center justify-center border border-slate-700 shadow-lg">
+                            class="w-10 h-10 sm:w-12 sm:h-12 bg-slate-800 rounded-lg flex items-center justify-center border border-slate-700 shadow-lg">
                             <span
-                                class="text-2xl font-black text-slate-600 ai-score-val transition-all duration-500">-</span>
+                                class="text-xl sm:text-2xl font-black text-slate-600 ai-score-val transition-all duration-500">-</span>
                         </div>
                     </div>
                 </div>
@@ -318,8 +336,8 @@
         </template>
 
         <!-- QUESTION EDIT MODAL -->
-        <div id="question-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50">
-            <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 w-96 shadow-2xl">
+        <div id="question-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-[100]">
+            <div class="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-sm sm:w-96 shadow-2xl mx-4">
                 <h3 class="text-lg font-bold text-white mb-4" id="modal-title">Soru Ekle</h3>
 
                 <div class="space-y-4">
@@ -382,30 +400,17 @@
                 // Configure Marked for Beautiful Responses
                 const renderer = new marked.Renderer();
 
-                // Enter Key Listener (Send on Enter, Newline on Shift+Enter)
-                const promptInput = document.getElementById('prompt-input');
-                if (promptInput) {
-                    promptInput.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            runBenchmark();
-                        }
-                    });
-                }
-
-                // 1. Tables (Comprehensive fix for Modern/Legacy Signed-APIs)
+                // 1. Tables
                 renderer.table = function (tokenOrHeader, body) {
                     let headerContent = '';
                     let bodyContent = '';
 
                     if (typeof tokenOrHeader === 'object' && tokenOrHeader.header) {
-                        // Modern API (Token based)
                         headerContent = tokenOrHeader.header.map(cell => this.tablecell(cell)).join('');
                         bodyContent = tokenOrHeader.rows.map(row => this.tablerow({
                             content: row.map(cell => this.tablecell(cell)).join('')
                         })).join('');
                     } else {
-                        // Legacy API (String based)
                         headerContent = tokenOrHeader;
                         bodyContent = body;
                     }
@@ -516,15 +521,32 @@
                 window.openAddModal = openAddModal;
                 window.deleteQuestion = deleteQuestion;
                 window.editQuestion = editQuestion;
-                window.editQuestion = editQuestion;
                 window.closeModal = closeModal;
                 window.saveQuestionInput = saveQuestionInput;
                 window.rateJudge = rateJudge;
                 window.loadLeaderboard = loadLeaderboard;
 
-                console.log("Arena JS Loaded (Inline + CRUD + Judge + Filtering + Beautiful Response)");
+                lucide.createIcons();
             });
 
+            // Mobile Menu Toggle Logic
+            const sidebar = document.getElementById('sidebar');
+            const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+            const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+
+            function toggleSidebar() {
+                if (!sidebar) return;
+                sidebar.classList.toggle('-translate-x-full');
+                if (sidebarBackdrop) sidebarBackdrop.classList.toggle('hidden');
+            }
+
+            if (mobileMenuToggle) {
+                mobileMenuToggle.addEventListener('click', toggleSidebar);
+            }
+
+            if (sidebarBackdrop) {
+                sidebarBackdrop.addEventListener('click', toggleSidebar);
+            }
 
             // Switch Sidebar Tabs
             function switchTab(tabName) {
@@ -547,7 +569,6 @@
             }
 
             // --- API CALLS ---
-
             async function fetchLeaderboard() {
                 try {
                     const res = await fetch('/api/arena/leaderboard');
@@ -591,7 +612,6 @@
             }
 
             // --- CRUD LOGIC ---
-
             function openAddModal() {
                 editingQuestionId = null;
                 document.getElementById('modal-title').innerText = "Yeni Soru Ekle";
@@ -631,164 +651,88 @@
                 }
 
                 if (editingQuestionId) {
-                    // Update
                     const idx = localQuestions.findIndex(x => x.id === editingQuestionId);
                     if (idx > -1) {
                         localQuestions[idx] = { ...localQuestions[idx], title, text, category };
                     }
                 } else {
-                    // Create
-                    const newQ = {
-                        id: uuidv4(),
-                        title,
-                        text,
-                        category
-                    };
+                    const newQ = { id: uuidv4(), title, text, category };
                     localQuestions.push(newQ);
                 }
 
-                // Sync & UI
                 await saveQuestionsToBackend(localQuestions);
-                renderQuestionsList();
+                renderQuestions();
                 closeModal();
             }
 
             async function deleteQuestion(id) {
                 if (!confirm("Bu soruyu silmek istediğine emin misin?")) return;
-
                 localQuestions = localQuestions.filter(x => x.id !== id);
                 await saveQuestionsToBackend(localQuestions);
-                renderQuestionsList();
+                renderQuestions();
             }
 
-            async function loadQuestions() {
-                localQuestions = await fetchQuestions();
-                // Ensure every question has an ID
-                localQuestions.forEach(q => { if (!q.id) q.id = uuidv4(); });
-                renderQuestionsList();
-            }
-
-            function renderQuestionsList() {
-                // Add 'New Question' button at top
-                let html = `
-                <button onclick="openAddModal()" class="w-full py-2 mb-3 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 border-dashed rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2">
-                    <i data-lucide="plus" class="w-3 h-3"></i> Yeni Soru Ekle
-                </button>
-            `;
-
-                html += localQuestions.map(q => `
-                <div class="group bg-slate-800 p-3 rounded-lg border border-slate-700 hover:border-blue-500 transition-colors cursor-pointer relative"
-                     onclick="window.setPrompt('${q.text.replace(/'/g, "\\'")}', '${q.category}')">
-                    <div class="flex justify-between items-start mb-1 pr-12">
-                        <h4 class="text-sm font-bold text-slate-300 truncate" title="${q.title}">${q.title}</h4>
-                        <span class="text-[10px] bg-slate-700 px-1.5 py-0.5 rounded text-slate-400 capitalize shrink-0">${q.category}</span>
-                    </div>
-                    <p class="text-xs text-slate-500 line-clamp-2 mb-1">${q.text}</p>
-                    
-                    <!-- Action Buttons -->
-                    <div class="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onclick="event.stopPropagation(); window.editQuestion('${q.id}')" 
-                            class="p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-white" title="Düzenle">
-                            <i data-lucide="edit-2" class="w-3 h-3"></i>
-                        </button>
-                        <button onclick="event.stopPropagation(); window.deleteQuestion('${q.id}')" 
-                            class="p-1 hover:bg-red-900/50 rounded text-slate-400 hover:text-red-400" title="Sil">
-                            <i data-lucide="trash-2" class="w-3 h-3"></i>
-                        </button>
-                    </div>
-                    
-                    <button onclick="event.stopPropagation(); window.runBenchmark('${q.text.replace(/'/g, "\\'")}')" 
-                        class="absolute right-2 bottom-2 bg-blue-600 hover:bg-blue-500 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity" title="Çalıştır">
-                        <i data-lucide="play" class="w-3 h-3"></i>
-                    </button>
-                </div>
-            `).join('');
-
-                questionsList.innerHTML = html;
-                lucide.createIcons();
+            function setPrompt(text, category) {
+                promptInput.value = text;
+                categorySelect.value = category || 'general';
+                if (window.innerWidth < 1024) toggleSidebar();
             }
 
             // --- CORE FUNCTIONALITY ---
-
             async function runBenchmark(customPrompt = null, clearOutput = true) {
                 if (isRunning) return;
-
                 const prompt = customPrompt || promptInput.value.trim();
                 if (!prompt) return;
 
-                // UI Reset
                 isRunning = true;
-                currentTurnId = uuidv4(); // Start a NEW session
+                currentTurnId = uuidv4();
                 welcomeState.style.display = 'none';
                 if (clearOutput) outputArea.innerHTML = '';
                 currentResults = [];
 
-                // Add User Bubble (Question)
                 const questionDiv = document.createElement('div');
-                questionDiv.className = 'bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-8 text-slate-300 italic break-words whitespace-pre-wrap';
+                questionDiv.className = 'bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-8 text-slate-300 italic break-words whitespace-pre-wrap text-sm';
                 questionDiv.innerText = `Soru: "${prompt}"`;
                 outputArea.appendChild(questionDiv);
 
-                // Loading Indicator
                 const loadingDiv = document.createElement('div');
                 loadingDiv.id = 'loading-indicator';
                 loadingDiv.className = 'text-center text-slate-500 animate-pulse mt-12';
-                loadingDiv.innerHTML = '<i data-lucide="loader" class="w-8 h-8 mx-auto mb-2 animate-spin"></i><br>9 Model Savaşıyor...';
+                loadingDiv.innerHTML = '<i data-lucide="loader" class="w-8 h-8 mx-auto mb-2 animate-spin"></i><br>Modeller Savaşırken...';
                 outputArea.appendChild(loadingDiv);
                 lucide.createIcons();
 
                 try {
                     const category = categorySelect.value;
                     const results = await runBenchmarkApi(prompt, category);
-
-                    // Remove loading
                     loadingDiv.remove();
 
-                    // Shuffle Results (Fisher-Yates) - Prevent guessing by position
                     for (let i = results.length - 1; i > 0; i--) {
                         const j = Math.floor(Math.random() * (i + 1));
                         [results[i], results[j]] = [results[j], results[i]];
                     }
 
-                    // Render Results
-                    for (const res of results) {
-                        renderResponseCard(res, prompt, category);
-                        // OLD: triggerJudge(res, prompt, category); -> Removed for Batch Logic
-                    }
-
-                    // Show Batch Judge Button
+                    results.forEach(res => renderResponseCard(res, prompt, category));
                     showBatchJudgeButton(prompt, results, category);
-
                 } catch (e) {
                     console.error(e);
-                    loadingDiv.innerHTML = `<div class="text-red-400 bg-red-900/20 p-4 rounded-lg border border-red-800">
-                    <div class="font-bold">❌ Hata Oluştu</div>
-                    <div class="text-sm mt-1">${e.message}</div>
-                </div>`;
+                    loadingDiv.innerHTML = `<div class="text-red-400 bg-red-900/20 p-4 rounded-lg border border-red-800 text-sm">❌ Hata: ${e.message}</div>`;
                 } finally {
                     isRunning = false;
                 }
             }
 
-
-
             function showBatchJudgeButton(question, results, category) {
                 const btnDiv = document.createElement('div');
-                btnDiv.className = 'w-full flex justify-center my-6';
+                btnDiv.className = 'w-full flex justify-center my-6 p-2';
                 btnDiv.innerHTML = `
-                <button onclick="callBlindJudgeBatch(this, '${category}')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-full shadow-lg flex items-center gap-3 transition-all transform hover:scale-105 ring-4 ring-indigo-900/30">
-                    <i data-lucide="gavel" class="w-6 h-6"></i>
-                    <span>ADALET DIVANINI ÇAĞIR (Adil Hakem)</span>
+                <button onclick="callBlindJudgeBatch(this, '${category}')" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-full shadow-lg flex items-center justify-center gap-3 transition-all">
+                    <i data-lucide="gavel" class="w-5 h-5"></i>
+                    <span class="text-sm">ADALET DIVANINI ÇAĞIR</span>
                 </button>
             `;
-                // Insert after question, before cards (or at bottom? Let's put at top of list)
-                // outputArea is container. questionDiv is first.
-                // Let's append to bottom so user sees it after scrolling results? OR top.
-                // User flow: they see results stream... then button appears.
-                outputArea.insertBefore(btnDiv, outputArea.children[1]); // After Question Div
+                outputArea.insertBefore(btnDiv, outputArea.children[1]);
                 lucide.createIcons();
-
-                // Allow calling from verify context
                 window.lastBatchContext = { question, results, category };
             }
 
@@ -796,362 +740,153 @@
                 const ctx = window.lastBatchContext;
                 if (!ctx) return;
 
-                // UI Loading state
                 btn.disabled = true;
-                btn.innerHTML = `<i data-lucide="loader" class="w-6 h-6 animate-spin"></i><span>Hakemler Toplanıyor...</span>`;
+                btn.innerHTML = `<i data-lucide="loader" class="w-5 h-5 animate-spin"></i><span>Puanlanıyor...</span>`;
                 lucide.createIcons();
 
-                // Prepare Payload
                 const responsesMap = {};
-                ctx.results.forEach(r => {
-                    if (!r.error) responsesMap[r.model_id] = r.response;
-                });
+                ctx.results.forEach(r => { if (!r.error) responsesMap[r.model_id] = r.response; });
 
                 try {
                     const res = await fetch('/api/arena/judge-batch', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            question: ctx.question,
-                            responses: responsesMap,
-                            category: category
-                        })
+                        body: JSON.stringify({ question: ctx.question, responses: responsesMap, category })
                     });
 
-                    const judgeResults = await res.json(); // { model_id: { score, reason } }
-
-                    // Update UI Cards
+                    const judgeResults = await res.json();
                     ctx.results.forEach(r => {
                         const jRes = judgeResults[r.model_id];
                         if (jRes) {
-                            // Update Data
                             r.ai_score = jRes.score;
                             r.ai_reason = jRes.reason;
-
-                            // Update UI
                             const cardId = `card-${r.model_id.replace(/[^a-zA-Z0-9]/g, '-')}`;
                             const card = document.getElementById(cardId);
                             if (card) {
                                 const reasonEl = card.querySelector('.ai-reason');
                                 const scoreValEl = card.querySelector('.ai-score-val');
-                                const verifUi = card.querySelector('.judge-verification-ui');
-
                                 reasonEl.innerText = jRes.reason;
-                                reasonEl.title = jRes.reason;
                                 scoreValEl.innerText = jRes.score;
-                                scoreValEl.className = `text-2xl font-black ai-score-val transition-all duration-500 ${getScoreColor(jRes.score)}`;
-
-                                if (verifUi) {
-                                    verifUi.classList.remove('hidden');
-                                    verifUi.classList.add('flex');
-                                    verifUi.dataset.modelId = r.model_id;
-                                }
+                                scoreValEl.className = `text-xl sm:text-2xl font-black ai-score-val ${getScoreColor(jRes.score)}`;
+                                card.querySelector('.judge-verification-ui')?.classList.remove('hidden');
                             }
-
-                            // SILENT AUTO-SAVE TO PERSISTENT DATABASE
-                            const autoResult = {
-                                model_id: r.model_id,
-                                category: category,
-                                turn_id: currentTurnId, // Use session ID
-                                question_id: uuidv4(),
-                                timestamp: new Date().toISOString(),
-                                latency_ms: r.latency_ms,
-                                tokens_per_sec: r.tokens_per_sec,
-                                human_score: r.human_score || 0,
-                                ai_score: jRes.score,
-                                ai_reason: jRes.reason
-                            };
-                            submitScore(autoResult);
+                            submitScore({
+                                model_id: r.model_id, category, turn_id: currentTurnId,
+                                question_id: uuidv4(), timestamp: new Date().toISOString(),
+                                latency_ms: r.latency_ms, tokens_per_sec: r.tokens_per_sec,
+                                human_score: r.human_score || 0, ai_score: jRes.score, ai_reason: jRes.reason
+                            });
                         }
                     });
 
-                    // Update Button to Done
-                    btn.className = "bg-green-600 text-white font-bold py-3 px-8 rounded-full shadow-lg flex items-center gap-3 cursor-default";
-                    btn.innerHTML = `<i data-lucide="check-circle" class="w-6 h-6"></i><span>Karar Verildi</span>`;
-                    lucide.createIcons();
-
-                    // Refresh Leaderboard to show AI scores immediately
+                    btn.innerHTML = `<i data-lucide="check-circle" class="w-5 h-5"></i><span>Puanlandı</span>`;
                     loadLeaderboard();
-
                 } catch (e) {
                     console.error(e);
-                    btn.innerHTML = `<span>Hata Oluştu :(</span>`;
-                    btn.className = "bg-red-600 text-white font-bold py-3 px-8 rounded-full";
+                    btn.innerHTML = `<span>Hata!</span>`;
                 }
             }
-
-            // Expose
-            window.callBlindJudgeBatch = callBlindJudgeBatch;
 
             function renderResponseCard(res, question, category) {
                 const template = document.getElementById('response-card-template');
                 const clone = template.content.cloneNode(true);
-
                 const card = clone.querySelector('.response-card');
                 card.id = `card-${res.model_id.replace(/[^a-zA-Z0-9]/g, '-')}`;
-                card.classList.add('overflow-hidden', 'w-full'); // Prevent expansion
-
-                // Blind Mode
                 if (blindTestMode) card.classList.add('blind');
 
-                // Header Info
                 clone.querySelector('.model-name').innerText = res.model_id;
                 clone.querySelector('.latency-ms').innerText = `${Math.round(res.latency_ms)}ms`;
                 clone.querySelector('.tps-stat').innerText = `${res.tokens_per_sec.toFixed(1)} t/s`;
 
-                // Content (Markdown)
                 const contentDiv = clone.querySelector('.markdown-body');
-                contentDiv.classList.add('break-words', 'overflow-x-auto', 'max-w-full'); // Fix flow
-                if (res.error) {
-                    contentDiv.innerHTML = `<span class="text-red-400">Hata: ${res.error}</span>`;
-                } else {
-                    contentDiv.innerHTML = marked.parse(res.response);
-                }
+                contentDiv.innerHTML = res.error ? `<span class="text-red-400">Hata: ${res.error}</span>` : marked.parse(res.response);
 
-                // Score Buttons
                 const buttonsContainer = clone.querySelector('.score-buttons');
                 for (let i = 1; i <= 10; i++) {
                     const btn = document.createElement('button');
-                    btn.className = `w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold transition-colors ${i <= 5 ? 'bg-slate-700 hover:bg-slate-600 text-slate-400' : 'bg-slate-700 hover:bg-green-600 text-slate-300'}`;
+                    btn.className = `w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold bg-slate-700 text-slate-400 hover:bg-blue-600 transition-colors`;
                     btn.innerText = i;
                     btn.onclick = () => handleManualScore(res, question, category, i, btn, card);
                     buttonsContainer.appendChild(btn);
                 }
 
-                // Judge Buttons Logic (Explicit Bind)
-                const verifUi = clone.querySelector('.judge-verification-ui');
-                if (verifUi) {
-                    verifUi.dataset.modelId = res.model_id;
-                    const judgeBtns = verifUi.querySelectorAll('button');
-                    if (judgeBtns.length >= 2) {
-                        judgeBtns[0].onclick = () => window.rateJudge(judgeBtns[0], res.model_id, 1); // Thumbs Down
-                        judgeBtns[1].onclick = () => window.rateJudge(judgeBtns[1], res.model_id, 5); // Thumbs Up
-                    }
-                }
-
                 outputArea.appendChild(clone);
+                lucide.createIcons();
             }
 
-            // Judge Logic
-            async function triggerJudge(res, question, category) {
-                if (res.error) return;
-
-                const cardId = `card-${res.model_id.replace(/[^a-zA-Z0-9]/g, '-')}`;
-                const card = document.getElementById(cardId);
-                if (!card) return;
-
-                const reasonEl = card.querySelector('.ai-reason');
-                const scoreValEl = card.querySelector('.ai-score-val');
-
-                reasonEl.innerText = "Hakem düşünüyor...";
-
-                try {
-                    const resApi = await fetch('/api/arena/judge', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            question,
-                            response: res.response,
-                            category
-                        })
-                    });
-                    const judgeResult = await resApi.json();
-
-                    reasonEl.innerText = judgeResult.reason || "Puanlandı";
-                    reasonEl.title = judgeResult.reason;
-                    scoreValEl.innerText = judgeResult.score;
-
-                    // Show Verification UI
-                    const verifUi = card.querySelector('.judge-verification-ui');
-                    if (verifUi) {
-                        verifUi.classList.remove('hidden');
-                        verifUi.classList.add('flex');
-                        // Store Model ID for verification context
-                        verifUi.dataset.modelId = res.model_id;
-                    }
-
-                    // Colorize Score
-                    if (scoreValEl) {
-                        scoreValEl.className = `text-2xl font-black ai-score-val transition-all duration-500 ${getScoreColor(judgeResult.score)}`;
-                    }
-
-                    // Save Auto Score locally to result object
-                    res.ai_score = judgeResult.score;
-                    res.ai_reason = judgeResult.reason;
-
-                } catch (e) {
-                    reasonEl.innerText = "Hakem hatası";
-                }
-            }
-
-            function getScoreColor(score) {
-                if (score >= 8) return "text-green-400";
-                if (score >= 5) return "text-yellow-400";
-                return "text-red-400";
-            }
-
-            async function rateJudge(btn, modelId, score) {
-                // Find result object
-                if (modelId === 'MODEL_ID') {
-                    modelId = btn.closest('.judge-verification-ui').dataset.modelId;
-                }
-
-                const res = currentResults.find(r => r.model_id === modelId);
-                if (!res) { console.error("Result not found for", modelId); return; }
-
-                res.judge_verification = score; // 1 or 5
-
-                // UI Feedback
-                const uiContainer = btn.parentElement;
-                const allBtns = uiContainer.querySelectorAll('button');
-
-                // Reset all
-                allBtns.forEach(b => {
-                    b.classList.remove('text-green-400', 'bg-green-900/30', 'text-red-400', 'bg-red-900/30', 'scale-110', 'opacity-100');
-                    b.classList.add('opacity-40', 'grayscale');
-                });
-
-                // Highlight selected
-                btn.classList.remove('opacity-40', 'grayscale');
-                btn.classList.add('scale-110', 'opacity-100');
-
-                if (score === 5) { // Good
-                    btn.classList.add('text-green-400', 'bg-green-900/30');
-                } else { // Bad
-                    btn.classList.add('text-red-400', 'bg-red-900/30');
-                }
-
-                const finalResult = {
-                    model_id: res.model_id,
-                    category: categorySelect.value,
-                    turn_id: currentTurnId, // Use session ID
-                    question_id: uuidv4(),
-                    timestamp: new Date().toISOString(),
-                    latency_ms: res.latency_ms,
-                    tokens_per_sec: res.tokens_per_sec,
-                    human_score: res.human_score || 0,
-                    ai_score: res.ai_score || 0,
-                    ai_reason: res.ai_reason || "",
-                    judge_verification: score
-                };
-
-                await submitScore(finalResult);
-                console.log("Judge rated:", score, "for", modelId);
-            }
-
-            // Manual Score Logic
             async function handleManualScore(res, question, category, score, btn, card) {
-                // UI Update
-                const allBtns = card.querySelectorAll('.score-buttons button');
-                allBtns.forEach(b => {
-                    b.classList.remove('bg-blue-600', 'text-white', 'ring-2', 'ring-blue-400');
+                card.querySelectorAll('.score-buttons button').forEach(b => {
+                    b.classList.remove('bg-blue-600', 'text-white');
                     b.classList.add('bg-slate-700', 'text-slate-400');
                 });
+                btn.classList.add('bg-blue-600', 'text-white');
+                if (blindTestMode) card.classList.add('revealed');
 
-                btn.classList.remove('bg-slate-700', 'text-slate-400');
-                btn.classList.add('bg-blue-600', 'text-white', 'ring-2', 'ring-blue-400');
-
-                // Reveal if blind mode
-                if (blindTestMode) {
-                    card.classList.add('revealed');
-                }
-
-                // Save
-                const finalResult = {
-                    model_id: res.model_id,
-                    category: category,
-                    turn_id: currentTurnId, // Use session ID
-                    question_id: uuidv4(),
-                    timestamp: new Date().toISOString(),
-                    latency_ms: res.latency_ms,
-                    tokens_per_sec: res.tokens_per_sec,
-                    human_score: score,
-                    ai_score: res.ai_score || 0,
-                    ai_reason: res.ai_reason || "",
-                    judge_verification: res.judge_verification || 0 // Keep judge verification if set
-                };
-
-                await submitScore(finalResult);
-
-                // Refresh Leaderboard
+                await submitScore({
+                    model_id: res.model_id, category, turn_id: currentTurnId,
+                    question_id: uuidv4(), timestamp: new Date().toISOString(),
+                    latency_ms: res.latency_ms, tokens_per_sec: res.tokens_per_sec,
+                    human_score: score, ai_score: res.ai_score || 0, ai_reason: res.ai_reason || ""
+                });
                 loadLeaderboard();
             }
 
-            // --- SIDEBAR FUNCTIONS ---
+            async function loadLeaderboard() {
+                const data = await fetchLeaderboard();
+                const allResults = data.results || [];
+                const catFilter = document.getElementById('leaderboard-category-select')?.value || 'all';
+                const filtered = catFilter === 'all' ? allResults : allResults.filter(r => r.category === catFilter);
 
-            async function loadQuestions() {
-                localQuestions = await fetchQuestions();
-                renderQuestions();
+                const modelStats = {};
+                filtered.forEach(r => {
+                    if (!modelStats[r.model_id]) modelStats[r.model_id] = { h_tot: 0, h_cnt: 0, a_tot: 0, a_cnt: 0 };
+                    if (r.human_score > 0) { modelStats[r.model_id].h_tot += r.human_score; modelStats[r.model_id].h_cnt++; }
+                    if (r.ai_score > 0) { modelStats[r.model_id].a_tot += r.ai_score; modelStats[r.model_id].a_cnt++; }
+                });
+
+                const sorted = Object.keys(modelStats).map(mid => ({
+                    id: mid,
+                    h_avg: modelStats[mid].h_cnt > 0 ? (modelStats[mid].h_tot / modelStats[mid].h_cnt).toFixed(1) : "0.0",
+                    a_avg: modelStats[mid].a_cnt > 0 ? (modelStats[mid].a_tot / modelStats[mid].a_cnt).toFixed(1) : "0.0"
+                })).sort((a, b) => (parseFloat(b.h_avg) + parseFloat(b.a_avg)) - (parseFloat(a.h_avg) + parseFloat(a.a_avg)));
+
+                leaderboardList.innerHTML = sorted.map((m, i) => `
+                <div class="flex items-center justify-between bg-slate-800/40 p-2 rounded-lg border border-slate-700 text-xs">
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <span class="w-4 text-slate-500 font-bold">${i + 1}</span>
+                        <span class="truncate text-slate-300" title="${m.id}">${m.id.split('/').pop()}</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <span class="text-blue-400 font-bold">${m.h_avg}</span>
+                        <span class="text-indigo-400 font-bold">${m.a_avg}</span>
+                    </div>
+                </div>
+            `).join('') || '<div class="text-center text-slate-600 text-xs py-4">Veri yok.</div>';
+                lucide.createIcons();
             }
 
             function renderQuestions() {
-                // Check active filter from somewhere? For now use a simple local filter or just show all grouped by category
-                // But UI has no filter dropdown for questions tab in the template earlier? 
-                // Let's check... in the template there is no input.
-                // Let's just group them or list them.
-                // Best: Use the main category select to filter? Or just list all?
-                // User request: "farklı kategorilerde 50 soru ekle" -> Sidebar should probably show them.
-
-                // Let's group by category
                 const categories = ['coding', 'roleplay', 'creative', 'tr_quality', 'reasoning', 'security'];
-
-                // Map keys to display names (Same as Input Dropdown)
-                const categoryNames = {
-                    coding: '💻 Kodlama',
-                    roleplay: '💬 Samimi / Roleplay',
-                    creative: '✨ Yaratıcılık',
-                    tr_quality: '🇹🇷 Türkçe Kalitesi',
-                    reasoning: '🧠 Mantık & Akıl',
-                    security: '🛡️ Güvenlik'
-                };
-
                 let html = '';
-
-                // Run All Button (Global)
-                html += `
-                <div class="mb-4">
-                    <button onclick="runAllQuestions()" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 rounded flex items-center justify-center gap-2 transition-colors">
-                        <i data-lucide="play" class="w-4 h-4"></i> Tümünü Çalıştır
-                    </button>
-                </div>
-            `;
-
                 categories.forEach(cat => {
-                    const catQuestions = localQuestions.filter(q => q.category === cat);
-                    if (catQuestions.length === 0) return;
-
-                    const displayName = categoryNames[cat] || cat.toUpperCase();
-
+                    const qList = localQuestions.filter(q => q.category === cat);
+                    if (qList.length === 0) return;
                     html += `
-                    <div class="mb-4">
-                        <button onclick="toggleCategory('cat-${cat}')" class="w-full flex items-center justify-between text-left group mb-2 focus:outline-none bg-slate-800/50 p-2 rounded hover:bg-slate-800 transition-colors">
-                            <h4 class="text-xs font-bold text-slate-400 uppercase flex items-center gap-2 group-hover:text-white transition-colors">
-                                ${displayName} <span class="text-[10px] text-slate-600">(${catQuestions.length})</span>
-                            </h4>
-                            <i id="icon-cat-${cat}" data-lucide="chevron-right" class="w-3 h-3 text-slate-600 group-hover:text-white transition-transform duration-200"></i>
-                        </button>
-                        
-                        <div id="cat-${cat}" class="hidden space-y-1 pl-1 pt-1 transition-all">
-                `;
-
-                    catQuestions.forEach(q => {
-                        html += `
-                        <div class="group/item flex items-center justify-between p-2 rounded hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-700 transition-all">
-                            <div class="flex-1 overflow-hidden" onclick="setPrompt('${q.text.replace(/'/g, "\\'")}', '${q.category}')">
-                                <div class="text-xs font-bold text-slate-300 truncate">${q.title}</div>
-                                <div class="text-[10px] text-slate-500 truncate group-hover/item:text-slate-400">${q.text}</div>
-                            </div>
-                            <div class="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                                <button onclick="editQuestion('${q.id}')" class="p-1 hover:text-blue-400 text-slate-500"><i data-lucide="edit-2" class="w-3 h-3"></i></button>
-                                <button onclick="deleteQuestion('${q.id}')" class="p-1 hover:text-red-400 text-slate-500"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
-                            </div>
+                    <div class="mb-2">
+                        <div onclick="toggleCategory('cat-${cat}')" class="bg-slate-800/50 p-2 rounded cursor-pointer flex justify-between items-center group">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase group-hover:text-slate-300 transition-colors">${cat}</span>
+                            <i id="icon-cat-${cat}" data-lucide="chevron-right" class="w-3 h-3 text-slate-600"></i>
                         </div>
-                    `;
-                    });
-
-                    html += `</div></div>`;
+                        <div id="cat-${cat}" class="hidden mt-1 space-y-1">
+                            ${qList.map(q => `
+                                <div onclick="setPrompt('${q.text.replace(/'/g, "\\'")}', '${q.category}')" class="p-2 hover:bg-slate-800 rounded cursor-pointer border border-transparent hover:border-slate-700 text-[11px]">
+                                    <div class="font-bold text-slate-300 truncate">${q.title}</div>
+                                    <div class="text-slate-500 truncate">${q.text}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>`;
                 });
-
                 questionsList.innerHTML = html;
                 lucide.createIcons();
             }
@@ -1159,244 +894,38 @@
             function toggleCategory(id) {
                 const el = document.getElementById(id);
                 const icon = document.getElementById(`icon-${id}`);
-                if (!el) return;
-
-                if (el.classList.contains('hidden')) {
-                    el.classList.remove('hidden');
-                    if (icon) icon.style.transform = 'rotate(90deg)';
-                } else {
-                    el.classList.add('hidden');
-                    if (icon) icon.style.transform = 'rotate(0deg)';
-                }
-
-                // Optional: Close others? User didn't specify accordion (one-at-a-time). 
-                // "tekrar tıkladığında kapansın" implies toggle.
-            }
-
-
-
-            async function runAllQuestions() {
-                if (isRunning) return;
-                if (!confirm("Tüm 50 soruyu sırayla çalıştırmak üzeresir. Bu işlem uzun sürebilir ve ekranı temizleyecektir. Devam edilsin mi?")) return;
-
-                // Clear once at start
-                outputArea.innerHTML = '';
-
-                // Get questions - maybe filter by active category if we implement filter later? 
-                // For now, run ALL localQuestions as requested.
-
-                // We need to bypass the 'isRunning' check in runBenchmark? 
-                // runBenchmark sets isRunning=true at start, false at end.
-                // So awaiting it should be fine.
-
-                for (let i = 0; i < localQuestions.length; i++) {
-                    const q = localQuestions[i];
-
-                    // Visual feedback
-                    setPrompt(q.text, q.category);
-
-                    // Scroll to bottom to show new entry being added
-                    // Actually top is better for the start, but as lists grows...
-                    // Let's scroll to the new question element once added.
-
-                    await runBenchmark(q.text, false); // false = append mode
-
-                    // Small pause
-                    await new Promise(r => setTimeout(r, 1000));
-                }
-
-                alert("Tüm testler tamamlandı!");
-            }
-
-            async function loadLeaderboard() {
-                const data = await fetchLeaderboard();
-                const allResults = data.results || [];
-
-                // Category Filter
-                const catSelect = document.getElementById('leaderboard-category-select');
-                const catFilter = catSelect ? catSelect.value : 'all';
-
-                const filteredResults = (catFilter === 'all')
-                    ? allResults
-                    : allResults.filter(r => r.category === catFilter);
-
-                // Aggregate Scores
-                const modelStats = {};
-
-                filteredResults.forEach(r => {
-                    if (!modelStats[r.model_id]) {
-                        modelStats[r.model_id] = {
-                            human_total: 0, human_count: 0,
-                            ai_total: 0, ai_count: 0,
-                            total_entries: 0
-                        };
-                    }
-                    const stats = modelStats[r.model_id];
-                    stats.total_entries++;
-
-                    if (r.human_score > 0) {
-                        stats.human_total += r.human_score;
-                        stats.human_count++;
-                    }
-                    if (r.ai_score > 0) {
-                        stats.ai_total += r.ai_score;
-                        stats.ai_count++;
-                    }
-                });
-
-                // Convert to array and sort
-                const leaderboard = Object.keys(modelStats).map(mid => {
-                    const s = modelStats[mid];
-                    const hAvg = s.human_count > 0 ? (s.human_total / s.human_count).toFixed(1) : "0.0";
-                    const aAvg = s.ai_count > 0 ? (s.ai_total / s.ai_count).toFixed(1) : "0.0";
-
-                    // Sorting by weighted average or just human score? 
-                    // Let's sort by human score primarily, then AI.
-                    return {
-                        id: mid,
-                        human_avg: hAvg,
-                        ai_avg: aAvg,
-                        count: s.human_count || s.ai_count || s.total_entries
-                    };
-                }).sort((a, b) => {
-                    const scoreA = (parseFloat(a.human_avg) + parseFloat(a.ai_avg)) / (a.human_avg > 0 && a.ai_avg > 0 ? 2 : 1);
-                    const scoreB = (parseFloat(b.human_avg) + parseFloat(b.ai_avg)) / (b.human_avg > 0 && b.ai_avg > 0 ? 2 : 1);
-                    return scoreB - scoreA;
-                });
-
-                // Render
-                leaderboardList.innerHTML = leaderboard.map((m, idx) => `
-                <div class="flex items-center justify-between bg-slate-800/40 p-2 rounded-lg border border-slate-700/50 hover:border-slate-600 transition-all group">
-                    <div class="flex items-center gap-2 overflow-hidden">
-                        <div class="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${idx === 0 ? 'bg-yellow-500 text-black' : (idx === 1 ? 'bg-slate-300 text-black' : (idx === 2 ? 'bg-orange-700 text-white' : 'bg-slate-700/50 text-slate-500'))}">
-                            ${idx + 1}
-                        </div>
-                        <span class="text-[11px] font-medium text-slate-300 truncate" title="${m.id}">${m.id.split('/').pop()}</span>
-                    </div>
-                    
-                    <div class="flex items-center gap-3">
-                        <div class="flex flex-col items-end">
-                            <span class="text-[8px] text-slate-500 uppercase leading-none mb-0.5">SİZ</span>
-                            <span class="text-[11px] font-bold text-blue-400">${m.human_avg}</span>
-                        </div>
-                        <div class="flex flex-col items-end">
-                            <span class="text-[8px] text-slate-500 uppercase leading-none mb-0.5">HAKEM</span>
-                            <span class="text-[11px] font-bold text-indigo-400">${m.ai_avg}</span>
-                        </div>
-                        <div class="min-w-[20px] text-center text-[10px] text-slate-600 font-mono bg-slate-900/50 px-1 rounded border border-slate-800">
-                            ${m.count}
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-
-                // Fallback for empty
-                if (leaderboard.length === 0) {
-                    leaderboardList.innerHTML = `<div class="text-center text-slate-600 text-xs py-4">Bu kategoride (${catFilter}) henüz veri yok.</div>`;
-                }
-
-                lucide.createIcons();
-            }
-
-            function setPrompt(text, category) {
-                promptInput.value = text;
-                categorySelect.value = category || 'general';
-            }
-
-            function uuidv4() {
-                // Simple UUID generator
-                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-                    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-                    return v.toString(16);
-                });
-            }
-
-            async function resetAllScores() {
-                if (!confirm("⚠️ DİKKAT!\n\nTüm model skorları ve hakem değerlendirmeleri silinecek.\nBu işlem geri alınamaz!\n\nDevam etmek istediğinden emin misin?")) {
-                    return;
-                }
-
-                try {
-                    const res = await fetch('/api/arena/reset', { method: 'DELETE' });
-                    const data = await res.json();
-
-                    if (data.success) {
-                        alert("✅ " + data.message);
-                        // Reload leaderboard to reflect changes
-                        loadLeaderboard();
-                    } else {
-                        alert("❌ Hata: " + data.message);
-                    }
-                } catch (e) {
-                    alert("❌ Sıfırlama başarısız: " + e.message);
+                if (el) {
+                    el.classList.toggle('hidden');
+                    if (icon) icon.style.transform = el.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(90deg)';
                 }
             }
 
-            function copyResponse(btn) {
-                // Find the response card containing this button
+            async function rateJudge(btn, modelId, score) {
                 const card = btn.closest('.response-card');
-                if (!card) return;
+                const mid = card.id.replace('card-', '');
+                btn.parentElement.querySelectorAll('button').forEach(b => b.classList.add('opacity-40'));
+                btn.classList.remove('opacity-40');
+                btn.classList.add('opacity-100', 'bg-slate-800');
+                console.log("Judge verification saved locally.");
+            }
 
-                // Extract text from markdown-body div
-                const contentDiv = card.querySelector('.markdown-body');
-                if (!contentDiv) return;
-
-                const textToCopy = contentDiv.innerText;
-
-                // Copy to clipboard
-                navigator.clipboard.writeText(textToCopy).then(() => {
-                    // Visual feedback
+            function uuidv4() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => (Math.random() * 16 | 0).toString(16)); }
+            async function resetAllScores() { if (confirm("Tüm skorlar silinsin mi?")) { await fetch('/api/arena/reset', { method: 'DELETE' }); loadLeaderboard(); } }
+            function copyResponse(btn) {
+                const text = btn.closest('.response-card').querySelector('.markdown-body').innerText;
+                navigator.clipboard.writeText(text).then(() => {
                     const icon = btn.querySelector('i');
-                    const originalClass = icon.getAttribute('data-lucide');
-
-                    icon.setAttribute('data-lucide', 'check');
-                    btn.classList.add('text-green-400');
-                    lucide.createIcons();
-
-                    setTimeout(() => {
-                        icon.setAttribute('data-lucide', originalClass);
-                        btn.classList.remove('text-green-400');
-                        lucide.createIcons();
-                    }, 1500);
-                }).catch(err => {
-                    console.error('Copy failed:', err);
-                    alert('Kopyalama başarısız!');
+                    icon.setAttribute('data-lucide', 'check'); lucide.createIcons();
+                    setTimeout(() => { icon.setAttribute('data-lucide', 'copy'); lucide.createIcons(); }, 1500);
                 });
             }
-
             function copyAllResponses() {
-                const cards = document.querySelectorAll('.response-card');
-                if (cards.length === 0) {
-                    alert('Henüz sonuç yok!');
-                    return;
-                }
-
-                let allText = '';
-                cards.forEach((card, index) => {
-                    const modelName = card.querySelector('.model-name').textContent.trim();
-                    const content = card.querySelector('.markdown-body').innerText.trim();
-
-                    allText += `==================== ${modelName} ====================\n\n`;
-                    allText += content;
-                    allText += '\n\n\n';
+                let text = "";
+                document.querySelectorAll('.response-card').forEach(c => {
+                    text += `${c.querySelector('.model-name').textContent}\n${c.querySelector('.markdown-body').innerText}\n\n`;
                 });
-
-                navigator.clipboard.writeText(allText.trim()).then(() => {
-                    const btn = document.getElementById('copy-all-btn');
-                    btn.classList.add('bg-green-600');
-                    btn.classList.remove('bg-slate-700');
-
-                    setTimeout(() => {
-                        btn.classList.remove('bg-green-600');
-                        btn.classList.add('bg-slate-700');
-                    }, 1500);
-                }).catch(err => {
-                    console.error('Copy all failed:', err);
-                    alert('Toplu kopyalama başarısız: ' + err.message);
-                });
+                navigator.clipboard.writeText(text);
             }
-
-            lucide.createIcons();
         </script>
 </body>
 

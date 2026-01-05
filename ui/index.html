@@ -476,6 +476,82 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #484f58;
         }
+
+        /* --- Mobile Responsiveness --- */
+        @media (max-width: 768px) {
+            .header {
+                padding: 0 12px;
+            }
+
+            .brand span:last-child {
+                display: none; /* Hide 'Obs Panel v7.0' */
+            }
+
+            .brand div {
+                display: none;
+            }
+
+            .engine-status {
+                font-size: 0.7rem;
+            }
+
+            .chat-view {
+                padding: 12px;
+            }
+
+            .message-wrapper {
+                max-width: 95%;
+            }
+
+            .bubble {
+                padding: 12px 14px;
+                font-size: 0.9rem;
+            }
+
+            .rdr-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .footer {
+                padding: 12px;
+            }
+
+            .input-wrapper {
+                padding: 4px 8px;
+                border-radius: 12px;
+            }
+
+            .persona-select {
+                font-size: 0.75rem;
+                margin-right: 4px;
+                max-width: 80px;
+            }
+
+            input {
+                padding: 8px;
+                font-size: 0.9rem;
+            }
+
+            .send-btn {
+                width: 36px;
+                height: 36px;
+                border-radius: 8px;
+            }
+
+            .notif-panel {
+                width: calc(100% - 40px);
+                right: 20px;
+            }
+            
+            .inspector-tabs {
+                gap: 5px;
+            }
+            
+            .tab {
+                padding: 8px;
+                font-size: 0.65rem;
+            }
+        }
     </style>
 </head>
 

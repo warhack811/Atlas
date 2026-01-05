@@ -686,3 +686,52 @@ pre {
     color: var(--accent);
     font-weight: 600;
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .main {
+        grid-template-columns: 1fr;
+    }
+
+    .rdr-panel {
+        display: none; /* Hide on mobile by default */
+    }
+
+    .header {
+        padding: 0.75rem 1rem;
+    }
+
+    .header h1 {
+        font-size: 1.1rem;
+    }
+
+    .messages {
+        padding: 1rem;
+    }
+
+    .message {
+        max-width: 90%;
+    }
+
+    .input-area {
+        padding: 0.75rem 1rem;
+    }
+
+    .input-area input {
+        font-size: 0.9rem;
+    }
+
+    .input-area button {
+        padding: 0.6rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .header-actions {
+        gap: 0.5rem;
+    }
+
+    .stats-btn {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.75rem;
+    }
+}
