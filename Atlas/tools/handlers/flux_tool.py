@@ -69,9 +69,10 @@ class FluxTool(BaseTool):
                 response.raise_for_status()
                 response.raise_for_status()
                 data = response.json()
+                from Atlas.reasoning_pool import get_random_flux_thought
                 return {
                     "output": data,
-                    "thought": "Hayal ettiğiniz görseli en ince ayrıntılarıyla kurguluyorum ve fırça darbelerimi vurmaya başlıyorum."
+                    "thought": get_random_flux_thought(prompt)
                 }
         except httpx.ConnectError:
             logger.error(f"Flux API bağlantı hatası: {api_url} adresine ulaşılamıyor.")

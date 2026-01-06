@@ -66,9 +66,10 @@ class SerperTool(BaseTool):
                 response = await client.post(url, headers=headers, json=payload)
                 response.raise_for_status()
                 search_data = response.json()
+                from Atlas.reasoning_pool import get_random_search_thought
                 return {
                     "output": search_data,
-                    "thought": f"'{query}' konusu hakkında internet üzerinde kapsamlı bir araştırma yapıyorum."
+                    "thought": get_random_search_thought(query)
                 }
         except httpx.HTTPStatusError as e:
             logger.error(f"Serper API hatası: {e.response.status_code} - {e.response.text}")

@@ -32,7 +32,8 @@ class MockWeatherTool(BaseTool):
     async def execute(self, city: str) -> dict:
         """Belirtilen şehir için sahte hava durumu verisi üretir."""
         temp = random.randint(15, 35)
+        from Atlas.reasoning_pool import get_random_weather_thought
         return {
             "output": f"{city} şehri için hava durumu: {temp}°C, Güneşli.",
-            "thought": f"{city} şehri için yerel meteoroloji istasyonlarından güncel verileri çekiyorum."
+            "thought": get_random_weather_thought(city)
         }

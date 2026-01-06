@@ -330,8 +330,9 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
                 for r in raw_results
             ]
             
-            # Sentezleme adımı için düşünce ekle
-            synth_thought = {"title": "✨ Final Sentez", "content": "Tüm veriler toplandı, stratejik harekat planı tamamlanıyor ve yanıtınız oluşturuluyor..."}
+            # Sentezleme adımı için düşünce ekle (Havuzdan rastgele seç)
+            from Atlas.reasoning_pool import get_random_synthesis_thought
+            synth_thought = {"title": "✨ Final Sentez", "content": get_random_synthesis_thought()}
             record.reasoning_steps.append(synth_thought)
             yield f"data: {json.dumps({'type': 'thought', 'step': synth_thought}, default=str)}\n\n"
             
