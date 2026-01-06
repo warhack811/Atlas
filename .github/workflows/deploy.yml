@@ -20,6 +20,16 @@ jobs:
             git pull
             /home/ubuntu/Atlas/.venv/bin/pip install -r requirements.txt
             /home/ubuntu/Atlas/.venv/bin/pip install -e .
-            sed -i "s/BUILD_TIMESTAMP_PLACEHOLDER/$(date '+%d.%m.%Y %H:%M:%S')/g" /home/ubuntu/Atlas/Atlas/ui/index.html
+            
+            # Tarih damgasını bas ve kontrol et
+            TIMESTAMP=$(date '+%d.%m.%Y %H:%M:%S')
+            echo "Görünen saat: $TIMESTAMP"
+            if [ -f "Atlas/ui/index.html" ]; then
+                sed -i "s/BUILD_TIMESTAMP_PLACEHOLDER/$TIMESTAMP/g" Atlas/ui/index.html
+                echo "Zaman damgası basıldı."
+            else
+                echo "HATA: Atlas/ui/index.html bulunamadı!"
+            fi
+            
             sudo systemctl restart atlas
             sudo systemctl status atlas --no-pager -l
