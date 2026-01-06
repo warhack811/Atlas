@@ -196,10 +196,32 @@ async def extract_and_save(text: str, user_id: str, source_turn_id: str | None =
                 cleaned_triplets = sanitize_triplets(triplets, user_id, text)
                 
                 if cleaned_triplets:
-                    # FAZ2: source_turn_id provenance bilgisi ile Neo4j'ye kaydet
-                    logger.info(f"Neo4j'ye kaydediliyor: {len(cleaned_triplets)} triplet (cleaned from {len(triplets)})")
-                    await neo4j_manager.store_triplets(cleaned_triplets, user_id, source_turn_id)
-                    return cleaned_triplets
+                    # FAZ4: MWG karar motoru
+                    from Atlas.memory.memory_policy import load_policy_for_user
+                    from Atlas.memory.mwg import decide, Decision
+                    from Atlas.memory.prospective_store import create_task
+                    
+                    policy = load_policy_for_user(user_id)
+                    long_term_triplets = []
+                    
+                    for triplet in cleaned_triplets:
+                        result = await decide(triplet, policy, user_id, text)
+                        if result.decision == Decision.LONG_TERM:
+                            long_term_triplets.append(triplet)
+                            logger.info(f"MWG: LONG_TERM - {result.reason}")
+                        elif result.decision == Decision.PROSPECTIVE:
+                            await create_task(user_id, text, source_turn_id)
+                            logger.info(f"MWG: PROSPECTIVE task oluşturuldu")
+                        else:
+                            logger.info(f"MWG: {result.decision.value} - {result.reason}")
+                    
+                    if long_term_triplets:
+                        logger.info(f"Neo4j: {len(long_term_triplets)} LONG_TERM triplet yazılıyor")
+                        await neo4j_manager.store_triplets(long_term_triplets, user_id, source_turn_id)
+                        return long_term_triplets
+                    else:
+                        logger.info("MWG: Tüm triplet'ler drop/PROSPECTIVE")
+                        return []
                 else:
                     logger.info("Tüm triplet'ler Faz 1 filtreleri tarafından drop edildi.")
                     return []
