@@ -24,8 +24,8 @@ from Atlas.memory.lifecycle_engine import (
 class TestExclusiveOverwrite(unittest.IsolatedAsyncioTestCase):
     """EXCLUSIVE predicate overwrite testleri"""
     
-    @patch('Atlas.memory.lifecycle_engine.neo4j_manager.query_graph', new_callable=AsyncMock)
-    @patch('Atlas.memory.lifecycle_engine.neo4j_manager.fact_exists', new_callable=AsyncMock)
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.fact_exists', new_callable=AsyncMock)
     async def test_exclusive_different_value_supersedes_old(self, mock_exists, mock_query):
         """EXCLUSIVE predicate: farklı değer ile eski SUPERSEDED olur"""
         # Mock catalog
@@ -56,7 +56,7 @@ class TestExclusiveOverwrite(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(supersede_ops[0]["old_object"], "İstanbul")
         self.assertEqual(supersede_ops[0]["new_turn_id"], "turn_002")
     
-    @patch('Atlas.memory.lifecycle_engine.neo4j_manager.query_graph', new_callable=AsyncMock)
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
     async def test_exclusive_same_value_no_supersede(self, mock_query):
         """EXCLUSIVE predicate: aynı değer ile supersede olmaz (update)"""
         # Mock catalog
@@ -88,8 +88,8 @@ class TestExclusiveOverwrite(unittest.IsolatedAsyncioTestCase):
 class TestAdditiveAccumulate(unittest.IsolatedAsyncioTestCase):
     """ADDITIVE predicate accumulation testleri"""
     
-    @patch('Atlas.memory.lifecycle_engine.neo4j_manager.fact_exists', new_callable=AsyncMock)
-    @patch('Atlas.memory.lifecycle_engine.neo4j_manager.query_graph', new_callable=AsyncMock)
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.fact_exists', new_callable=AsyncMock)
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
     async def test_additive_accumulates_multiple_values(self, mock_query, mock_exists):
         """ADDITIVE predicate: birden fazla değer accumulate edilir"""
         # Mock catalog
@@ -139,7 +139,7 @@ class TestSupersededNotInRetrieval(unittest.TestCase):
 class TestMultiUserIsolation(unittest.IsolatedAsyncioTestCase):
     """Multi-user izolasyon testleri"""
     
-    @patch('Atlas.memory.lifecycle_engine.neo4j_manager.query_graph', new_callable=AsyncMock)
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
     async def test_user_a_supersede_does_not_affect_user_b(self, mock_query):
         """UserA supersede edince userB etkilenmez"""
         # Mock catalog
@@ -172,7 +172,7 @@ class TestMultiUserIsolation(unittest.IsolatedAsyncioTestCase):
 class TestProvenanceIntegrity(unittest.IsolatedAsyncioTestCase):
     """Provenance alanlarının bozulmadığı testleri"""
     
-    @patch('Atlas.memory.lifecycle_engine.neo4j_manager.query_graph', new_callable=AsyncMock)
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
     async def test_supersede_sets_correct_fields(self, mock_query):
         """Supersede operation doğru provenance alanlarını set eder"""
         mock_query.return_value = [{"superseded_count": 1}]
@@ -200,7 +200,7 @@ class TestProvenanceIntegrity(unittest.IsolatedAsyncioTestCase):
         # superseded_at set ediliyor
         self.assertIn("r.superseded_at = datetime()", query)
     
-    @patch('Atlas.memory.lifecycle_engine.neo4j_manager.query_graph', new_callable=AsyncMock)
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
     async def test_resolve_preserves_source_turn_id(self, mock_query):
         """resolve_conflicts source_turn_id'yi triplet'lerde koruyor"""
         mock_catalog = MagicMock()

@@ -116,7 +116,7 @@ class TestBuildMemoryContextV3(unittest.IsolatedAsyncioTestCase):
 class TestRetrievalFunctions(unittest.IsolatedAsyncioTestCase):
     """Retrieval yardımcı fonksiyon testleri"""
     
-    @patch('Atlas.memory.context.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
     async def test_retrieve_identity_facts_active_only(self, mock_query):
         """Identity facts sadece ACTIVE olanları döner"""
         mock_query.return_value = [
@@ -134,7 +134,7 @@ class TestRetrievalFunctions(unittest.IsolatedAsyncioTestCase):
         self.assertIn("status IS NULL OR r.status = 'ACTIVE'", call_args[0][0])
         self.assertEqual(call_args[0][1]["anchor"], "__USER__::user123")
     
-    @patch('Atlas.memory.context.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
     async def test_retrieve_hard_facts_exclusive_only(self, mock_query):
         """Hard facts sadece EXCLUSIVE predicates"""
         mock_catalog = MagicMock()
@@ -160,7 +160,7 @@ class TestRetrievalFunctions(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("SEVER", predicates)  # ADDITIVE olduğu için yok
         self.assertNotIn("İSİM", predicates)  # Identity olduğu için hariç
     
-    @patch('Atlas.memory.context.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
     async def test_retrieve_soft_signals_additive_temporal(self, mock_query):
         """Soft signals sadece ADDITIVE/TEMPORAL predicates"""
         mock_catalog = MagicMock()
@@ -190,7 +190,7 @@ class TestRetrievalFunctions(unittest.IsolatedAsyncioTestCase):
 class TestStatusFiltering(unittest.IsolatedAsyncioTestCase):
     """SUPERSEDED/RETRACTED filtering testleri"""
     
-    @patch('Atlas.memory.context.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
     async def test_superseded_not_in_results(self, mock_query):
         """SUPERSEDED relationship'ler retrieval'e düşmez"""
         # Query'de status filter olduğunu doğrula
@@ -298,7 +298,7 @@ class TestEmptyGraph(unittest.TestCase):
 class TestAnchorUsage(unittest.IsolatedAsyncioTestCase):
     """Anchor subject kullanımı testleri"""
     
-    @patch('Atlas.memory.context.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
     @patch('Atlas.memory.context.get_user_anchor')
     async def test_anchor_subject_used_correctly(self, mock_get_anchor, mock_query):
         """Anchor subject doğru kullanılıyor"""
