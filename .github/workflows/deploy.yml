@@ -16,6 +16,7 @@ jobs:
           key: ${{ secrets.OCI_SSH_KEY }}
           script: |
             cd /home/ubuntu/Atlas
+            git reset --hard
             git pull
             /home/ubuntu/Atlas/.venv/bin/pip install -r requirements.txt
             /home/ubuntu/Atlas/.venv/bin/pip install -e .
