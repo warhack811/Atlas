@@ -351,24 +351,35 @@ async def get_recent_rdrs(limit: int = 10):
 @app.post("/api/upload")
 async def upload_image(session_id: str, file: UploadFile = File(...)):
     """Görsel yükleme ve analiz endpoint'i."""
-    from Atlas.vision_engine import analyze_image
-    from Atlas.safety import safety_gate
-    from Atlas.memory import MessageBuffer, SessionManager
-    
     try:
-        logger.info(f"Görsel yükleme başlatıldı: {file.filename}, Session: {session_id}")
+        # Importları ve hazırlıkları try içine taşıyarak başlangıç hatalarını da yakalıyoruz
+        from Atlas.vision_engine import analyze_image
+        from Atlas.safety import safety_gate
+        from Atlas.memory import MessageBuffer, SessionManager
+        import traceback
+        
+        logger.info(f"[UPLOAD] Başladı: {file.filename}, Session: {session_id}")
+        
         session = SessionManager.get_or_create(session_id)
         session_id = session.id
+        
         content = await file.read()
-        logger.info(f"Görsel okundu: {len(content)} byte")
+        logger.info(f"[UPLOAD] Dosya okundu: {len(content)} byte")
         
+        if not content:
+            return {"status": "error", "message": "Boş dosya gönderildi."}
+
+        # 1. Görsel Analizi
+        logger.info("[UPLOAD] Vision Engine çağrılıyor...")
         analysis_text = await analyze_image(content)
-        logger.info(f"Görsel analizi tamamlandı: {analysis_text[:100]}...")
+        logger.info(f"[UPLOAD] Analiz bitti: {analysis_text[:50]}...")
         
+        # 2. Güvenlik Denetimi
+        logger.info("[UPLOAD] Güvenlik kontrolü başlatılıyor...")
         is_safe, sanitized_text, issues, used_model = await safety_gate.check_input_safety(analysis_text)
-        logger.info(f"Güvenlik denetimi tamamlandı. Güvenli mi: {is_safe}")
+        logger.info(f"[UPLOAD] Güvenlik bitti. Geçti mi: {is_safe} ({used_model})")
         
-        # Analiz sonucunu sistem notu olarak mesaj geçmişine enjekte et
+        # 3. Belleğe Kayıt
         system_note = f"[BAĞLAM - GÖRSEL ANALİZİ ({file.filename})]: {sanitized_text}"
         MessageBuffer.add_user_message(session_id, system_note)
         
@@ -376,11 +387,17 @@ async def upload_image(session_id: str, file: UploadFile = File(...)):
             "status": "success",
             "filename": file.filename,
             "analysis": sanitized_text,
-            "safety_passed": is_safe
+            "safety_passed": is_safe,
+            "used_model": used_model
         }
+
+    except ImportError as ie:
+        logger.error(f"[UPLOAD] Import Hatası: {ie}")
+        return {"status": "error", "message": f"Sistem bileşeni eksik: {str(ie)}", "traceback": traceback.format_exc()}
     except Exception as e:
         import traceback
-        logger.error(f"Yükleme hatası detayı: {e}\n{traceback.format_exc()}")
+        err_msg = f"Yükleme hatası detayı: {e}"
+        logger.error(f"[UPLOAD] {err_msg}\n{traceback.format_exc()}")
         return {
             "status": "error",
             "message": str(e),
