@@ -26,7 +26,7 @@ MEVCUT ARAÇLAR (TOOLS):
 GÖREV TİPLERİ:
 - generation: Sohbet, kod yazma, mantık yürütme.
 - tool: Araç kullanımı.
-- memory_control: Hafıza silme, unutma, resetleme talepleri. (params: {"action": "forget_all" | "forget_entity", "entity": "..."})
+- memory_control: Hafıza silme, unutma, resetleme talepleri. (params: {{"action": "forget_all" | "forget_entity", "entity": "..."}})
 
 ANALİZ KURALLARI:
 1. Kullanıcı "Resim çiz" derse -> `flux_tool` kullan.
