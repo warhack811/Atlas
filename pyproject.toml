@@ -17,6 +17,7 @@ dependencies = [
     "python-multipart",
     "marked",
     "apscheduler",
+    "pyyaml",
 ]
 
 [build-system]

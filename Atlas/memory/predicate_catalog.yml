@@ -152,8 +152,35 @@ HAYAL_EDER:
   enabled: true
   example: "Dünya turu yapmayı hayal ediyorum."
 
+ARKADASI:
+  canonical: "ARKADAŞI"
+  aliases: ["ARKADAS", "ARKADAŞ"]
+  type: "ADDITIVE"
+  category: "relationship"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Ali arkadaşım."
+
+AILE_UYESI:
+  canonical: "AİLE_ÜYESİ"
+  aliases: ["AILE", "AİLE"]
+  type: "ADDITIVE"
+  category: "relationship"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Mehmet amcam."
+
+COCUGU:
+  canonical: "ÇOCUĞU"
+  aliases: ["COCUK", "ÇOCUK"]
+  type: "ADDITIVE"
+  category: "relationship"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "İki çocuğu var."
+
 # ==============================================================================
-# ACTIONS & ABILITIES (Additive)
+# ACTIONS & ABILITIES (Additive - Disabled for Faz 1)
 # ==============================================================================
 
 CIZER:
@@ -162,8 +189,9 @@ CIZER:
   type: "ADDITIVE"
   category: "ability"
   durability: "LONG_TERM"
-  enabled: true
+  enabled: false
   example: "Atlas resim çizer."
+  note: "System ability - disabled in Faz 1 to reduce personal memory noise"
 
 PROGRAMLAYAN:
   canonical: "PROGRAMLAYAN"
@@ -171,8 +199,9 @@ PROGRAMLAYAN:
   type: "ADDITIVE"
   category: "ability"
   durability: "LONG_TERM"
-  enabled: true
+  enabled: false
   example: "Python ile kod yazan."
+  note: "System ability - disabled in Faz 1"
 
 FOTO_GONDERIR:
   canonical: "FOTO_GONDERIR"
@@ -180,8 +209,9 @@ FOTO_GONDERIR:
   type: "ADDITIVE"
   category: "ability"
   durability: "LONG_TERM"
-  enabled: true
+  enabled: false
   example: "Görsel paylaşır."
+  note: "System ability - disabled in Faz 1"
 
 KONUSUR:
   canonical: "KONUŞUR"
@@ -189,8 +219,9 @@ KONUSUR:
   type: "ADDITIVE"
   category: "ability"
   durability: "LONG_TERM"
-  enabled: true
+  enabled: false
   example: "Türkçe konuşur."
+  note: "System ability - disabled in Faz 1"
 
 GULER:
   canonical: "GÜLER"
@@ -198,8 +229,9 @@ GULER:
   type: "ADDITIVE"
   category: "ability"
   durability: "LONG_TERM"
-  enabled: true
+  enabled: false
   example: "Şakaya güler."
+  note: "System ability - disabled in Faz 1"
 
 KIZAR:
   canonical: "KIZAR"
@@ -207,8 +239,9 @@ KIZAR:
   type: "ADDITIVE"
   category: "ability"
   durability: "LONG_TERM"
-  enabled: true
+  enabled: false
   example: "Hataya kızar."
+  note: "System ability - disabled in Faz 1"
 
 DUSUNUR:
   canonical: "DÜŞÜNÜR"
@@ -216,8 +249,9 @@ DUSUNUR:
   type: "ADDITIVE"
   category: "ability"
   durability: "LONG_TERM"
-  enabled: true
+  enabled: false
   example: "Analiz ederek düşünür."
+  note: "System ability - disabled in Faz 1"
 
 # ==============================================================================
 # META PREDICATES (Information/Communication - Disabled)
@@ -304,8 +338,9 @@ ICERIK:
   type: "STATIC"
   category: "content"
   durability: "LONG_TERM"
-  enabled: true
+  enabled: false
   example: "Bu dosyanın içeriği metin."
+  note: "Content metadata - disabled in Faz 1"
 
 TIPI:
   canonical: "TİPİ"
@@ -313,8 +348,9 @@ TIPI:
   type: "STATIC"
   category: "content"
   durability: "LONG_TERM"
-  enabled: true
+  enabled: false
   example: "Elma bir meyvedir."
+  note: "Content metadata - disabled in Faz 1"
 
 RENK:
   canonical: "RENK"
@@ -322,8 +358,9 @@ RENK:
   type: "EXCLUSIVE"
   category: "attribute"
   durability: "LONG_TERM"
-  enabled: true
+  enabled: false
   example: "Gökyüzünün rengi mavi."
+  note: "Attribute - disabled in Faz 1"
 
 YAPIM_ASAMALARI:
   canonical: "YAPIM_AŞAMALARI"
@@ -331,8 +368,9 @@ YAPIM_ASAMALARI:
   type: "STATIC"
   category: "content"
   durability: "LONG_TERM"
-  enabled: true
+  enabled: false
   example: "Proje 3 aşamadan oluşur."
+  note: "Content metadata - disabled in Faz 1"
 
 ISLEM:
   canonical: "İŞLEM"
@@ -340,8 +378,9 @@ ISLEM:
   type: "STATIC"
   category: "content"
   durability: "LONG_TERM"
-  enabled: true
+  enabled: false
   example: "Bu fonksiyon toplama işlemi yapar."
+  note: "Content metadata - disabled in Faz 1"
 
 # ==============================================================================
 # INVALID/CLEANUP (Disabled - MWG should DISCARD)
