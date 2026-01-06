@@ -26,7 +26,7 @@ class TestExclusiveOverwrite(unittest.IsolatedAsyncioTestCase):
     
     @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
     @patch('Atlas.memory.neo4j_manager.neo4j_manager.fact_exists', new_callable=AsyncMock)
-    async def test_exclusive_different_value_supersedes_old(self, mock_exists, mock_query):
+    async def test_exclusive_different_value_supersedes_old(self, mock_query):
         """EXCLUSIVE predicate: farklı değer ile eski SUPERSEDED olur"""
         # Mock catalog
         mock_catalog = MagicMock()
@@ -90,7 +90,7 @@ class TestAdditiveAccumulate(unittest.IsolatedAsyncioTestCase):
     
     @patch('Atlas.memory.neo4j_manager.neo4j_manager.fact_exists', new_callable=AsyncMock)
     @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
-    async def test_additive_accumulates_multiple_values(self, mock_query, mock_exists):
+    async def test_additive_accumulates_multiple_values(self, mock_query):
         """ADDITIVE predicate: birden fazla değer accumulate edilir"""
         # Mock catalog
         mock_catalog = MagicMock()
