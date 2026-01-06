@@ -49,8 +49,10 @@ class Observer:
 
         # 1. Hafıza Taraması (Neo4j): Kullanıcının gelecek planlarını veya kritik bilgilerini getir
         # FAZ0.1-3: FACT ilişkisini user_id ile filtrele (multi-user isolation)
+        # FAZ2: status filtresi ekle (ACTIVE olmayan relationship'leri gösterme)
         cypher = """
         MATCH (u:User {id: $uid})-[:KNOWS]->(s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity)
+        WHERE r.status IS NULL OR r.status = 'ACTIVE'
         RETURN s.name as subject, r.predicate as predicate, o.name as object
         LIMIT 20
         """

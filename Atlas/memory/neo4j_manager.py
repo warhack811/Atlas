@@ -126,11 +126,23 @@ class Neo4jManager:
             r.confidence = COALESCE(t.confidence, 1.0),
             r.category = COALESCE(t.category, 'general'),
             r.created_at = datetime(),
-            r.updated_at = datetime()
+            r.updated_at = datetime(),
+            // FAZ2: Provenance ve schema alanları (yeni relationship'ler için)
+            r.schema_version = 2,
+            r.status = 'ACTIVE',
+            r.source_turn_id_first = $source_turn_id,
+            r.source_turn_id_last = $source_turn_id,
+            r.modality = 'ASSERTED',
+            r.polarity = 'POSITIVE',
+            r.attribution = 'USER',
+            r.inferred = false
         ON MATCH SET
             r.confidence = COALESCE(t.confidence, r.confidence),
             r.category = COALESCE(t.category, r.category),
-            r.updated_at = datetime()
+            r.updated_at = datetime(),
+            // FAZ2: Güncelleme sırasında source_turn_id_last ve schema_version'ı güncelle
+            r.source_turn_id_last = $source_turn_id,
+            r.schema_version = COALESCE(r.schema_version, 1)
         // User'ın Entity'yi bildiğini işaretle
         MERGE (u)-[:KNOWS]->(s)
         MERGE (u)-[:KNOWS]->(o)

@@ -68,10 +68,12 @@ class ContextBuilder:
         # 2. Neo4j sorgusu
         # Hem mesajdaki kelimeleri ara hem de kullanıcının genel kimliğini (personal) önceliklendirerek getir
         # FAZ0.1-2: FACT ilişkisini user_id ile filtrele (multi-user isolation)
+        # FAZ2: status filtresi ekle (ACTIVE olmayan relationship'leri gösterme)
         cypher = """
         MATCH (u:User {id: $uid})-[:KNOWS]->(s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity)
-        WHERE any(kw IN $keywords WHERE toLower(s.name) CONTAINS toLower(kw))
-           OR r.category = 'personal'
+        WHERE (any(kw IN $keywords WHERE toLower(s.name) CONTAINS toLower(kw))
+           OR r.category = 'personal')
+           AND (r.status IS NULL OR r.status = 'ACTIVE')
         RETURN s.name as subject, r.predicate as predicate, o.name as object, r.updated_at as ts, r.category as cat
         ORDER BY (case when r.category = 'personal' then 0 else 1 end), ts DESC
         LIMIT 15
