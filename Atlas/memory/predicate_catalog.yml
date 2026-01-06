@@ -1,0 +1,398 @@
+# Atlas Predicate Catalog
+# This file defines canonical predicates for the memory system
+# Version: 1.0 (Faz 1)
+
+# ==============================================================================
+# IDENTITY & PERSONAL INFO (Exclusive)
+# ==============================================================================
+
+ISIM:
+  canonical: "İSİM"
+  aliases: ["AD"]
+  type: "EXCLUSIVE"
+  category: "identity"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Benim adım Ali."
+
+YASI:
+  canonical: "YAŞI"
+  aliases: []
+  type: "EXCLUSIVE"
+  category: "identity"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "25 yaşındayım."
+
+MESLEGI:
+  canonical: "MESLEĞİ"
+  aliases: ["MESLEK"]
+  type: "EXCLUSIVE"
+  category: "identity"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Yazılım mühendisiyim."
+
+YASAR_YER:
+  canonical: "YAŞAR_YER"
+  aliases: []
+  type: "EXCLUSIVE"
+  category: "identity"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "İstanbul'da yaşıyorum."
+
+GELDIGI_YER:
+  canonical: "GELDİĞİ_YER"
+  aliases: []
+  type: "EXCLUSIVE"
+  category: "identity"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Ankara'dan geldim."
+
+NEREDE:
+  canonical: "NEREDE"
+  aliases: []
+  type: "EXCLUSIVE"
+  category: "location"
+  durability: "EPHEMERAL"
+  enabled: true
+  example: "Evdeyim."
+  note: "Temporal location - MWG should mark as EPHEMERAL"
+
+# ==============================================================================
+# PREFERENCES & EMOTIONAL (Additive)
+# ==============================================================================
+
+SEVER:
+  canonical: "SEVER"
+  aliases: []
+  type: "ADDITIVE"
+  category: "preference"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Pizza seviyorum."
+
+SEVMIYOR:
+  canonical: "SEVMİYOR"
+  aliases: ["SEVMEZ"]
+  type: "ADDITIVE"
+  category: "preference"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Brokoli sevmiyorum."
+
+ISTIYOR:
+  canonical: "İSTİYOR"
+  aliases: []
+  type: "ADDITIVE"
+  category: "preference"
+  durability: "SITUATIONAL"
+  enabled: true
+  example: "Yeni araba istiyorum."
+
+OGRENMEK_ISTIYOR:
+  canonical: "ÖĞRENMEK_İSTİYOR"
+  aliases: []
+  type: "ADDITIVE"
+  category: "preference"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Python öğrenmek istiyorum."
+
+HISSEDIYOR:
+  canonical: "HİSSEDİYOR"
+  aliases: ["HİSSETTİĞİ_DUYGU", "HİS"]
+  type: "TEMPORAL"
+  category: "emotional"
+  durability: "EPHEMERAL"
+  enabled: true
+  example: "Mutlu hissediyorum."
+  note: "Current emotion - should be EPHEMERAL or DISCARD"
+
+# ==============================================================================
+# RELATIONSHIPS & SOCIAL (Additive/Exclusive)
+# ==============================================================================
+
+SAHIP:
+  canonical: "SAHİP"
+  aliases: []
+  type: "ADDITIVE"
+  category: "relationship"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Bir kedim var."
+
+ESI:
+  canonical: "EŞİ"
+  aliases: []
+  type: "EXCLUSIVE"
+  category: "relationship"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Eşim Ayşe."
+
+PLANLIYOR:
+  canonical: "PLANLIYOR"
+  aliases: []
+  type: "ADDITIVE"
+  category: "prospective"
+  durability: "SITUATIONAL"
+  enabled: true
+  example: "Yarın Ankara'ya gideceğim."
+  note: "For Prospective Memory (Faz 7)"
+
+HAYAL_EDER:
+  canonical: "HAYAL_EDER"
+  aliases: []
+  type: "ADDITIVE"
+  category: "preference"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Dünya turu yapmayı hayal ediyorum."
+
+# ==============================================================================
+# ACTIONS & ABILITIES (Additive)
+# ==============================================================================
+
+CIZER:
+  canonical: "ÇİZER"
+  aliases: []
+  type: "ADDITIVE"
+  category: "ability"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Atlas resim çizer."
+
+PROGRAMLAYAN:
+  canonical: "PROGRAMLAYAN"
+  aliases: []
+  type: "ADDITIVE"
+  category: "ability"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Python ile kod yazan."
+
+FOTO_GONDERIR:
+  canonical: "FOTO_GONDERIR"
+  aliases: ["GÖNDERİR"]
+  type: "ADDITIVE"
+  category: "ability"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Görsel paylaşır."
+
+KONUSUR:
+  canonical: "KONUŞUR"
+  aliases: []
+  type: "ADDITIVE"
+  category: "ability"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Türkçe konuşur."
+
+GULER:
+  canonical: "GÜLER"
+  aliases: []
+  type: "ADDITIVE"
+  category: "ability"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Şakaya güler."
+
+KIZAR:
+  canonical: "KIZAR"
+  aliases: []
+  type: "ADDITIVE"
+  category: "ability"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Hataya kızar."
+
+DUSUNUR:
+  canonical: "DÜŞÜNÜR"
+  aliases: []
+  type: "ADDITIVE"
+  category: "ability"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Analiz ederek düşünür."
+
+# ==============================================================================
+# META PREDICATES (Information/Communication - Disabled)
+# ==============================================================================
+
+HATIRLAMAK:
+  canonical: "HATIRLAMAK"
+  aliases: ["HATIRLIYOR", "UNUTMUYOR"]
+  type: "META"
+  category: "meta"
+  durability: "SESSION"
+  enabled: false
+  example: "Bunu hatırla."
+  note: "Meta-information about memory itself"
+
+BILGI_VERDI:
+  canonical: "BİLGİ_VERDİ"
+  aliases: ["BİLGİ_VERİR", "BİLGİ_VERMEZ", "HİÇBİR_BİLGİ_VERMEDİ"]
+  type: "META"
+  category: "meta"
+  durability: "SESSION"
+  enabled: false
+  example: "Şifremi söyledim."
+  note: "Meta-communication about information sharing"
+
+DEGERI_BILMIYORUM:
+  canonical: "DEĞERİ_BİLMİYORUM"
+  aliases: ["BELİRTİLMEZ"]
+  type: "META"
+  category: "meta"
+  durability: "SESSION"
+  enabled: false
+  example: "Sıcaklık değerini bilmiyorum."
+
+KIMLIK_BILGISI:
+  canonical: "KİMLİK_BİLGİSİ"
+  aliases: []
+  type: "META"
+  category: "meta"
+  durability: "SESSION"
+  enabled: false
+  example: "Kimlik bilgisi verildi."
+
+# ==============================================================================
+# EXTERNAL/TEMPORAL PREDICATES (Disabled)
+# ==============================================================================
+
+HAVADURUMU:
+  canonical: "HAVADURUMU"
+  aliases: ["HAVA_DURUMU"]
+  type: "TEMPORAL"
+  category: "external"
+  durability: "EPHEMERAL"
+  enabled: false
+  example: "İstanbul'da yağmur var."
+  note: "External data - should come from tool, not user claim"
+
+SICAKLIK:
+  canonical: "SICAKLIK"
+  aliases: []
+  type: "TEMPORAL"
+  category: "external"
+  durability: "EPHEMERAL"
+  enabled: false
+  example: "Sıcaklık 25 derece."
+
+BASKENT:
+  canonical: "BAŞKENT"
+  aliases: []
+  type: "STATIC"
+  category: "external"
+  durability: "LONG_TERM"
+  enabled: false
+  example: "Türkiye'nin başkenti Ankara."
+  note: "Static world knowledge - should be in knowledge base, not user memory"
+
+# ==============================================================================
+# CONTENT/STATIC PREDICATES (Additive)
+# ==============================================================================
+
+ICERIK:
+  canonical: "İÇERİK"
+  aliases: ["İÇERİR"]
+  type: "STATIC"
+  category: "content"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Bu dosyanın içeriği metin."
+
+TIPI:
+  canonical: "TİPİ"
+  aliases: []
+  type: "STATIC"
+  category: "content"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Elma bir meyvedir."
+
+RENK:
+  canonical: "RENK"
+  aliases: []
+  type: "EXCLUSIVE"
+  category: "attribute"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Gökyüzünün rengi mavi."
+
+YAPIM_ASAMALARI:
+  canonical: "YAPIM_AŞAMALARI"
+  aliases: []
+  type: "STATIC"
+  category: "content"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Proje 3 aşamadan oluşur."
+
+ISLEM:
+  canonical: "İŞLEM"
+  aliases: []
+  type: "STATIC"
+  category: "content"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Bu fonksiyon toplama işlemi yapar."
+
+# ==============================================================================
+# INVALID/CLEANUP (Disabled - MWG should DISCARD)
+# ==============================================================================
+
+MERHABA:
+  canonical: "MERHABA"
+  aliases: []
+  type: "INVALID"
+  category: "invalid"
+  durability: "EPHEMERAL"
+  enabled: false
+  example: "Merhaba dedi."
+  note: "Greeting - should be DISCARD by MWG"
+
+DUSUNCE:
+  canonical: "DÜŞÜNCE"
+  aliases: []
+  type: "VAGUE"
+  category: "invalid"
+  durability: "EPHEMERAL"
+  enabled: false
+  example: "Bir düşüncesi var."
+  note: "Too vague - needs more specific predicate"
+
+DURUM:
+  canonical: "DURUM"
+  aliases: ["ÇALIŞMA_DURUMU"]
+  type: "VAGUE"
+  category: "invalid"
+  durability: "EPHEMERAL"
+  enabled: false
+  example: "Durumu iyi."
+  note: "Too vague - context dependent"
+
+DEGERLENDIRME:
+  canonical: "DEĞERLENDİRME"
+  aliases: []
+  type: "VAGUE"
+  category: "invalid"
+  durability: "EPHEMERAL"
+  enabled: false
+  example: "Değerlendirme yaptı."
+  note: "Should use SEVER/SEVMİYOR instead"
+
+SOYLEMIS_GIBI:
+  canonical: "SÖYLEMİŞ_GİBİ"
+  aliases: []
+  type: "INVALID"
+  category: "invalid"
+  durability: "EPHEMERAL"
+  enabled: false
+  example: "Söylemiş gibi davrandı."
+  note: "LLM extraction error"
