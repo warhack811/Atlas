@@ -808,6 +808,7 @@
                     <div class="tab" onclick="switchTab(event, '${msgId}', 'tool')">🛠️ Tools</div>
                     <div class="tab" onclick="switchTab(event, '${msgId}', 'safe')">🛡️ Safe</div>
                     <div class="tab" onclick="switchTab(event, '${msgId}', 'synth')">🎭 Synth</div>
+                    <div class="tab" style="color:var(--danger)" onclick="switchTab(event, '${msgId}', 'err')">❌ Hata</div>
                 </div>
                 
                 <div class="tab-content active" id="summ-${msgId}">
@@ -865,6 +866,18 @@
                     <div class="stat-label">Style Preset: <span style="color:var(--cyan)">${rdr.style_preset || "N/A"}</span></div>
                     <div class="stat-label" style="margin-top:10px">Sentezleyici Prompt:</div>
                     <pre class="code-block">${rdr.synthesizer_prompt || "Bilinmiyor"}</pre>
+                </div>
+                <div class="tab-content" id="err-${msgId}">
+                    <div class="stat-label" style="color:var(--danger)">Teknik Hata Kayıtları:</div>
+                    <div id="errorList-${msgId}" style="margin-top:10px">
+                        ${(rdr.technical_errors || []).map(e => `
+                            <div style="margin-bottom:12px; border-left: 2px solid var(--danger); padding-left:10px;">
+                                <div style="font-size:0.7rem; color:var(--text-dim)">${e.timestamp}</div>
+                                <div style="font-size:0.8rem; color:var(--text-main); margin-top:4px;">${e.error}</div>
+                                <pre class="code-block" style="margin-top:5px; max-height:100px; color:var(--danger)">${e.traceback}</pre>
+                            </div>
+                        `).join('') || "Herhangi bir teknik hata kaydedilmedi."}
+                    </div>
                 </div>
              `;
 

@@ -38,20 +38,15 @@ class Config:
 
 def get_groq_api_keys() -> list[str]:
     """Sistem yapılandırmasından veya ortam değişkenlerinden Groq API anahtarlarını çeker."""
-    try:
-        from app.config import get_settings
-        settings = get_settings()
-        return settings.get_groq_api_keys()
-    except ImportError:
-        import os
-        # Hata durumunda doğrudan ortam değişkenlerinden çekmeyi dene
-        keys = [
-            os.getenv("GROQ_API_KEY", ""),
-            os.getenv("GROQ_API_KEY_BACKUP", ""),
-            os.getenv("GROQ_API_KEY_3", ""),
-            os.getenv("GROQ_API_KEY_4", ""),
-        ]
-        return [k for k in keys if k]
+    import os
+    # Ortam değişkenlerinden çek
+    keys = [
+        os.getenv("GROQ_API_KEY", ""),
+        os.getenv("GROQ_API_KEY_BACKUP", ""),
+        os.getenv("GROQ_API_KEY_3", ""),
+        os.getenv("GROQ_API_KEY_4", ""),
+    ]
+    return [k for k in keys if k]
 
 
 def get_gemini_api_keys() -> list[str]:

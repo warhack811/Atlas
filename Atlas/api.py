@@ -15,6 +15,7 @@ Temel Sorumluluklar:
 
 import os
 import time
+from datetime import datetime
 import asyncio
 import json
 import logging
@@ -307,7 +308,16 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
 
         except Exception as e:
             logger.error(f"Akış hatası: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+            error_msg = str(e)
+            record.technical_errors.append({
+                "timestamp": datetime.now().isoformat(),
+                "error": error_msg,
+                "traceback": "api.py exception"
+            })
+            rdr.save_rdr(record)
+            yield f"data: {json.dumps({'type': 'error', 'content': error_msg})}\n\n"
+            # Hata durumunda da RDR'yi gönder ki kullanıcı ne olduğunu görsün
+            yield f"data: {json.dumps({'type': 'done', 'rdr': record.to_dict()})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

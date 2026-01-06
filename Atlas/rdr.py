@@ -106,6 +106,9 @@ class RDR:
     is_urgent: bool = False
     urgency_keywords: list = field(default_factory=list)
     
+    # Yakalanan Teknik Hatalar
+    technical_errors: list = field(default_factory=list)
+    
     # Enjekte edilen ham istemler
     orchestrator_prompt: str = ""
     synthesizer_prompt: str = ""

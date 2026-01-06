@@ -170,7 +170,7 @@ class Synthesizer:
                 print(f"[HATA] {model_id} için Sentezleyici akışı başarısız oldu: {e}")
                 continue
 
-        yield "Maalesef şu an yanıt oluşturulamadı."
+        yield {"type": "chunk", "content": "Maalesef şu an yanıt oluşturulamadı."}
 
     @staticmethod
     def _sanitize_response(text: str) -> str:
