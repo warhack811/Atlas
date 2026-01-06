@@ -76,8 +76,8 @@ MODEL_GOVERNANCE = {
         "llama-3.1-8b-instant"
     ],
     "safety": [
-        "meta-llama/llama-guard-4-12b",
         "meta-llama/llama-prompt-guard-2-86m",
+        "meta-llama/llama-guard-4-12b",
         "openai/gpt-oss-safeguard-20b"
     ],
     "coding": [
