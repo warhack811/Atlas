@@ -163,7 +163,7 @@ class Synthesizer:
                 yield {"type": "metadata", "model": model_id, "prompt": prompt, "mode": mode, "persona": mode} # Persona mode ile aynı şimdilik
                 
                 # generate_stream asenkron jeneratör döner
-                async for chunk in generate_stream(prompt, model_id, intent, api_key=api_key):
+                async for chunk in generate_stream(prompt, model_id, intent, api_key=api_key, override_system_prompt=style_instruction):
                     yield {"type": "chunk", "content": chunk}
                 return # Başarılı akış bitti
             except Exception as e:

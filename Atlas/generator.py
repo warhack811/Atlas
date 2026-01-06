@@ -136,7 +136,8 @@ async def generate_stream(
     model_id: str,
     intent: str,
     session_id: str = None,
-    api_key: Optional[str] = None
+    api_key: Optional[str] = None,
+    override_system_prompt: Optional[str] = None
 ) -> AsyncGenerator[str, None]:
     """Token'ları üretildiği anda döndüren asenkron akış (streaming) üretimi."""
     from Atlas.key_manager import KeyManager
@@ -149,7 +150,9 @@ async def generate_stream(
 
     intent_to_category = {"coding": "coding", "debug": "coding", "creative": "creative", "analysis": "analysis"}
     category = intent_to_category.get(intent, "general")
-    system_prompt = INTENT_SYSTEM_PROMPTS.get(category, INTENT_SYSTEM_PROMPTS["general"])
+    
+    # Eğer özel bir sistem promptu (persona vb.) gelmişse onu kullan, yoksa varsayılanı al
+    system_prompt = override_system_prompt or INTENT_SYSTEM_PROMPTS.get(category, INTENT_SYSTEM_PROMPTS["general"])
     
     if "qwen" in model_id.lower() or "deepseek" in model_id.lower():
         system_prompt += "\n" + COT_SUPPRESSION_PROMPT
