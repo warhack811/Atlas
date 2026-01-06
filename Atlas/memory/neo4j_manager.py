@@ -246,5 +246,95 @@ class Neo4jManager:
                 break
         return []
 
+    async def fact_exists(self, user_id: str, subject: str, predicate: str, obj: str) -> bool:
+        """
+        Belirli bir triplet'in ACTIVE olup olmadığını kontrol eder. (FAZ5)
+        """
+        query = """
+        MATCH (s:Entity {name: $sub})-[r:FACT {predicate: $pred, user_id: $uid}]->(o:Entity {name: $obj})
+        WHERE r.status = 'ACTIVE' OR r.status IS NULL
+        RETURN count(r) > 0 as exists
+        """
+        results = await self.query_graph(query, {"uid": user_id, "sub": subject, "pred": predicate, "obj": obj})
+        return results[0]["exists"] if results else False
+
+    async def create_notification(self, user_id: str, data: Dict[str, Any]) -> str:
+        """
+        Yeni bir bildirim (Notification) oluşturur ve kullanıcıya bağlar. (FAZ7)
+        """
+        notification_id = f"notif_{int(time.time())}"
+        query = """
+        MATCH (u:User {id: $uid})
+        CREATE (n:Notification {
+            id: $nid,
+            user_id: $uid,
+            created_at: datetime(),
+            message: $message,
+            type: $type,
+            read: false,
+            source: $source,
+            score_relevance: $relevance,
+            score_urgency: $urgency,
+            score_fatigue: $fatigue,
+            reason: $reason,
+            related_task_id: $task_id
+        })
+        MERGE (u)-[:HAS_NOTIFICATION]->(n)
+        RETURN n.id as id
+        """
+        try:
+            await self.query_graph(query, {
+                "uid": user_id,
+                "nid": notification_id,
+                "message": data.get("message"),
+                "type": data.get("type", "proactive_warning"),
+                "source": data.get("source", "observer"),
+                "relevance": data.get("score_relevance", 1.0),
+                "urgency": data.get("score_urgency", 1.0),
+                "fatigue": data.get("score_fatigue", 1.0),
+                "reason": data.get("reason", ""),
+                "task_id": data.get("related_task_id")
+            })
+            return notification_id
+        except Exception as e:
+            logger.error(f"Bildirim oluşturma hatası: {e}")
+            return None
+
+    async def list_notifications(self, user_id: str, limit: int = 10, unread_only: bool = False) -> List[Dict]:
+        """
+        Kullanıcının bildirimlerini listeler. (FAZ7)
+        """
+        where_clause = "WHERE n.read = false" if unread_only else ""
+        query = f"""
+        MATCH (u:User {{id: $uid}})-[:HAS_NOTIFICATION]->(n:Notification)
+        {where_clause}
+        RETURN n.id as id, n.message as message, n.type as type, n.created_at as created_at, 
+               n.read as read, n.reason as reason
+        ORDER BY n.created_at DESC
+        LIMIT $limit
+        """
+        try:
+            results = await self.query_graph(query, {"uid": user_id, "limit": limit})
+            return results if results else []
+        except Exception as e:
+            logger.error(f"Bildirim listeleme hatası: {e}")
+            return []
+
+    async def acknowledge_notification(self, user_id: str, notification_id: str) -> bool:
+        """
+        Bildirimi okundu (read=true) olarak işaretler. (FAZ7)
+        """
+        query = """
+        MATCH (u:User {id: $uid})-[:HAS_NOTIFICATION]->(n:Notification {id: $nid})
+        SET n.read = true
+        RETURN count(n) as updated
+        """
+        try:
+            results = await self.query_graph(query, {"uid": user_id, "nid": notification_id})
+            return results[0]["updated"] > 0 if results else False
+        except Exception as e:
+            logger.error(f"Bildirim onaylama hatası: {e}")
+            return False
+
 # Tekil örnek
 neo4j_manager = Neo4jManager()
