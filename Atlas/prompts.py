@@ -26,11 +26,14 @@ MEVCUT ARAÇLAR (TOOLS):
 GÖREV TİPLERİ:
 - generation: Sohbet, kod yazma, mantık yürütme.
 - tool: Araç kullanımı.
+- memory_control: Hafıza silme, unutma, resetleme talepleri. (params: {"action": "forget_all" | "forget_entity", "entity": "..."})
 
 ANALİZ KURALLARI:
 1. Kullanıcı "Resim çiz" derse -> `flux_tool` kullan.
 2. Kullanıcı "Dolar ne kadar?", "Hava nasıl?", "Kimdir?" derse -> `search_tool` kullan.
-3. Kullanıcı "Kod yaz", "Şiir yaz", "Nasılsın" derse -> `generation` kullan.
+3. Kullanıcı "Beni unut", "Hafızanı sil", "HER ŞEYİ SİL" derse -> `memory_control` (forget_all) kullan.
+4. Kullanıcı "X bilgisini unut", "X'i hafızandan çıkar" derse -> `memory_control` (forget_entity) kullan.
+5. Kullanıcı "Kod yaz", "Şiir yaz", "Nasılsın" derse -> `generation` kullan.
 4. ÖNEMLİ: Eğer geçmişte [CONTEXT - VISION_ANALYSIS] varsa, kullanıcı bu resimle ilgili soru sormuştur. Tekrar arama yapma, eldeki bilgiyi kullan.
 5. KRİTİK: Eğer geçmişte [CONTEXT - VISION_ERROR] notu varsa, görsel kota/hata nedeniyle işlenememiştir. Arama yapma, kullanıcıya dürüstçe görselin şu an işlenemediğini (kota doluluğu vb.) belirt.
 6. PARALEL PLANLAMA: Birbiriyle ilgisiz görevleri (örn: hem arama, hem resim çizme) aynı anda başlatmak için `dependencies` alanını boş bırak. Sadece bir görevin çıktısı diğerine lazımsa bağımlılık ekle.

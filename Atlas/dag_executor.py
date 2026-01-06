@@ -118,14 +118,42 @@ class DAGExecutor:
                 prompt=processed_prompt,
                 instruction=task.instruction or "",
                 session_id=session_id,
-                intent=plan.active_intent, # OrchestrationPlan'dan gelen alan adı active_intent
-                signal_only=True # Specialistler için bağlamı sadeleştiriyoruz
+                intent=plan.active_intent,
+                signal_only=True
             )
+        elif task.type == "memory_control":
+            res = await self._execute_memory_control(task, session_id)
         else:
             res = {"task_id": task_id, "error": f"Bilinmeyen görev tipi: {task.type}"}
             
         res["duration_ms"] = int((time.time() - start_t) * 1000)
         return res
+
+    async def _execute_memory_control(self, task: TaskSpec, session_id: str) -> Dict:
+        """Hafıza kontrol işlemlerini (silme, unutma) yürütür."""
+        from Atlas.memory.neo4j_manager import neo4j_manager
+        
+        action = task.params.get("action")
+        try:
+            if action == "forget_all":
+                success = await neo4j_manager.delete_all_memory(session_id)
+                output = "Tüm hafıza başarıyla temizlendi." if success else "Hafıza temizleme başarısız oldu."
+            elif action == "forget_entity":
+                entity = task.params.get("entity", "")
+                await neo4j_manager.forget_fact(session_id, entity)
+                output = f"'{entity}' bilgisi hafızamdan silindi."
+            else:
+                output = f"Bilinmeyen hafıza aksiyonu: {action}"
+            
+            return {
+                "task_id": task.id,
+                "type": "memory_control",
+                "output": output,
+                "status": "success"
+            }
+        except Exception as e:
+            logger.error(f"Hafıza kontrol hatası: {e}")
+            return {"task_id": task.id, "error": str(e), "status": "failed"}
 
     async def _execute_tool(self, task: TaskSpec) -> Dict:
         """Registry üzerinden bir aracı (tool) çalıştırır."""

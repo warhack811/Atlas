@@ -127,6 +127,35 @@ class Neo4jManager:
         record = await result.single()
         return record[0] if record else 0
 
+    async def delete_all_memory(self, user_id: str) -> bool:
+        """Kullanıcıya ait tüm graf hafızasını siler (Hard Reset)."""
+        query = """
+        MATCH (u:User {id: $uid})
+        OPTIONAL MATCH (u)-[:KNOWS]->(e:Entity)
+        DETACH DELETE u, e
+        """
+        try:
+            await self.query_graph(query, {"uid": user_id})
+            logger.info(f"Kullanıcı {user_id} için tüm hafıza silindi.")
+            return True
+        except Exception as e:
+            logger.error(f"Hafıza silme hatası: {e}")
+            return False
+
+    async def forget_fact(self, user_id: str, entity_name: str) -> int:
+        """Belirli bir varlık (Entity) ile ilgili tüm ilişkileri siler."""
+        query = """
+        MATCH (u:User {id: $uid})-[:KNOWS]->(e:Entity {name: $ename})
+        DETACH DELETE e
+        """
+        try:
+            records = await self.query_graph(query, {"uid": user_id, "ename": entity_name})
+            logger.info(f"Kullanıcı {user_id} için '{entity_name}' bilgisi unutuldu.")
+            return 1
+        except Exception as e:
+            logger.error(f"Bilgi unutma hatası: {e}")
+            return 0
+
     async def query_graph(self, cypher_query: str, params: Optional[Dict] = None) -> List[Dict]:
         """
         Graf veritabanı üzerinde Cypher sorgusu çalıştırır ve sonuçları liste olarak döner.
