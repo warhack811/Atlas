@@ -24,32 +24,33 @@ logger = logging.getLogger(__name__)
 # Bilgi çıkarımı için kullanılacak model
 EXTRACTION_MODEL = "llama-3.3-70b-versatile"
 
-# Faz 1: Pronoun/placeholder filter (geçici, Faz 3'e kadar)
-# Ben/Sen/O gibi zamirleri subject/object olarak kabul etme
-# Neo4j zaten title/upper yapıyor, burada hem raw hem normalized kontrol et
-PRONOUN_FILTER = {
-    "BEN", "SEN", "BIZ", "SİZ", "O", "ONLAR", 
-    "HOCAM", "HOCA", "KENDIM", "KENDİM", "BANA", "SANA",
-    # Normalized versions (Turkish -> ASCII)
-    "SIZ", "KENDIM"
-}
+# FAZ 3: Pronoun handling artık identity_resolver modülünde yapılıyor
+# PRONOUN_FILTER kaldırıldı - is_first_person, is_second_person, is_other_pronoun kullan
+
 
 def sanitize_triplets(triplets: List[Dict], user_id: str, raw_text: str) -> List[Dict]:
     """
     Faz 1: Triplets post-processor - enforces predicate catalog rules.
+    Faz 3: 1. şahıs zamirlerini (BEN/BENIM) user anchor'a map eder.
     
     Filters:
     1. Required fields check (subject, predicate, object)
-    2. Pronoun filter (BEN/SEN/O etc.)
-    3. Predicate canonicalization (alias → canonical)
-    4. Unknown predicate drop (fail-closed if catalog exists)
-    5. Disabled predicate drop
-    6. Category bridge (catalog → personal/general)
-    7. Durability filter (EPHEMERAL/SESSION predicates dropped)
+    2. First-person subject mapping (BEN → __USER__::<user_id>) - FAZ3
+    3. Pronoun filter (SEN/O/ONLAR etc. still dropped)
+    4. Predicate canonicalization (alias → canonical)
+    5. Unknown predicate drop (fail-closed if catalog exists)
+    6. Disabled predicate drop
+    7. Category bridge (catalog → personal/general)
+    8. Durability filter (EPHEMERAL/SESSION predicates dropped)
     
     Returns:
         Filtered list of triplets ready for Neo4j
     """
+    # FAZ3: Identity resolver modülünü import et
+    from Atlas.memory.identity_resolver import (
+        is_first_person, is_second_person, is_other_pronoun, get_user_anchor
+    )
+    
     catalog = get_catalog()
     
     # Fail-open: if catalog failed to load, pass through without filtering
@@ -74,12 +75,24 @@ def sanitize_triplets(triplets: List[Dict], user_id: str, raw_text: str) -> List
             logger.debug(f"DROP: Too short - subject='{subject}', object='{obj}'")
             continue
         
-        # 2. Pronoun filter
-        subject_upper = subject.upper()
-        obj_upper = obj.upper()
-        
-        if subject_upper in PRONOUN_FILTER or obj_upper in PRONOUN_FILTER:
+        # 2. FAZ3: Subject pronoun handling
+        original_subject = subject
+        if is_first_person(subject):
+            # FAZ3: 1. şahıs zamirlerini user anchor'a map et (drop ETME!)
+            subject = get_user_anchor(user_id)
+            logger.info(f"FIRST_PERSON_MAPPED: '{original_subject}' → '{subject}' (predicate: {predicate})")
+        elif is_second_person(subject):
+            # 2. şahıs zamirleri hala drop edilir (asistan kimliği tutulmaz)
+            logger.info(f"SECOND_PERSON_DROPPED: '{subject}' - '{predicate}' - '{obj}'")
+            continue
+        elif is_other_pronoun(subject):
+            # Diğer zamirler (O/ONLAR/HOCA vb.) hala drop edilir
             logger.info(f"PRONOUN_DROPPED: '{subject}' - '{predicate}' - '{obj}'")
+            continue
+        
+        # 3. Object pronoun handling (hala tüm zamirleri drop et)
+        if is_first_person(obj) or is_second_person(obj) or is_other_pronoun(obj):
+            logger.info(f"OBJECT_PRONOUN_DROPPED: '{subject}' - '{predicate}' - '{obj}'")
             continue
         
         # 3. Predicate canonicalization
