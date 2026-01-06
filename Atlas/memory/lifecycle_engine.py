@@ -14,6 +14,7 @@ Bu modül, FACT relationship'leri yazarken temporal conflict resolution sağlar:
 
 import logging
 from typing import List, Dict, Tuple
+from Atlas.memory.neo4j_manager import neo4j_manager  # Modül seviyesi import: test mocking için standardizasyon
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,7 @@ async def _find_active_relationship(user_id: str, subject: str, predicate: str) 
     Returns:
         {"object": "...", "turn_id": "..."} veya None
     """
-    from Atlas.memory.neo4j_manager import neo4j_manager
+    # Global neo4j_manager kullanılıyor (test mocking için)
     
     query = """
     MATCH (s:Entity {name: $subject})-[r:FACT {predicate: $predicate, user_id: $uid}]->(o:Entity)
@@ -165,7 +166,7 @@ async def supersede_relationship(
         old_object: Eski object (supersede edilecek)
         new_turn_id: Yeni turn ID (superseded_by_turn_id)
     """
-    from Atlas.memory.neo4j_manager import neo4j_manager
+    # Global neo4j_manager kullanılıyor (test mocking için)
     
     query = """
     MATCH (s:Entity {name: $subject})-[r:FACT {predicate: $predicate, user_id: $uid}]->(o:Entity {name: $old_obj})

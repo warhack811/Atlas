@@ -16,6 +16,7 @@ Temel Sorumluluklar:
 import logging
 from typing import Optional
 from Atlas.memory.buffer import MessageBuffer
+from Atlas.memory.neo4j_manager import neo4j_manager  # Modül seviyesi import: test mocking için standardizasyon
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ class ContextBuilder:
         Neo4j'den mesajla ilgili bilgileri çeker.
         """
         import re
-        from Atlas.memory.neo4j_manager import neo4j_manager
+        # neo4j_manager modül seviyesinde import edilmiş (test mocking için)
         # FAZ3: Identity resolver için import
         from Atlas.memory.identity_resolver import get_user_anchor
 
@@ -303,11 +304,10 @@ async def build_memory_context_v3(
     - Hard: max 20 satır, Soft: max 20 satır, Open: max 10 satır
     - En son güncellenler önce (updated_at desc)
     """
-    from Atlas.memory.neo4j_manager import neo4j_manager
+    # neo4j_manager modül seviyesinde import edilmiş (test mocking için)
     from Atlas.memory.identity_resolver import get_user_anchor
     from Atlas.memory.predicate_catalog import get_catalog
     from Atlas.memory.memory_policy import load_policy_for_user
-    from Atlas.logger import logger
     
     # Policy kontrolü
     if policy is None:
@@ -386,8 +386,7 @@ async def _retrieve_identity_facts(user_id: str, user_anchor: str) -> list:
     Returns:
         List of {predicate, object} dicts
     """
-    from Atlas.memory.neo4j_manager import neo4j_manager
-    from Atlas.logger import logger
+    # Global neo4j_manager kullanılıyor (test mocking için)
     
     # Sadece identity category predicates
     query = """
@@ -420,8 +419,7 @@ async def _retrieve_hard_facts(user_id: str, user_anchor: str, catalog) -> list:
     Returns:
         List of {subject, predicate, object} dicts
     """
-    from Atlas.memory.neo4j_manager import neo4j_manager
-    from Atlas.logger import logger
+    # Global neo4j_manager kullanılıyor (test mocking için)
     
     # Catalog'dan EXCLUSIVE predicates al
     exclusive_preds = []
@@ -464,8 +462,7 @@ async def _retrieve_soft_signals(user_id: str, catalog) -> list:
     Returns:
         List of {subject, predicate, object} dicts
     """
-    from Atlas.memory.neo4j_manager import neo4j_manager
-    from Atlas.logger import logger
+    # Global neo4j_manager kullanılıyor (test mocking için)
     
     # Catalog'dan ADDITIVE/TEMPORAL predicates al
     soft_preds = []
