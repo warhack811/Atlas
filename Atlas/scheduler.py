@@ -20,20 +20,15 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 def start_scheduler():
-    """Arka plan zamanlayıcısını ve tanımlı tüm görevleri başlatır."""
+    """Arka plan zamanlayıcısını ve tanımlı tüm görevleri başlatır.
+    FAZ0.1-5: test_user sabiti kaldırıldı. Observer job'ları Faz 7'de user listesinden eklenecek.
+    """
     if not scheduler.running:
-        # Örnek: 'test_user' için her 15 dakikada bir kontrol et
-        # Test amaçlı süreyi düşürebiliriz ama talep 15 dk.
-        scheduler.add_job(
-            observer.check_triggers,
-            trigger=IntervalTrigger(minutes=15),
-            args=["test_user"], # Şimdilik sabit bir test kullanıcısı
-            id="observer_job_test_user",
-            replace_existing=True
-        )
+        # TODO: Faz 7'de user listesi DB/config'den alınıp her kullanıcı için observer job eklenecek
+        # Şimdilik scheduler boş başlatılıyor
         
         scheduler.start()
-        logger.info("Scheduler, Gözlemci görevi ile birlikte başarıyla başlatıldı.")
+        logger.info("Scheduler başarıyla başlatıldı (Observer job'ları manuel olarak eklenecek).")
 
 def stop_scheduler():
     """Zamanlayıcıyı ve çalışan görevleri güvenli bir şekilde kapatır."""
