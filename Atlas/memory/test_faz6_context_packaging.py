@@ -47,7 +47,7 @@ class TestBuildMemoryContextV3(unittest.IsolatedAsyncioTestCase):
         self.assertIn("### Yumuşak Sinyaller", result)
         self.assertIn("### Açık Sorular", result)
     
-    @patch('Atlas.memory.context.get_catalog')
+    @patch('Atlas.memory.predicate_catalog.get_catalog')
     async def test_no_catalog_returns_minimal_context(self, mock_get_catalog):
         """Catalog yüklenemediyse minimal context döner"""
         mock_get_catalog.return_value = None
@@ -63,8 +63,8 @@ class TestBuildMemoryContextV3(unittest.IsolatedAsyncioTestCase):
     @patch('Atlas.memory.context._retrieve_identity_facts', new_callable=AsyncMock)
     @patch('Atlas.memory.context._retrieve_hard_facts', new_callable=AsyncMock)
     @patch('Atlas.memory.context._retrieve_soft_signals', new_callable=AsyncMock)
-    @patch('Atlas.memory.context.get_catalog')
-    @patch('Atlas.memory.context.load_policy_for_user')
+    @patch('Atlas.memory.predicate_catalog.get_catalog')
+    @patch('Atlas.memory.memory_policy.load_policy_for_user')
     async def test_standard_mode_retrieves_all_sections(
         self, mock_load_policy, mock_get_catalog,
         mock_soft, mock_hard, mock_identity
@@ -299,7 +299,7 @@ class TestAnchorUsage(unittest.IsolatedAsyncioTestCase):
     """Anchor subject kullanımı testleri"""
     
     @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
-    @patch('Atlas.memory.context.get_user_anchor')
+    @patch('Atlas.memory.identity_resolver.get_user_anchor')
     async def test_anchor_subject_used_correctly(self, mock_get_anchor, mock_query):
         """Anchor subject doğru kullanılıyor"""
         mock_get_anchor.return_value = "__USER__::user123"
