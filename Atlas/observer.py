@@ -48,8 +48,9 @@ class Observer:
         self._last_check[user_id] = now
 
         # 1. Hafıza Taraması (Neo4j): Kullanıcının gelecek planlarını veya kritik bilgilerini getir
+        # FAZ0.1-3: FACT ilişkisini user_id ile filtrele (multi-user isolation)
         cypher = """
-        MATCH (u:User {id: $uid})-[:KNOWS]->(s:Entity)-[r:FACT]->(o:Entity)
+        MATCH (u:User {id: $uid})-[:KNOWS]->(s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity)
         RETURN s.name as subject, r.predicate as predicate, o.name as object
         LIMIT 20
         """
