@@ -56,7 +56,8 @@ KULLANICI MESAJI:
   "intent": "coding" | "general" | "search" | "creative",
   "is_follow_up": false,
   "context_focus": "...",
-  "reasoning": "Neden bu planı seçtiğinin 1-2 cümlelik teknik açıklaması.",
+  "reasoning": "Planın seçilme nedeni (teknik analiz).",
+  "user_thought": "Kullanıcıya yönelik profesyonel ve güven veren iş özeti (1 paragraf).",
   "tasks": [
     {{
       "id": "t1",

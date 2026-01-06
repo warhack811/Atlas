@@ -212,6 +212,95 @@
             font-size: 0.85rem;
         }
 
+        /* --- AI Düşünce Kutusu (Reasoning) --- */
+        .thought-container {
+            background: rgba(0, 255, 150, 0.03);
+            border: 1px dashed rgba(0, 255, 150, 0.2);
+            border-radius: 8px;
+            margin-bottom: 12px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .thought-header {
+            padding: 8px 12px;
+            font-size: 0.75rem;
+            color: var(--matrix-green);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+            background: rgba(0, 255, 150, 0.05);
+        }
+
+        .thought-header:hover {
+            background: rgba(0, 255, 150, 0.1);
+        }
+
+        .thought-header i {
+            transition: transform 0.3s;
+        }
+
+        .thought-container.collapsed .thought-content {
+            display: none;
+        }
+
+        .thought-container.collapsed .thought-header i {
+            transform: rotate(-90deg);
+        }
+
+        .thought-content {
+            padding: 12px;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            line-height: 1.5;
+            border-top: 1px dashed rgba(0, 255, 150, 0.1);
+        }
+
+        .thought-step {
+            margin-bottom: 10px;
+            padding-left: 10px;
+            border-left: 1px solid var(--matrix-green);
+        }
+
+        .thought-step-title {
+            font-weight: 700;
+            color: var(--matrix-green);
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .thought-step-title::before {
+            content: "•";
+        }
+
+        .pulse-thinking {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--matrix-green);
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse-green 1.5s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% {
+                box-shadow: 0 0 0 0 rgba(0, 255, 150, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 6px rgba(0, 255, 150, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(0, 255, 150, 0);
+            }
+        }
+
         /* --- RDR Inspector --- */
         .rdr-trigger {
             margin-top: 8px;
@@ -763,7 +852,19 @@
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 const bubble = document.getElementById(`bubble-${aiMsgId}`);
-                bubble.innerHTML = ""; // Clear loader
+                bubble.innerHTML = `
+                    <div class="thought-container collapsed" id="thought-container-${aiMsgId}">
+                        <div class="thought-header" onclick="toggleThought('${aiMsgId}')">
+                            <span><span class="pulse-thinking"></span>Atlas Düşünüyor...</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div class="thought-content" id="thought-content-${aiMsgId}"></div>
+                    </div>
+                    <div class="final-answer" id="answer-${aiMsgId}">...</div>
+                `;
+                const thoughtContent = document.getElementById(`thought-content-${aiMsgId}`);
+                const answerContainer = document.getElementById(`answer-${aiMsgId}`);
+                const thoughtContainer = document.getElementById(`thought-container-${aiMsgId}`);
 
                 let buffer = "";
                 while (true) {
@@ -783,12 +884,26 @@
                                 const data = JSON.parse(trimmedLine.substring(6));
                                 if (data.type === 'plan') {
                                     statusLabel.innerText = "PLANNING: " + (data.intent || "GENERAL").toUpperCase();
-                                } else if (data.type === 'tasks_done') {
-                                    statusLabel.innerText = "SYNTHESIZING...";
+                                } else if (data.type === 'thought') {
+                                    const step = data.step;
+                                    const stepHtml = `
+                                        <div class="thought-step">
+                                            <div class="thought-step-title">${step.title}</div>
+                                            <div>${step.content}</div>
+                                        </div>
+                                    `;
+                                    thoughtContent.innerHTML += stepHtml;
+                                    chatView.scrollTop = chatView.scrollHeight;
                                 } else if (data.type === 'chunk') {
                                     fullText += data.content;
-                                    bubble.innerHTML = marked.parse(fullText);
+                                    answerContainer.innerHTML = marked.parse(fullText);
                                     chatView.scrollTop = chatView.scrollHeight;
+                                } else if (data.type === 'tasks_done') {
+                                    statusLabel.innerText = "SYNTHESIZING...";
+                                    // Senteze geçildiğinde düşünce kutusunun "aktif" halini durdurabiliriz
+                                    const pulse = thoughtContainer.querySelector('.pulse-thinking');
+                                    if (pulse) pulse.style.animation = 'none';
+                                    if (pulse) pulse.style.opacity = '0.5';
                                 } else if (data.type === 'done') {
                                     console.log("RDR Received:", data.rdr);
                                     if (data.rdr) {
@@ -809,6 +924,11 @@
             } finally {
                 setLoading(false);
             }
+        }
+
+        function toggleThought(id) {
+            const container = document.getElementById(`thought-container-${id}`);
+            container.classList.toggle('collapsed');
         }
 
         function appendRDRTrigger(msgId, rdr) {

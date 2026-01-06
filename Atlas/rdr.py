@@ -109,10 +109,10 @@ class RDR:
     orchestrator_model: str = ""
     synthesizer_model: str = ""
     
-    # Enjekte edilen ham istemler
     orchestrator_prompt: str = ""
     synthesizer_prompt: str = ""
-    orchestrator_reasoning: str = ""   # Karar verme mantığı (COT)
+    orchestrator_reasoning: str = ""   # Teknik Karar Gerekçesi
+    reasoning_steps: list = field(default_factory=list) # [{"title": "...", "content": "..."}] Kullanıcıya yönelik
     
     def to_dict(self) -> dict:
         return asdict(self)

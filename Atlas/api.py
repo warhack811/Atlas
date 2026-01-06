@@ -166,6 +166,10 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         record.classification_ms = classify_ms
         record.safety_ms = safety_ms
         record.orchestrator_reasoning = plan.reasoning
+        
+        # Kullanıcı dostu düşünce adımı ekle
+        orchestrator_thought = {"title": "Analiz ve Planlama", "content": plan.user_thought or "İsteğiniz analiz ediliyor..."}
+        record.reasoning_steps.append(orchestrator_thought)
 
         from Atlas.time_context import time_context
         
@@ -285,6 +289,12 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             record.classification_ms = classify_ms
             record.orchestrator_prompt = plan.orchestrator_prompt
             record.orchestrator_reasoning = plan.reasoning
+            
+            # Kullanıcı dostu düşünce adımı ekle ve stream et
+            orchestrator_thought = {"title": "Analiz ve Planlama", "content": plan.user_thought or "İsteğiniz analiz ediliyor..."}
+            record.reasoning_steps.append(orchestrator_thought)
+            yield f"data: {json.dumps({'type': 'thought', 'step': orchestrator_thought}, default=str)}\n\n"
+            
             if graph_context:
                 record.full_context_injection = f"[NEO4J MEMORY]: {graph_context}"
             
