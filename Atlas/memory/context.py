@@ -13,8 +13,11 @@ Temel Sorumluluklar:
 5. Rol Düzenleme: LLM API'lerinin beklediği ardışık rol (user-assistant) sırasını koruma.
 """
 
+import logging
 from typing import Optional
 from Atlas.memory.buffer import MessageBuffer
+
+logger = logging.getLogger(__name__)
 
 
 # Yaklaşık token limitleri ve tahminleri
