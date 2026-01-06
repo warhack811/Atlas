@@ -356,7 +356,6 @@ async def upload_image(session_id: str, file: UploadFile = File(...)):
         from Atlas.vision_engine import analyze_image
         from Atlas.safety import safety_gate
         from Atlas.memory import MessageBuffer, SessionManager
-        import traceback
         
         logger.info(f"[UPLOAD] Başladı: {file.filename}, Session: {session_id}")
         
@@ -395,7 +394,6 @@ async def upload_image(session_id: str, file: UploadFile = File(...)):
         logger.error(f"[UPLOAD] Import Hatası: {ie}")
         return {"status": "error", "message": f"Sistem bileşeni eksik: {str(ie)}", "traceback": traceback.format_exc()}
     except Exception as e:
-        import traceback
         err_msg = f"Yükleme hatası detayı: {e}"
         logger.error(f"[UPLOAD] {err_msg}\n{traceback.format_exc()}")
         return {
