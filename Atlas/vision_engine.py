@@ -28,7 +28,9 @@ async def analyze_image(image_bytes: bytes) -> str:
     retry_delay = 2 # seconds
     
     # Google GenAI SDK istemcisini yapılandır
-    client = genai.Client(api_key=Config.GEMINI_API_KEY)
+    from Atlas.config import get_gemini_api_key
+    gemini_key = get_gemini_api_key()
+    client = genai.Client(api_key=gemini_key)
     
     for attempt in range(max_retries):
         try:

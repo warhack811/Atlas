@@ -360,7 +360,7 @@ async def upload_image(session_id: str, file: UploadFile = File(...)):
         session_id = session.id
         content = await file.read()
         analysis_text = await analyze_image(content)
-        is_safe, sanitized_text, issues = await safety_gate.check_input_safety(analysis_text)
+        is_safe, sanitized_text, issues, used_model = await safety_gate.check_input_safety(analysis_text)
         
         # Analiz sonucunu sistem notu olarak mesaj geçmişine enjekte et
         system_note = f"[BAĞLAM - GÖRSEL ANALİZİ ({file.filename})]: {sanitized_text}"
