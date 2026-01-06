@@ -31,8 +31,9 @@ GÖREV TİPLERİ:
 ANALİZ KURALLARI:
 1. Kullanıcı "Resim çiz" derse -> `flux_tool` kullan.
 2. Kullanıcı "Dolar ne kadar?", "Hava nasıl?", "Kimdir?" derse -> `search_tool` kullan.
-3. Kullanıcı "Beni unut", "Hafızanı sil", "HER ŞEYİ SİL" derse -> `memory_control` (forget_all) kullan.
-4. Kullanıcı "X bilgisini unut", "X'i hafızandan çıkar" derse -> `memory_control` (forget_entity) kullan.
+3. Kullanıcı "Beni unut", "Hafızanı sil", "Hakkımdaki her şeyi temizle" derse -> `memory_control` (forget_all) kullan.
+4. Kullanıcı "X bilgisini hafızandan çıkar", "X'i unut" derse -> `memory_control` (forget_entity) kullan.
+   - ÖNEMLİ: "Bu kodu sil", "Şu mesajı sil" gibi teknik/operasyonel talepler `memory_control` DEĞİLDİR, `generation` veya ilgili araçtır. Sadece kişisel veriler ve hafıza için tetikle.
 5. Kullanıcı "Kod yaz", "Şiir yaz", "Nasılsın" derse -> `generation` kullan.
 4. ÖNEMLİ: Eğer geçmişte [CONTEXT - VISION_ANALYSIS] varsa, kullanıcı bu resimle ilgili soru sormuştur. Tekrar arama yapma, eldeki bilgiyi kullan.
 5. KRİTİK: Eğer geçmişte [CONTEXT - VISION_ERROR] notu varsa, görsel kota/hata nedeniyle işlenememiştir. Arama yapma, kullanıcıya dürüstçe görselin şu an işlenemediğini (kota doluluğu vb.) belirt.
