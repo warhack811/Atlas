@@ -31,9 +31,9 @@ jobs:
             $VENV_PATH install -r requirements.txt
             $VENV_PATH install -e .
             
-            # Tarih damgasını bas ve kontrol et
-            TIMESTAMP=$(date '+%d.%m.%Y %H:%M:%S')
-            echo "Görünen saat: $TIMESTAMP"
+            # Tarih damgasını bas ve kontrol et (Türkiye saatine göre)
+            TIMESTAMP=$(TZ='Europe/Istanbul' date '+%d.%m.%Y %H:%M:%S')
+            echo "Görünen yerel saat: $TIMESTAMP"
             
             # index.html konumunu doğrula (Atlas/ui/index.html)
             if [ -f "Atlas/ui/index.html" ]; then
