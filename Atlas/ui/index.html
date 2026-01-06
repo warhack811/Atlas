@@ -751,19 +751,24 @@
                 const bubble = document.getElementById(`bubble-${aiMsgId}`);
                 bubble.innerHTML = ""; // Clear loader
 
+                let buffer = "";
                 while (true) {
                     const { value, done } = await reader.read();
                     if (done) break;
 
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n');
+                    const chunk = decoder.decode(value, { stream: true });
+                    buffer += chunk;
+
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // Keep the partial line for the next chunk
 
                     for (const line of lines) {
-                        if (line.startsWith('data: ')) {
+                        const trimmedLine = line.trim();
+                        if (trimmedLine.startsWith('data: ')) {
                             try {
-                                const data = JSON.parse(line.substring(6));
+                                const data = JSON.parse(trimmedLine.substring(6));
                                 if (data.type === 'plan') {
-                                    statusLabel.innerText = "PLANNING: " + data.intent.toUpperCase();
+                                    statusLabel.innerText = "PLANNING: " + (data.intent || "GENERAL").toUpperCase();
                                 } else if (data.type === 'tasks_done') {
                                     statusLabel.innerText = "SYNTHESIZING...";
                                 } else if (data.type === 'chunk') {
@@ -771,12 +776,15 @@
                                     bubble.innerHTML = marked.parse(fullText);
                                     chatView.scrollTop = chatView.scrollHeight;
                                 } else if (data.type === 'done') {
+                                    console.log("RDR Received:", data.rdr);
                                     if (data.rdr) {
                                         appendRDRTrigger(aiMsgId, data.rdr);
                                     }
+                                } else if (data.type === 'error') {
+                                    console.error("Stream error data:", data.content);
                                 }
                             } catch (e) {
-                                console.error("JSON parse error", e, line);
+                                console.error("JSON parse error in line:", line, e);
                             }
                         }
                     }

@@ -304,7 +304,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             background_tasks.add_task(extract_and_save_task, request.message, session_id)
 
             rdr.save_rdr(record)
-            yield f"data: {json.dumps({'type': 'done', 'rdr': record.to_dict()})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'rdr': record.to_dict()}, default=str)}\n\n"
 
         except Exception as e:
             logger.error(f"Akış hatası: {e}")
@@ -315,9 +315,9 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
                 "traceback": "api.py exception"
             })
             rdr.save_rdr(record)
-            yield f"data: {json.dumps({'type': 'error', 'content': error_msg})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'content': error_msg}, default=str)}\n\n"
             # Hata durumunda da RDR'yi gönder ki kullanıcı ne olduğunu görsün
-            yield f"data: {json.dumps({'type': 'done', 'rdr': record.to_dict()})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'rdr': record.to_dict()}, default=str)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
