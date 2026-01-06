@@ -37,6 +37,7 @@ class OrchestrationPlan:
     resilience_data: Dict[str, Any] = field(default_factory=dict) # Hata yönetim verileri
     orchestrator_prompt: str = ""      # Karar verilirken kullanılan tam prompt
     orchestrator_model: str = ""       # Karar veren modelin ID'si
+    reasoning: str = ""                # Karar verme mantığı (COT)
 
 from Atlas.prompts import ORCHESTRATOR_PROMPT
 
@@ -90,7 +91,8 @@ class Orchestrator:
             rewritten_query=plan_data.get("rewritten_query"),
             resilience_data=plan_data.get("_resilience", {}),
             orchestrator_prompt=used_prompt,
-            orchestrator_model=used_model
+            orchestrator_model=used_model,
+            reasoning=plan_data.get("reasoning", "")
         )
 
     @staticmethod

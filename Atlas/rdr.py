@@ -19,6 +19,7 @@ from datetime import datetime
 from typing import Optional
 import uuid
 import json
+import pytz
 
 
 @dataclass
@@ -27,7 +28,7 @@ class RDR:
     
     # Kimlik ve Zaman
     request_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
-    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(pytz.timezone('Europe/Istanbul')).isoformat())
     
     # Girdi Verileri
     message: str = ""
@@ -111,6 +112,7 @@ class RDR:
     # Enjekte edilen ham istemler
     orchestrator_prompt: str = ""
     synthesizer_prompt: str = ""
+    orchestrator_reasoning: str = ""   # Karar verme mantığı (COT)
     
     def to_dict(self) -> dict:
         return asdict(self)

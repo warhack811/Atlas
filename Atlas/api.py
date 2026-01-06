@@ -165,6 +165,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         record.intent = plan.active_intent
         record.classification_ms = classify_ms
         record.safety_ms = safety_ms
+        record.orchestrator_reasoning = plan.reasoning
 
         from Atlas.time_context import time_context
         
@@ -283,6 +284,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             record.orchestrator_model = plan.orchestrator_model
             record.classification_ms = classify_ms
             record.orchestrator_prompt = plan.orchestrator_prompt
+            record.orchestrator_reasoning = plan.reasoning
             if graph_context:
                 record.full_context_injection = f"[NEO4J MEMORY]: {graph_context}"
             

@@ -56,6 +56,7 @@ KULLANICI MESAJI:
   "intent": "coding" | "general" | "search" | "creative",
   "is_follow_up": false,
   "context_focus": "...",
+  "reasoning": "Neden bu planı seçtiğinin 1-2 cümlelik teknik açıklaması.",
   "tasks": [
     {{
       "id": "t1",
