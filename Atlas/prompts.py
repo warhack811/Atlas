@@ -233,9 +233,18 @@ Kullanıcının mesajından kalıcı, önemli ve ileride hatırlanması gereken 
 KURALLAR:
 1. Sadece kalıcı gerçekleri çıkar (Örn: Ad, meslek, ikamet, aile bireyleri, sevdiği/sevmediği şeyler).
 2. Geçici durumları (yorgunluk, anlık açlık) ve selamlaşmaları atla.
-3. Çıktıyı SADECE ve SADECE şu JSON formatında bir liste olarak ver: [{{"subject": "...", "predicate": "...", "object": "...", "category": "personal" | "general"}}]
-4. Açıklama yapma, sadece JSON döndür.
-5. Bilgi yoksa [] döndür.
+3. "Ben", "Sen", "O", "Onlar", "Biz", "Hocam" gibi zamirleri subject veya object olarak kullanma. Gerçek isim veya varlık varsa onu kullan, yoksa o triplet'i üretme.
+4. Çıktıyı SADECE ve SADECE şu JSON formatında bir liste olarak ver: [{{"subject": "...", "predicate": "...", "object": "...", "category": "personal" | "general"}}]
+5. Açıklama yapma, sadece JSON döndür.
+6. Bilgi yoksa [] döndür.
+
+İZİN VERİLEN PREDICATE'LER (sadece bunları kullan):
+- İSİM, YAŞI, MESLEĞİ, YAŞAR_YER, GELDİĞİ_YER
+- SEVER, SEVMİYOR, İSTİYOR, ÖĞRENMEK_İSTİYOR
+- SAHİP, EŞİ, ARKADAŞI, AİLE_ÜYESİ, ÇOCUĞU
+- PLANLIYOR, HAYAL_EDER, NEREDE, HİSSEDİYOR
+
+Eğer bir predicate yukarıdaki listede yoksa, o triplet'i üretme.
 
 ÖRNEK:
 Kullanıcı: "Ben Ali, İstanbul'da yaşıyorum ve Python yazmayı çok seviyorum."
@@ -243,6 +252,10 @@ Kullanıcı: "Ben Ali, İstanbul'da yaşıyorum ve Python yazmayı çok seviyoru
   {{"subject": "Ali", "predicate": "YAŞAR_YER", "object": "İstanbul", "category": "personal"}},
   {{"subject": "Ali", "predicate": "SEVER", "object": "Python Yazmak", "category": "general"}}
 ]
+
+Kullanıcı: "Bugün yorgunum ve evdeyim."
+Çıktı: []
+(Neden: "yorgunum" geçici durum; "Ben" zamirinden "evdeyim" için gerçek subject çıkmıyor)
 """
 
 
