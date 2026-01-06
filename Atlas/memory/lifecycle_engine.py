@@ -12,8 +12,10 @@ Bu modül, FACT relationship'leri yazarken temporal conflict resolution sağlar:
 - SEVER Pizza + SEVER Sushi: İkisi de ACTIVE kalır
 """
 
+import logging
 from typing import List, Dict, Tuple
-from Atlas.logger import logger
+
+logger = logging.getLogger(__name__)
 
 
 async def resolve_conflicts(
