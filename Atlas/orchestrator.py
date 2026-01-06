@@ -196,6 +196,10 @@ class Orchestrator:
                 continue
                 
         # Tüm modeller başarısız olursa güvenli bir varsayılan plan döner
+        return {
+            "intent": "general", 
+            "is_follow_up": False, 
+            "tasks": [{"id": "t1", "type": "generation", "specialist": "logic", "instruction": "Lütfen yardımcı ol."}]
         }, prompt, "fallback-safety"
 
 orchestrator = Orchestrator()

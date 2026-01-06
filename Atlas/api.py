@@ -282,7 +282,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
                 {"id": r.get("task_id") or r.get("id"), "model": r.get("model"), "status": "success", "result": r.get("output") or r.get("response"), "duration_ms": r.get("duration_ms", 0)}
                 for r in raw_results
             ]
-            yield f"data: {json.dumps({'type': 'tasks_done'})}\n\n"
+            yield f"data: {json.dumps({'type': 'tasks_done'}, default=str)}\n\n"
 
             full_response = ""
             synth_start = time.time()
@@ -297,7 +297,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
                 elif data["type"] == "chunk":
                     chunk = data["content"]
                     full_response += chunk
-                    yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+                    yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, default=str)}\n\n"
             
             synth_ms = int((time.time() - synth_start) * 1000)
             record.synthesis_ms = synth_ms
