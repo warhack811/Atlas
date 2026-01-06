@@ -386,9 +386,6 @@ async def upload_image(session_id: str, file: UploadFile = File(...)):
             "message": str(e),
             "traceback": traceback.format_exc()
         }
-    except Exception as e:
-        logger.error(f"Yükleme hatası: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/health")

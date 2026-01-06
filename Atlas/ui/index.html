@@ -703,7 +703,15 @@
                         body: formData
                     });
 
-                    const data = await res.json();
+                    let data;
+                    try {
+                        data = await res.json();
+                    } catch (jsonErr) {
+                        const rawText = await res.text();
+                        appendSystemNotification(`❌ Sunucu Hatası (${res.status}): ${rawText.substring(0, 50)}...`);
+                        return;
+                    }
+
                     if (data.status === 'success') {
                         // Check if the backend returned a structural error message
                         if (data.analysis && data.analysis.includes("Sistem Yoğunluğu/Kota")) {
@@ -717,7 +725,7 @@
                         console.error("Upload Error Traceback:", data.traceback);
                     }
                 } catch (err) {
-                    appendSystemNotification(`❌ Yükleme Hatası (Sunucu Bağlantısı): ${file.name}`);
+                    appendSystemNotification(`❌ Kritik Bağlantı Hatası: ${err.message}`);
                 }
             }
             e.target.value = ''; // Reset
