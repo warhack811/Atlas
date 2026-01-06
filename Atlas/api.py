@@ -224,8 +224,9 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         rdr.save_rdr(record)
         
         # Arka planda bilgi çıkarımı yaparak graf veritabanını günceller
+        # FAZ2: source_turn_id (request_id) iz sürme için extractor'a gönderiliyor
         from Atlas.memory.extractor import extract_and_save as extract_and_save_task
-        background_tasks.add_task(extract_and_save_task, user_message, session_id)
+        background_tasks.add_task(extract_and_save_task, user_message, session_id, record.request_id)
 
         return ChatResponse(
             response=response_text,
@@ -359,10 +360,10 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             MessageBuffer.add_assistant_message(session_id, full_response)
             record.total_ms = int((time.time() - start_time) * 1000)
             record.generation_ms = record.total_ms
-            record.response_length = len(full_response)
-            
+            # Arka planda bilgi çıkarımı yaparak graf veritabanını günceller
+            # FAZ2: source_turn_id (request_id) iz sürme için extractor'a gönderiliyor
             from Atlas.memory.extractor import extract_and_save as extract_and_save_task
-            background_tasks.add_task(extract_and_save_task, request.message, session_id)
+            background_tasks.add_task(extract_and_save_task, request.message, session_id, record.request_id)
 
             rdr.save_rdr(record)
             yield f"data: {json.dumps({'type': 'done', 'rdr': record.to_dict()}, default=str)}\n\n"

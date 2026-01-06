@@ -121,9 +121,14 @@ def sanitize_triplets(triplets: List[Dict], user_id: str, raw_text: str) -> List
     return cleaned
 
 
-async def extract_and_save(text: str, user_id: str):
+async def extract_and_save(text: str, user_id: str, source_turn_id: str | None = None):
     """
     Belirli bir metinden anlamlı bilgileri çıkarır ve veritabanına kaydeder.
+    
+    Args:
+        text: Analiz edilecek kullanıcı mesajı
+        user_id: Kullanıcı kimliği (session_id)
+        source_turn_id: Bu bilginin geldiği konuşma turn'ünün ID'si (RDR request_id) - FAZ2 provenance
     """
     if not text or len(text.strip()) < 5:
         return []
@@ -178,8 +183,9 @@ async def extract_and_save(text: str, user_id: str):
                 cleaned_triplets = sanitize_triplets(triplets, user_id, text)
                 
                 if cleaned_triplets:
+                    # FAZ2: source_turn_id provenance bilgisi ile Neo4j'ye kaydet
                     logger.info(f"Neo4j'ye kaydediliyor: {len(cleaned_triplets)} triplet (cleaned from {len(triplets)})")
-                    await neo4j_manager.store_triplets(cleaned_triplets, user_id)
+                    await neo4j_manager.store_triplets(cleaned_triplets, user_id, source_turn_id)
                     return cleaned_triplets
                 else:
                     logger.info("Tüm triplet'ler Faz 1 filtreleri tarafından drop edildi.")

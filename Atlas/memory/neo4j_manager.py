@@ -65,10 +65,18 @@ class Neo4jManager:
             await self._driver.close()
             logger.info("Neo4j bağlantısı kapatıldı.")
 
-    async def store_triplets(self, triplets: List[Dict[str, str]], user_id: str):
+    async def store_triplets(self, triplets: List[Dict], user_id: str, source_turn_id: str | None = None) -> int:
         """
-        Bilgi parçalarını (üçlüler/triplets) graf veritabanına atomik olarak kaydeder.
+        Verilen triplet listesini Neo4j graf veritabanına kaydeder.
+        
+        Args:
+            triplets: subject-predicate-object yapısındaki bilgi listesi
+            user_id: Kullanıcı kimliği
+            source_turn_id: Bu bilginin geldiği konuşma turn'ünün ID'si (RDR request_id) - FAZ2 provenance
         """
+        if not triplets or not self._initialized:
+            return 0
+        
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -76,7 +84,8 @@ class Neo4jManager:
                     self._connect()
 
                 async with self._driver.session() as session:
-                    result = await session.execute_write(self._execute_triplet_merge, user_id, triplets)
+                    # FAZ2: source_turn_id'yi _execute_triplet_merge'e gönder
+                    result = await session.execute_write(self._execute_triplet_merge, user_id, triplets, source_turn_id)
                     logger.info(f"Başarıyla {result} bilgi (triplet) Neo4j'ye kaydedildi (Kullanıcı: {user_id})")
                     return result
             except (ServiceUnavailable, SessionExpired, ConnectionResetError) as e:
@@ -89,7 +98,7 @@ class Neo4jManager:
         return 0
 
     @staticmethod
-    async def _execute_triplet_merge(tx, user_id, triplets):
+    async def _execute_triplet_merge(tx, user_id, triplets, source_turn_id=None):
         """
         Cypher sorgusunu çalıştırarak verileri düğüm ve ilişki olarak birleştirir.
         Daha temiz bir hafıza için isimleri normalize eder.
@@ -103,6 +112,7 @@ class Neo4jManager:
             nt["predicate"] = str(t.get("predicate", "")).strip().upper() # İlişkileri büyük harf yap
             normalized_triplets.append(nt)
 
+        # KNOWS ilişkisi için User node'u oluştur
         query = """
         MERGE (u:User {id: $user_id})
         WITH u
@@ -118,14 +128,18 @@ class Neo4jManager:
             r.created_at = datetime(),
             r.updated_at = datetime()
         ON MATCH SET
-            r.updated_at = datetime(),
-            r.confidence = COALESCE(t.confidence, r.confidence)
+            r.confidence = COALESCE(t.confidence, r.confidence),
+            r.category = COALESCE(t.category, r.category),
+            r.updated_at = datetime()
+        // User'ın Entity'yi bildiğini işaretle
         MERGE (u)-[:KNOWS]->(s)
+        MERGE (u)-[:KNOWS]->(o)
         RETURN count(r)
         """
-        result = await tx.run(query, user_id=user_id, triplets=normalized_triplets)
-        record = await result.single()
-        return record[0] if record else 0
+        
+        # FAZ2: source_turn_id parametresini query'ye ekle (şimdilik kullanılmıyor, FAZ2-2'de schema'ya eklenecek)
+        records = await self.query_graph(query, {"user_id": user_id, "triplets": normalized_triplets, "source_turn_id": source_turn_id})
+        return records[0]['count(r)'] if records else 0
 
     async def delete_all_memory(self, user_id: str) -> bool:
         """Kullanıcıya ait tüm graf hafızasını siler (Hard Reset).
