@@ -110,12 +110,13 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     
     # 0. GÜVENLİK DENETİMİ: Girdide zararlı içerik veya hassas veri (PII) kontrolü
     from Atlas.safety import safety_gate
-    is_safe, sanitized_text, issues = await safety_gate.check_input_safety(request.message)
+    is_safe, sanitized_text, issues, used_model = await safety_gate.check_input_safety(request.message)
     safety_ms = int((time.time() - start_time) * 1000)
     
     if not is_safe:
         record = rdr.RDR.create(request.message)
         record.safety_passed = False
+        record.safety_model = used_model
         record.safety_ms = safety_ms
         record.injection_blocked = True
         record.safety_issues = [{"type": "INJECTION", "details": i.details} for i in issues]
@@ -209,6 +210,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         record.total_ms = int((time.time() - start_time) * 1000)
         record.generation_ms = record.total_ms # Geriye dönük uyumluluk için
         record.safety_passed = safety_info["passed"]
+        record.safety_model = used_model
         record.safety_issues = safety_info["issues"]
         record.pii_redacted = safety_info["pii_redacted"]
         
@@ -249,10 +251,11 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             MessageBuffer.add_user_message(session_id, request.message)
 
             safety_start = time.time()
-            is_safe, sanitized_text, issues = await safety.safety_gate.check_input_safety(request.message)
+            is_safe, sanitized_text, issues, used_model = await safety.safety_gate.check_input_safety(request.message)
             safety_ms = int((time.time() - safety_start) * 1000)
             
             record.safety_passed = is_safe
+            record.safety_model = used_model
             record.safety_ms = safety_ms
             record.safety_issues = [{"type": i.type, "details": i.details} for i in issues]
             record.pii_redacted = any(i.type == "PII" for i in issues)

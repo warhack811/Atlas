@@ -104,6 +104,7 @@ class RDR:
     technical_errors: list = field(default_factory=list)
     
     # Model Detayları
+    safety_model: str = ""
     orchestrator_model: str = ""
     synthesizer_model: str = ""
     

@@ -64,10 +64,10 @@ class SafetyGate:
         self.injection_patterns = [re.compile(p, re.IGNORECASE) for p in self.INJECTION_KEYWORDS]
         self.pii_patterns = {k: re.compile(v) for k, v in self.PII_PATTERNS.items()}
 
-    async def check_input_safety(self, text: str) -> Tuple[bool, str, List[SafetyIssue]]:
+    async def check_input_safety(self, text: str) -> Tuple[bool, str, List[SafetyIssue], str]:
         """
         Kullanıcı girişini güvenlik sorunları için kontrol et.
-        Dönüş: (güvenli_mi, temizlenmiş_metin, sorunlar_listesi)
+        Dönüş: (güvenli_mi, temizlenmiş_metin, sorunlar_listesi, kullanılan_model)
         """
         from Atlas.config import MODEL_GOVERNANCE, API_CONFIG
         from Atlas.key_manager import KeyManager
@@ -76,6 +76,7 @@ class SafetyGate:
         
         issues = []
         sanitized_text = text
+        used_model = "regex-rule-based"
         
         # 1. TEMEL REGEX KONTROLLERİ (Her zaman devrede)
         # A. Enjeksiyon Kontrolü (Engelle)
@@ -86,7 +87,8 @@ class SafetyGate:
                     details=f"Zararlı kalıp tespit edildi: {pattern.pattern}", 
                     severity="YÜKSEK"
                 ))
-                return False, text, issues
+                return False, text, issues, used_model
+
         # B. PII Kontrolü (Maskele)
         for pii_type, pattern in self.pii_patterns.items():
             if pattern.search(sanitized_text):
@@ -103,7 +105,7 @@ class SafetyGate:
         if any(word in lowered_text for word in self.SAFE_KEYWORDS):
             # Eğer içinde tehlikeli regex'ler yoksa (yukarıda kontrol edildi), güvenli say
             if not issues:
-                return True, sanitized_text, [SafetyIssue(type="BEYAZ_LISTE", details="Güvenli kelimeler nedeniyle kabul edildi", severity="DÜŞÜK")]
+                return True, sanitized_text, [SafetyIssue(type="BEYAZ_LISTE", details="Güvenli kelimeler nedeniyle kabul edildi", severity="DÜŞÜK")], "whitelist-bypass"
 
         # 2. GELİŞMİŞ AI GUARD KONTROLLERİ
         safety_models = MODEL_GOVERNANCE.get("safety", [])
@@ -133,6 +135,7 @@ class SafetyGate:
                     )
                     
                     if response.status_code == 200:
+                        used_model = model
                         content = response.json()["choices"][0]["message"]["content"]
                         if "unsafe" in content.lower():
                             violation_code = content.split('\n')[-1] if '\n' in content else "AI_Guard_Blocked"
@@ -141,12 +144,15 @@ class SafetyGate:
                                 details=f"Yapay Zeka Koruması ({model}) engelledi: {violation_code}",
                                 severity="YÜKSEK"
                             ))
-                            return False, sanitized_text, issues
+                            return False, sanitized_text, issues, used_model
+                        else:
+                            # Model "safe" dedi, diğer modellere bakmaya gerek yok (veya n tanesine bakılabilir)
+                            return True, sanitized_text, issues, used_model
             except Exception as e:
                 print(f"[HATA] {model} için Yapay Zeka Koruması kontrolü başarısız: {e}")
                 continue 
         
-        return True, sanitized_text, issues
+        return True, sanitized_text, issues, used_model
 
 # Tekil örnek (Singleton)
 safety_gate = SafetyGate()
