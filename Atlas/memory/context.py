@@ -266,3 +266,324 @@ class SemanticSearch:
     def search(query: str, session_id: str, top_k: int = 3) -> list[str]:
         # İleride: pgvector benzerlik araması eklenebilir
         return []
+
+
+# ==============================================================================
+# FAZ 6: Context Packaging V3 - Hard/Soft/Open Questions
+# ==============================================================================
+
+async def build_memory_context_v3(
+    user_id: str,
+    user_message: str,
+    policy = None
+) -> str:
+    """
+    FAZ 6: LLM için 3-bölmeli hafıza context'i oluşturur.
+    
+    Bölümler:
+    - Kullanıcı Profili: Identity bilgileri (__USER__ anchor'dan)
+    - Sert Gerçekler (Hard Facts): EXCLUSIVE predicates (İSİM, YAŞI, MESLEĞİ vb.)
+    - Yumuşak Sinyaller (Soft Signals): ADDITIVE/TEMPORAL predicates (SEVER, ARKADAŞI vb.)
+    - Açık Sorular (Open Questions): Eksik EXCLUSIVE bilgiler veya çelişkiler
+    
+    Args:
+        user_id: Kullanıcı kimliği (session_id)
+        user_message: Kullanıcının mesajı (relevance için kullanılabilir)
+        policy: MemoryPolicy instance (None ise varsayılan STANDARD)
+    
+    Returns:
+        Formatlanmış context string
+    
+    Kurallar:
+    - MemoryPolicy.OFF ise kişisel hafıza retrieval KAPALI
+    - Sadece ACTIVE status (SUPERSEDED/RETRACTED hariç)
+    - Hard: max 20 satır, Soft: max 20 satır, Open: max 10 satır
+    - En son güncellenler önce (updated_at desc)
+    """
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    from Atlas.memory.identity_resolver import get_user_anchor
+    from Atlas.memory.predicate_catalog import get_catalog
+    from Atlas.memory.memory_policy import load_policy_for_user
+    from Atlas.logger import logger
+    
+    # Policy kontrolü
+    if policy is None:
+        policy = load_policy_for_user(user_id)
+    
+    # MemoryPolicy.OFF ise kişisel hafıza kapalı
+    if policy.mode == "OFF":
+        return _build_off_mode_context()
+    
+    # Catalog yükle
+    catalog = get_catalog()
+    if not catalog:
+        logger.warning("FAZ6: Predicate catalog yüklenemedi, minimal context döndürülüyor")
+        return _build_minimal_context()
+    
+    # Anchor-based identity retrieval
+    user_anchor = get_user_anchor(user_id)
+    identity_facts = await _retrieve_identity_facts(user_id, user_anchor)
+    
+    # Hard Facts (EXCLUSIVE predicates)
+    hard_facts = await _retrieve_hard_facts(user_id, user_anchor, catalog)
+    
+    # Soft Signals (ADDITIVE/TEMPORAL predicates)
+    soft_signals = await _retrieve_soft_signals(user_id, catalog)
+    
+    # Open Questions (eksik EXCLUSIVE'ler)
+    open_questions = _generate_open_questions(identity_facts, hard_facts, catalog)
+    
+    # Format oluştur
+    return _format_context_v3(identity_facts, hard_facts, soft_signals, open_questions)
+
+
+def _build_off_mode_context() -> str:
+    """
+    MemoryPolicy.OFF modunda döndürülecek context.
+    Kişisel hafıza retrieval kapalıdır.
+    """
+    return """### Kullanıcı Profili
+(Hafıza modu kapalı - kişisel bilgi yok)
+
+### Sert Gerçekler (Hard Facts)
+(Hafıza modu kapalı)
+
+### Yumuşak Sinyaller (Soft Signals)
+(Hafıza modu kapalı)
+
+### Açık Sorular (Open Questions)
+(Hafıza modu kapalı)"""
+
+
+def _build_minimal_context() -> str:
+    """
+    Catalog yüklenemediğinde minimal context.
+    """
+    return """### Kullanıcı Profili
+(Bellek sistemi geçici olarak kullanılamıyor)
+
+### Sert Gerçekler (Hard Facts)
+(Bellek sistemi geçici olarak kullanılamıyor)
+
+### Yumuşak Sinyaller (Soft Signals)
+(Bellek sistemi geçici olarak kullanılamıyor)
+
+### Açık Sorular (Open Questions)
+(Bellek sistemi geçici olarak kullanılamıyor)"""
+
+
+async def _retrieve_identity_facts(user_id: str, user_anchor: str) -> list:
+    """
+    __USER__ anchor'dan identity bilgilerini çek.
+    
+    Args:
+        user_id: Kullanıcı ID
+        user_anchor: __USER__::<uid> anchor entity
+    
+    Returns:
+        List of {predicate, object} dicts
+    """
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    from Atlas.logger import logger
+    
+    # Sadece identity category predicates
+    query = """
+    MATCH (s:Entity {name: $anchor})-[r:FACT {user_id: $uid}]->(o:Entity)
+    WHERE (r.status IS NULL OR r.status = 'ACTIVE')
+      AND r.predicate IN ['İSİM', 'YAŞI', 'MESLEĞİ', 'YAŞAR_YER', 'LAKABI', 'GELDİĞİ_YER']
+    RETURN r.predicate as predicate, o.name as object, r.updated_at as updated_at
+    ORDER BY r.updated_at DESC
+    LIMIT 10
+    """
+    
+    try:
+        result = await neo4j_manager.query_graph(query, {"anchor": user_anchor, "uid": user_id})
+        return result if result else []
+    except Exception as e:
+        logger.warning(f"FAZ6 identity retrieval hatası: {e}")
+        return []
+
+
+async def _retrieve_hard_facts(user_id: str, user_anchor: str, catalog) -> list:
+    """
+    EXCLUSIVE predicates'leri çek (Hard Facts).
+    Identity predicates hariç (onlar zaten identity_facts'te).
+    
+    Args:
+        user_id: Kullanıcı ID
+        user_anchor: Anchor entity (hard facts için subject olarak kullanılabilir)
+        catalog: PredicateCatalog instance
+    
+    Returns:
+        List of {subject, predicate, object} dicts
+    """
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    from Atlas.logger import logger
+    
+    # Catalog'dan EXCLUSIVE predicates al
+    exclusive_preds = []
+    for key, entry in catalog.by_key.items():
+        if entry.get("type") == "EXCLUSIVE" and entry.get("enabled", True):
+            canonical = entry.get("canonical", key)
+            # Identity predicates'leri hariç tut (zaten identity_facts'te)
+            if canonical not in ['İSİM', 'YAŞI', 'MESLEĞİ', 'YAŞAR_YER', 'LAKABI', 'GELDİĞİ_YER']:
+                exclusive_preds.append(canonical)
+    
+    if not exclusive_preds:
+        return []
+    
+    # Neo4j'den çek
+    query = """
+    MATCH (s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity)
+    WHERE (r.status IS NULL OR r.status = 'ACTIVE')
+      AND r.predicate IN $predicates
+    RETURN s.name as subject, r.predicate as predicate, o.name as object, r.updated_at as updated_at
+    ORDER BY r.updated_at DESC
+    LIMIT 20
+    """
+    
+    try:
+        result = await neo4j_manager.query_graph(query, {"uid": user_id, "predicates": exclusive_preds})
+        return result if result else []
+    except Exception as e:
+        logger.warning(f"FAZ6 hard facts retrieval hatası: {e}")
+        return []
+
+
+async def _retrieve_soft_signals(user_id: str, catalog) -> list:
+    """
+    ADDITIVE/TEMPORAL predicates'leri çek (Soft Signals).
+    
+    Args:
+        user_id: Kullanıcı ID
+        catalog: PredicateCatalog instance
+    
+    Returns:
+        List of {subject, predicate, object} dicts
+    """
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    from Atlas.logger import logger
+    
+    # Catalog'dan ADDITIVE/TEMPORAL predicates al
+    soft_preds = []
+    for key, entry in catalog.by_key.items():
+        pred_type = entry.get("type")
+        if pred_type in ["ADDITIVE", "TEMPORAL"] and entry.get("enabled", True):
+            canonical = entry.get("canonical", key)
+            soft_preds.append(canonical)
+    
+    if not soft_preds:
+        return []
+    
+    # Neo4j'den çek
+    query = """
+    MATCH (s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity)
+    WHERE (r.status IS NULL OR r.status = 'ACTIVE')
+      AND r.predicate IN $predicates
+    RETURN s.name as subject, r.predicate as predicate, o.name as object, r.updated_at as updated_at
+    ORDER BY r.updated_at DESC
+    LIMIT 20
+    """
+    
+    try:
+        result = await neo4j_manager.query_graph(query, {"uid": user_id, "predicates": soft_preds})
+        return result if result else []
+    except Exception as e:
+        logger.warning(f"FAZ6 soft signals retrieval hatası: {e}")
+        return []
+
+
+def _generate_open_questions(identity_facts: list, hard_facts: list, catalog) -> list:
+    """
+    Açık soruları belirle.
+    
+    MVP düzeyinde: 
+    - EXCLUSIVE predicates için ACTIVE bir değer yoksa "eksik bilgi" olarak işaretle
+    
+    Args:
+        identity_facts: Identity bilgileri
+        hard_facts: Hard facts
+        catalog: Predicate catalog
+    
+    Returns:
+        List of question strings
+    """
+    questions = []
+    
+    # Bilinen EXCLUSIVE predicates
+    known_predicates = set()
+    for fact in identity_facts:
+        known_predicates.add(fact.get("predicate"))
+    for fact in hard_facts:
+        known_predicates.add(fact.get("predicate"))
+    
+    # Temel identity predicates'leri kontrol et
+    essential_identity = {
+        'İSİM': 'Kullanıcının adı bilinmiyor',
+        'YAŞI': 'Kullanıcının yaşı bilinmiyor',
+        'MESLEĞİ': 'Kullanıcının mesleği bilinmiyor',
+        'YAŞAR_YER': 'Kullanıcının yaşadığı yer bilinmiyor'
+    }
+    
+    for pred, question in essential_identity.items():
+        if pred not in known_predicates:
+            questions.append(question)
+    
+    # Max 10 soru
+    return questions[:10]
+
+
+def _format_context_v3(
+    identity_facts: list,
+    hard_facts: list,
+    soft_signals: list,
+    open_questions: list
+) -> str:
+    """
+    V3 formatında context string oluştur.
+    
+    Format:
+    ### Kullanıcı Profili
+    - İSİM: ...
+    ### Sert Gerçekler (Hard Facts)
+    - subject - predicate - object
+    ### Yumuşak Sinyaller (Soft Signals)
+    - subject - predicate - object
+    ### Açık Sorular (Open Questions)
+    - ...
+    """
+    parts = []
+    
+    # 1. Kullanıcı Profili
+    parts.append("### Kullanıcı Profili")
+    if identity_facts:
+        for fact in identity_facts[:10]:  # Max 10
+            parts.append(f"- {fact['predicate']}: {fact['object']}")
+    else:
+        parts.append("(Henüz kullanıcı profili bilgisi yok)")
+    
+    # 2. Hard Facts
+    parts.append("\n### Sert Gerçekler (Hard Facts)")
+    if hard_facts:
+        for fact in hard_facts[:20]:  # Max 20
+            parts.append(f"- {fact['subject']} - {fact['predicate']} - {fact['object']}")
+    else:
+        parts.append("(Henüz sert gerçek bilgisi yok)")
+    
+    # 3. Soft Signals
+    parts.append("\n### Yumuşak Sinyaller (Soft Signals)")
+    if soft_signals:
+        for signal in soft_signals[:20]:  # Max 20
+            parts.append(f"- {signal['subject']} - {signal['predicate']} - {signal['object']}")
+    else:
+        parts.append("(Henüz yumuşak sinyal bilgisi yok)")
+    
+    # 4. Open Questions
+    parts.append("\n### Açık Sorular (Open Questions)")
+    if open_questions:
+        for question in open_questions[:10]:  # Max 10
+            parts.append(f"- {question}")
+    else:
+        parts.append("(Şu an açık soru yok)")
+    
+    return "\n".join(parts)
