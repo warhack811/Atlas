@@ -230,15 +230,15 @@ Kullanıcının mesajından kalıcı, önemli ve ileride hatırlanması gereken 
 KURALLAR:
 1. Sadece kalıcı gerçekleri çıkar (Örn: Ad, meslek, ikamet, aile bireyleri, sevdiği/sevmediği şeyler).
 2. Geçici durumları (yorgunluk, anlık açlık) ve selamlaşmaları atla.
-3. Çıktıyı SADECE ve SADECE şu JSON formatında bir liste olarak ver: [{{"subject": "...", "predicate": "...", "object": "..."}}]
+3. Çıktıyı SADECE ve SADECE şu JSON formatında bir liste olarak ver: [{{"subject": "...", "predicate": "...", "object": "...", "category": "personal" | "general"}}]
 4. Açıklama yapma, sadece JSON döndür.
 5. Bilgi yoksa [] döndür.
 
 ÖRNEK:
 Kullanıcı: "Ben Ali, İstanbul'da yaşıyorum ve Python yazmayı çok seviyorum."
 Çıktı: [
-  {{"subject": "Ali", "predicate": "YAŞAR_YER", "object": "İstanbul"}},
-  {{"subject": "Ali", "predicate": "SEVER", "object": "Python Yazmak"}}
+  {{"subject": "Ali", "predicate": "YAŞAR_YER", "object": "İstanbul", "category": "personal"}},
+  {{"subject": "Ali", "predicate": "SEVER", "object": "Python Yazmak", "category": "general"}}
 ]
 """
 

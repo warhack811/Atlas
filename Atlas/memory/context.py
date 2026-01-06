@@ -66,14 +66,13 @@ class ContextBuilder:
             return ""
 
         # 2. Neo4j sorgusu
-        # Hem mesajdaki kelimeleri ara hem de kullanıcının genel tercihlerini (Core Identity) getir
+        # Hem mesajdaki kelimeleri ara hem de kullanıcının genel kimliğini (personal) önceliklendirerek getir
         cypher = """
         MATCH (u:User {id: $uid})-[:KNOWS]->(s:Entity)-[r:FACT]->(o:Entity)
         WHERE any(kw IN $keywords WHERE toLower(s.name) CONTAINS toLower(kw))
-           OR toLower(s.name) CONTAINS 'ben'  // Kullanıcı hakkındaki temel bilgiler
-           OR r.category = 'personal'        // Kişisel kategorisindeki her şey
-        RETURN s.name as subject, r.predicate as predicate, o.name as object, r.updated_at as ts
-        ORDER BY ts DESC
+           OR r.category = 'personal'
+        RETURN s.name as subject, r.predicate as predicate, o.name as object, r.updated_at as ts, r.category as cat
+        ORDER BY (case when r.category = 'personal' then 0 else 1 end), ts DESC
         LIMIT 15
         """
         
