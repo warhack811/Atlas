@@ -58,17 +58,53 @@ class ContextBuilder:
         """
         import re
         from Atlas.memory.neo4j_manager import neo4j_manager
+        # FAZ3: Identity resolver için import
+        from Atlas.memory.identity_resolver import get_user_anchor
 
         # 1. Basit anahtar kelime çıkarımı (Stop-wordleri atlamıyoruz şimdilik)
         # 3 karakter ve üzeri kelimeleri al (Örn: Can, Ali gibi isimleri kaçırmamak için)
         keywords = [w.strip() for w in re.split(r'\W+', message) if len(w.strip()) > 2]
         if not keywords:
             return ""
+        
+        # FAZ3: Self-profile sorusu tespiti
+        # Kullanıcı kendisi hakkında soru soruyorsa anchor-based retrieval yap
+        SELF_PROFILE_KEYWORDS = {
+            "ben", "benim", "bana", "bende",
+            "adım", "adim", "yaşım", "yasim", "mesleğim", "meslegim",
+            "kim", "nerede", "yaşıyorum", "yasiyorum", "kimim"
+        }
+        message_lower = message.lower()
+        is_self_query = any(kw in message_lower for kw in SELF_PROFILE_KEYWORDS)
+        
+        context_parts = []
+        
+        # FAZ3: Eğer self-profile sorusu ise, önce anchor-based fact'leri getir
+        if is_self_query:
+            user_anchor = get_user_anchor(user_id)
+            anchor_query = """
+            MATCH (s:Entity {name: $anchor})-[r:FACT {user_id: $uid}]->(o:Entity)
+            WHERE (r.status IS NULL OR r.status = 'ACTIVE')
+              AND r.predicate IN ['İSİM', 'YAŞI', 'MESLEĞİ', 'YAŞAR_YER', 'LAKABI']
+            RETURN r.predicate as predicate, o.name as object
+            LIMIT 5
+            """
+            try:
+                anchor_facts = await neo4j_manager.query_graph(anchor_query, {"anchor": user_anchor, "uid": user_id})
+                if anchor_facts:
+                    # Kullanıcı profili bölümü ekle
+                    profile_lines = ["### Kullanıcı Profili"]
+                    for fact in anchor_facts:
+                        profile_lines.append(f"- {fact['predicate']}: {fact['object']}")
+                    context_parts.append("\n".join(profile_lines))
+                    logger.info(f"Self-profile query detected: {len(anchor_facts)} anchor facts retrieved")
+            except Exception as e:
+                logger.warning(f"Anchor-based retrieval error: {e}")
 
         # 2. Neo4j sorgusu
         # Hem mesajdaki kelimeleri ara hem de kullanıcının genel kimliğini (personal) önceliklendirerek getir
         # FAZ0.1-2: FACT ilişkisini user_id ile filtrele (multi-user isolation)
-        # FAZ2: status filtresi ekle (ACTIVE olmayan relationship'leri gösterme)
+        # FA2: status filtresi ekle (ACTIVE olmayan relationship'leri gösterme)
         cypher = """
         MATCH (u:User {id: $uid})-[:KNOWS]->(s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity)
         WHERE (any(kw IN $keywords WHERE toLower(s.name) CONTAINS toLower(kw))
@@ -82,16 +118,25 @@ class ContextBuilder:
         try:
             records = await neo4j_manager.query_graph(cypher, {"uid": user_id, "keywords": keywords})
             if not records:
-                return ""
+                # Eğer anchor facts varsa onları döndür, yoksa boş
+                return "\n\n".join(context_parts) if context_parts else ""
             
             # 3. Formatla
             facts = []
             for rec in records:
                 facts.append(f"{rec['subject']} - {rec['predicate']} - {rec['object']}")
             
-            return "\n".join(facts)
-        except Exception:
-            return ""
+            context_str = "### İlgili Bilgiler\n" + "\n".join(facts)
+            # FAZ3: Anchor facts varsa, onları en üste ekle
+            if context_parts:
+                context_parts.append(context_str)
+                return "\n\n".join(context_parts)
+            else:
+                return context_str
+        except Exception as e:
+            logger.warning(f"Neo4j context retrieval error: {e}")
+            # Anchor facts varsa onları döndür, yoksa boş
+            return "\n\n".join(context_parts) if context_parts else ""
     def build(self, current_message: str, history_limit: int = 5, signal_only: bool = False) -> list[dict]:
         """
         LLM için messages listesi oluşturur.
