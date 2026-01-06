@@ -45,4 +45,7 @@ jobs:
             fi
             
             sudo systemctl restart atlas
-            sudo systemctl status atlas --no-pager -l
+            echo "--- Paket Listesi ---"
+            $VENV_PATH list
+            echo "--- Kritik Servis Logları ---"
+            sudo journalctl -u atlas -n 50 --no-pager
