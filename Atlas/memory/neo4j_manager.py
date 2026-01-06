@@ -77,6 +77,27 @@ class Neo4jManager:
         if not triplets or not self._initialized:
             return 0
         
+        # FAZ5: Lifecycle engine - EXCLUSIVE/ADDITIVE conflict resolution
+        from Atlas.memory.lifecycle_engine import resolve_conflicts, supersede_relationship
+        from Atlas.memory.predicate_catalog import get_catalog
+        
+        catalog = get_catalog()
+        new_triplets, supersede_ops = await resolve_conflicts(triplets, user_id, source_turn_id, catalog)
+        
+        # Execute supersede operations first
+        for op in supersede_ops:
+            await supersede_relationship(
+                op["user_id"],
+                op["subject"],
+                op["predicate"],
+                op["old_object"],
+                op["new_turn_id"]
+            )
+        
+        # Then write new triplets
+        if not new_triplets:
+            return 0
+        
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -85,7 +106,7 @@ class Neo4jManager:
 
                 async with self._driver.session() as session:
                     # FAZ2: source_turn_id'yi _execute_triplet_merge'e gönder
-                    result = await session.execute_write(self._execute_triplet_merge, user_id, triplets, source_turn_id)
+                    result = await session.execute_write(self._execute_triplet_merge, user_id, new_triplets, source_turn_id)
                     logger.info(f"Başarıyla {result} bilgi (triplet) Neo4j'ye kaydedildi (Kullanıcı: {user_id})")
                     return result
             except (ServiceUnavailable, SessionExpired, ConnectionResetError) as e:

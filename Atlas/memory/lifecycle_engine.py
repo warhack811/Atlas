@@ -1,0 +1,188 @@
+"""
+Atlas Lifecycle & Conflict Engine
+----------------------------------
+FAZ 5: EXCLUSIVE/ADDITIVE predicate lifecycle yönetimi.
+
+Bu modül, FACT relationship'leri yazarken temporal conflict resolution sağlar:
+- EXCLUSIVE: Aynı (subject, predicate) için sadece bir ACTIVE object
+- ADDITIVE: Aynı (subject, predicate) için N ACTIVE object
+
+Örnek:
+- YAŞAR_YER İstanbul → Ankara: Eski ilişki SUPERSEDED olur
+- SEVER Pizza + SEVER Sushi: İkisi de ACTIVE kalır
+"""
+
+from typing import List, Dict, Tuple
+from Atlas.logger import logger
+
+
+async def resolve_conflicts(
+    triplets: List[Dict],
+    user_id: str,
+    source_turn_id: str,
+    catalog
+) -> Tuple[List[Dict], List[Dict]]:
+    """
+    EXCLUSIVE/ADDITIVE lifecycle kurallarını uygula.
+    
+    Args:
+        triplets: LONG_TERM triplet'ler (MWG'den geçmiş)
+        user_id: Kullanıcı ID
+        source_turn_id: Mevcut turn ID
+        catalog: PredicateCatalog instance
+    
+    Returns:
+        (new_triplets, supersede_operations)
+        - new_triplets: Yaz\u0131lacak yeni triplet'ler
+        - supersede_operations: SUPERSEDED i\u015faretlemesi için dict'ler
+    
+    Logic:
+    1. Her triplet i\u00e7in predicate type'\u0131 kontrol et (EXCLUSIVE vs ADDITIVE)
+    2. EXCLUSIVE ise: Ayn\u0131 subject+predicate var m\u0131? Object farkl\u0131ysa supersede
+    3. ADDITIVE ise: Ayn\u0131 subject+predicate+object var m\u0131? Varsa update, yoksa new
+    """
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    
+   new_triplets = []
+    supersede_operations = []
+    
+    for triplet in triplets:
+        predicate = triplet.get("predicate", "")
+        subject = triplet.get("subject", "")
+        obj = triplet.get("object", "")
+        
+        if not catalog:
+            # Catalog yoksa fail-safe: add as is
+            new_triplets.append(triplet)
+            continue
+        
+        # Resolve predicate
+        pred_key = catalog.resolve_predicate(predicate)
+        if not pred_key:
+            logger.warning(f"Lifecycle: Unknown predicate '{predicate}', skipping")
+            continue
+        
+        # Get type
+        pred_type = catalog.get_type(pred_key)
+        
+        if pred_type == "EXCLUSIVE":
+            # EXCLUSIVE: Check for existing ACTIVE relationship with same subject+predicate
+            existing = await _find_active_relationship(user_id, subject, predicate)
+            
+            if existing:
+                existing_object = existing.get("object")
+                
+                if existing_object == obj:
+                    # Same value - no conflict, will be updated by MERGE
+                    logger.info(f"Lifecycle EXCLUSIVE: Same value '{subject}' {predicate} '{obj}' - update")
+                    new_triplets.append(triplet)
+                else:
+                    # Different value - supersede old
+                    logger.info(f"Lifecycle EXCLUSIVE: '{subject}' {predicate} '{existing_object}' → '{obj}' - superseding old")
+                    supersede_operations.append({
+                        "user_id": user_id,
+                        "subject": subject,
+                        "predicate": predicate,
+                        "old_object": existing_object,
+                        "new_turn_id": source_turn_id
+                    })
+                    new_triplets.append(triplet)
+            else:
+                # No existing - create new
+                logger.info(f"Lifecycle EXCLUSIVE: New '{subject}' {predicate} '{obj}'")
+                new_triplets.append(triplet)
+        
+        elif pred_type == "ADDITIVE":
+            # ADDITIVE: Check for exact match (subject+predicate+object)
+            exact_exists = await neo4j_manager.fact_exists(user_id, subject, predicate, obj)
+            
+            if exact_exists:
+                # Recurrence - will be updated by MERGE
+                logger.info(f"Lifecycle ADDITIVE: Recurrence '{subject}' {predicate} '{obj}'")
+                new_triplets.append(triplet)
+            else:
+                # New value - accumulate
+                logger.info(f"Lifecycle ADDITIVE: Accumulate '{subject}' {predicate} '{obj}'")
+                new_triplets.append(triplet)
+        
+        else:
+            # Unknown type - default to ADDITIVE behavior
+            logger.warning(f"Lifecycle: Unknown type '{pred_type}' for predicate '{predicate}', defaulting to ADDITIVE")
+            new_triplets.append(triplet)
+    
+    return new_triplets, supersede_operations
+
+
+async def _find_active_relationship(user_id: str, subject: str, predicate: str) -> Dict:
+    """
+    Belirtilen subject+predicate için ACTIVE ilişkiyi bul.
+    
+    Args:
+        user_id: Kullanıcı ID
+        subject: Subject entity
+        predicate: Predicate (canonical)
+    
+    Returns:
+        {"object": "...", "turn_id": "..."} veya None
+    """
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    
+    query = """
+    MATCH (s:Entity {name: $subject})-[r:FACT {predicate: $predicate, user_id: $uid}]->(o:Entity)
+    WHERE r.status IS NULL OR r.status = 'ACTIVE'
+    RETURN o.name as object, r.source_turn_id_last as turn_id
+    LIMIT 1
+    """
+    
+    try:
+        result = await neo4j_manager.query_graph(query, {
+            "uid": user_id,
+            "subject": subject,
+            "predicate": predicate
+        })
+        return result[0] if result else None
+    except Exception as e:
+        logger.warning(f"_find_active_relationship hatası: {e}")
+        return None
+
+
+async def supersede_relationship(
+    user_id: str,
+    subject: str,
+    predicate: str,
+    old_object: str,
+    new_turn_id: str
+) -> None:
+    """
+    Eski ilişkiyi SUPERSEDED olarak işaretle.
+    
+    Args:
+        user_id: Kullanıcı ID
+        subject: Subject entity
+        predicate: Predicate
+        old_object: Eski object (supersede edilecek)
+        new_turn_id: Yeni turn ID (superseded_by_turn_id)
+    """
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    
+    query = """
+    MATCH (s:Entity {name: $subject})-[r:FACT {predicate: $predicate, user_id: $uid}]->(o:Entity {name: $old_obj})
+    WHERE r.status IS NULL OR r.status = 'ACTIVE'
+    SET r.status = 'SUPERSEDED',
+        r.superseded_by_turn_id = $new_turn_id,
+        r.superseded_at = datetime()
+    RETURN count(r) as superseded_count
+    """
+    
+    try:
+        result = await neo4j_manager.query_graph(query, {
+            "uid": user_id,
+            "subject": subject,
+            "predicate": predicate,
+            "old_obj": old_object,
+            "new_turn_id": new_turn_id
+        })
+        count = result[0]["superseded_count"] if result else 0
+        logger.info(f"Lifecycle: {count} ilişki SUPERSEDED olarak işaretlendi")
+    except Exception as e:
+        logger.error(f"Supersede relationship hatası: {e}")
