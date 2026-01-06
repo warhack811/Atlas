@@ -141,15 +141,17 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         session_id = session.id
         MessageBuffer.add_user_message(session_id, user_message)
         
-        # GRAF VERİTABANI BAĞLAMI: Kullanıcı geçmişini ve ilişkili bilgileri Neo4j'den getirir
-        from Atlas.memory.context import ContextBuilder
+        # GRAF VERİTABANI BAĞLAMI: FAZ6 - v3 context packaging
+        from Atlas.memory.context import ContextBuilder, build_memory_context_v3
         cb = ContextBuilder(session_id)
-        neo4j_context = await cb.get_neo4j_context(session_id, user_message)
+        
+        # FAZ6: Yeni v3 context packaging kullan
+        neo4j_context = await build_memory_context_v3(session_id, user_message)
         cb.with_neo4j_context(neo4j_context)
         
         record = rdr.RDR.create(user_message)
         if neo4j_context:
-            record.full_context_injection = f"[NEO4J MEMORY]: {neo4j_context}"
+            record.full_context_injection = f"[MEMORY V3]: {neo4j_context}"
         
         # 1. PLANLAMA (ORKESTRASYON): Kullanıcı niyetini anlar ve bir iş planı oluşturur
         from Atlas import orchestrator
@@ -275,10 +277,12 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
                 return
 
             classify_start = time.time()
-            # 1. Bellek ve Bağlam Hazırlığı (Neo4j Hatırlama)
-            from Atlas.memory.context import ContextBuilder
+            # 1. Bellek ve Bağlam Hazırlığı - FAZ6: v3 context packaging
+            from Atlas.memory.context import ContextBuilder, build_memory_context_v3
             cb = ContextBuilder(session_id)
-            graph_context = await cb.get_neo4j_context(session_id, request.message)
+            
+            # FAZ6: Yeni v3 context packaging kullan
+            graph_context = await build_memory_context_v3(session_id, request.message)
             cb.with_neo4j_context(graph_context)
             
             # 2. Orkestrasyon: Niyet analizi ve DAG planı oluşturma
