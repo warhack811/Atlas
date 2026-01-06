@@ -356,11 +356,17 @@ async def upload_image(session_id: str, file: UploadFile = File(...)):
     from Atlas.memory import MessageBuffer, SessionManager
     
     try:
+        logger.info(f"Görsel yükleme başlatıldı: {file.filename}, Session: {session_id}")
         session = SessionManager.get_or_create(session_id)
         session_id = session.id
         content = await file.read()
+        logger.info(f"Görsel okundu: {len(content)} byte")
+        
         analysis_text = await analyze_image(content)
+        logger.info(f"Görsel analizi tamamlandı: {analysis_text[:100]}...")
+        
         is_safe, sanitized_text, issues, used_model = await safety_gate.check_input_safety(analysis_text)
+        logger.info(f"Güvenlik denetimi tamamlandı. Güvenli mi: {is_safe}")
         
         # Analiz sonucunu sistem notu olarak mesaj geçmişine enjekte et
         system_note = f"[BAĞLAM - GÖRSEL ANALİZİ ({file.filename})]: {sanitized_text}"
@@ -371,6 +377,14 @@ async def upload_image(session_id: str, file: UploadFile = File(...)):
             "filename": file.filename,
             "analysis": sanitized_text,
             "safety_passed": is_safe
+        }
+    except Exception as e:
+        import traceback
+        logger.error(f"Yükleme hatası detayı: {e}\n{traceback.format_exc()}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc()
         }
     except Exception as e:
         logger.error(f"Yükleme hatası: {e}")

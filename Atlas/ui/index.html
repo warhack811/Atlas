@@ -712,7 +712,9 @@
                             appendSystemNotification(`📸 Görsel Analiz Edildi: ${file.name}`);
                         }
                     } else {
-                        appendSystemNotification(`⚠️ Görsel İşlenemedi: ${file.name}`);
+                        const errorDetail = data.message || "Bilinmeyen hata";
+                        appendSystemNotification(`⚠️ Yükleme Hatası: ${file.name} - ${errorDetail}`);
+                        console.error("Upload Error Traceback:", data.traceback);
                     }
                 } catch (err) {
                     appendSystemNotification(`❌ Yükleme Hatası (Sunucu Bağlantısı): ${file.name}`);
