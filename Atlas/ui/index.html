@@ -703,12 +703,12 @@
                         body: formData
                     });
 
+                    const rawResponse = await res.text();
                     let data;
                     try {
-                        data = await res.json();
+                        data = JSON.parse(rawResponse);
                     } catch (jsonErr) {
-                        const rawText = await res.text();
-                        appendSystemNotification(`❌ Sunucu Hatası (${res.status}): ${rawText.substring(0, 50)}...`);
+                        appendSystemNotification(`❌ Sunucu Hatası (${res.status}): ${rawResponse.substring(0, 100)}...`);
                         return;
                     }
 
@@ -722,7 +722,7 @@
                     } else {
                         const errorDetail = data.message || "Bilinmeyen hata";
                         appendSystemNotification(`⚠️ Yükleme Hatası: ${file.name} - ${errorDetail}`);
-                        console.error("Upload Error Traceback:", data.traceback);
+                        console.error("Upload Error Traceback:", data.traceback || "No traceback");
                     }
                 } catch (err) {
                     appendSystemNotification(`❌ Kritik Bağlantı Hatası: ${err.message}`);
