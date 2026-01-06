@@ -128,11 +128,20 @@ class Neo4jManager:
         return record[0] if record else 0
 
     async def delete_all_memory(self, user_id: str) -> bool:
-        """Kullanıcıya ait tüm graf hafızasını siler (Hard Reset)."""
+        """Kullanıcıya ait tüm graf hafızasını siler (Hard Reset).
+        FAZ0.1-4: Shared Entity node'ları değil, sadece kullanıcıya ait ilişkileri siler.
+        """
         query = """
         MATCH (u:User {id: $uid})
-        OPTIONAL MATCH (u)-[:KNOWS]->(e:Entity)
-        DETACH DELETE u, e
+        // Kullanıcının KNOWS ilişkilerini sil
+        OPTIONAL MATCH (u)-[k:KNOWS]->(e:Entity)
+        DELETE k
+        // Kullanıcının FACT ilişkilerini sil (user_id ile filtrelenerek)
+        WITH u
+        OPTIONAL MATCH ()-[r:FACT {user_id: $uid}]->()
+        DELETE r
+        // Sadece User node'unu sil, Entity'leri değil (başka kullanıcılar kullanıyor olabilir)
+        DELETE u
         """
         try:
             await self.query_graph(query, {"uid": user_id})
@@ -143,15 +152,26 @@ class Neo4jManager:
             return False
 
     async def forget_fact(self, user_id: str, entity_name: str) -> int:
-        """Belirli bir varlık (Entity) ile ilgili tüm ilişkileri siler."""
+        """Belirli bir varlık (Entity) ile ilgili kullanıcıya ait ilişkileri siler.
+        FAZ0.1-4: Entity node'u silinmez, sadece kullanıcıya ait FACT ve KNOWS ilişkileri silinir.
+        """
         query = """
-        MATCH (u:User {id: $uid})-[:KNOWS]->(e:Entity {name: $ename})
-        DETACH DELETE e
+        MATCH (u:User {id: $uid})-[k:KNOWS]->(e:Entity {name: $ename})
+        // Önce bu entity ile kullanıcıya ait FACT ilişkilerini sil
+        OPTIONAL MATCH (e)-[r:FACT {user_id: $uid}]->()
+        DELETE r
+        OPTIONAL MATCH ()-[r2:FACT {user_id: $uid}]->(e)
+        DELETE r2
+        // Sonra KNOWS ilişkisini sil
+        DELETE k
+        // Entity node'u SİLME - başka kullanıcılar kullanıyor olabilir
+        RETURN count(k) as deleted_count
         """
         try:
             records = await self.query_graph(query, {"uid": user_id, "ename": entity_name})
-            logger.info(f"Kullanıcı {user_id} için '{entity_name}' bilgisi unutuldu.")
-            return 1
+            count = records[0]['deleted_count'] if records else 0
+            logger.info(f"Kullanıcı {user_id} için '{entity_name}' bilgisi unutuldu ({count} ilişki).")
+            return count
         except Exception as e:
             logger.error(f"Bilgi unutma hatası: {e}")
             return 0
