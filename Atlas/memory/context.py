@@ -60,8 +60,8 @@ class ContextBuilder:
         from Atlas.memory.neo4j_manager import neo4j_manager
 
         # 1. Basit anahtar kelime çıkarımı (Stop-wordleri atlamıyoruz şimdilik)
-        # 3 karakterden büyük kelimeleri al
-        keywords = [w.strip() for w in re.split(r'\W+', message) if len(w.strip()) > 3]
+        # 3 karakter ve üzeri kelimeleri al (Örn: Can, Ali gibi isimleri kaçırmamak için)
+        keywords = [w.strip() for w in re.split(r'\W+', message) if len(w.strip()) > 2]
         if not keywords:
             return ""
 

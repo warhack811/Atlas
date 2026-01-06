@@ -92,24 +92,38 @@ class Neo4jManager:
     async def _execute_triplet_merge(tx, user_id, triplets):
         """
         Cypher sorgusunu çalıştırarak verileri düğüm ve ilişki olarak birleştirir.
-        Triplet yapısı: {subject, predicate, object, confidence?, category?}
+        Daha temiz bir hafıza için isimleri normalize eder.
         """
+        # Python tarafında isimleri normalize et (Örn: muhammet -> Muhammet)
+        normalized_triplets = []
+        for t in triplets:
+            nt = t.copy()
+            nt["subject"] = str(t.get("subject", "")).strip().title()
+            nt["object"] = str(t.get("object", "")).strip().title()
+            nt["predicate"] = str(t.get("predicate", "")).strip().upper() # İlişkileri büyük harf yap
+            normalized_triplets.append(nt)
+
         query = """
         MERGE (u:User {id: $user_id})
         WITH u
         UNWIND $triplets AS t
         MERGE (s:Entity {name: t.subject})
         MERGE (o:Entity {name: t.object})
-        MERGE (s)-[r:FACT]->(o)
-        SET r.predicate = t.predicate, 
+        // İlişkiyi predicate ile birlikte MERGE et ki aynı iki entity arasında aynı ilişki tekrar etmesin
+        MERGE (s)-[r:FACT {predicate: t.predicate}]->(o)
+        ON CREATE SET 
             r.user_id = $user_id,
             r.confidence = COALESCE(t.confidence, 1.0),
             r.category = COALESCE(t.category, 'general'),
+            r.created_at = datetime(),
             r.updated_at = datetime()
+        ON MATCH SET
+            r.updated_at = datetime(),
+            r.confidence = COALESCE(t.confidence, r.confidence)
         MERGE (u)-[:KNOWS]->(s)
         RETURN count(r)
         """
-        result = await tx.run(query, user_id=user_id, triplets=triplets)
+        result = await tx.run(query, user_id=user_id, triplets=normalized_triplets)
         record = await result.single()
         return record[0] if record else 0
 
