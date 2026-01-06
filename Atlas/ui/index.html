@@ -571,6 +571,10 @@
             <span id="statusLabel">ENGINE STANDBY</span>
         </div>
         <div class="header-actions">
+            <div
+                style="font-size: 0.65rem; color: var(--text-dim); text-align: right; margin-right: 15px; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">
+                Build: <span style="color: var(--cyan)">BUILD_TIMESTAMP_PLACEHOLDER</span>
+            </div>
             <a href="/arena" class="arena-link">
                 🏟️ Arena
             </a>
@@ -822,6 +826,7 @@
                 <div class="tab-content active" id="summ-${msgId}">
                     <div class="rdr-grid">
                         <div class="stat-card"><div class="stat-label">Toplam Süre</div><div class="stat-value">${rdr.total_ms || 0}ms</div></div>
+                        <div class="stat-card"><div class="stat-label">Orkestratör</div><div class="stat-value" style="font-size:0.6rem">${rdr.orchestrator_model || "N/A"}</div></div>
                         <div class="stat-card"><div class="stat-label">Sentezleyici</div><div class="stat-value" style="font-size:0.6rem">${rdr.synthesizer_model || "N/A"}</div></div>
                         <div class="stat-card">
                             <div class="stat-label">Güvenlik</div>
@@ -832,12 +837,12 @@
                     </div>
                     
                     <div style="margin-top:15px; background:rgba(0,0,0,0.2); border-radius:8px; padding:10px; border:1px solid var(--border);">
-                        <div style="font-size:0.7rem; color:var(--text-dim); margin-bottom:8px; font-weight:700; text-transform:uppercase; letter-spacing:1px;">Performans Kırılımı</div>
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; font-size:0.75rem;">
+                        <div style="font-size:0.7rem; color:var(--text-dim); margin-bottom:8px; font-weight:700; text-transform:uppercase; letter-spacing:1px;">Performans ve Model Kırılımı</div>
+                        <div style="display:grid; grid-template-columns: 1fr; gap:8px; font-size:0.75rem;">
                             <div class="timing-item">🛡️ Güvenlik: <span style="color:var(--matrix-green)">${rdr.safety_ms || 0}ms</span></div>
-                            <div class="timing-item">🧠 Orkestrasyon: <span style="color:var(--matrix-green)">${rdr.classification_ms || 0}ms</span></div>
-                            <div class="timing-item">⚙️ Yürütme (Tool): <span style="color:var(--matrix-green)">${rdr.dag_execution_ms || 0}ms</span></div>
-                            <div class="timing-item">🎭 Sentez: <span style="color:var(--matrix-green)">${rdr.synthesis_ms || 0}ms</span></div>
+                            <div class="timing-item">🧠 Orkestrasyon: <span style="color:var(--matrix-green)">${rdr.classification_ms || 0}ms</span> <span style="opacity:0.6; font-size:0.65rem;">[${rdr.orchestrator_model || "N/A"}]</span></div>
+                            <div class="timing-item">⚙️ Yürütme (Tool): <span style="color:var(--matrix-green)">${rdr.dag_execution_ms || 0}ms</span> <span style="opacity:0.6; font-size:0.65rem;">[Expert DAG]</span></div>
+                            <div class="timing-item">🎭 Sentez: <span style="color:var(--matrix-green)">${rdr.synthesis_ms || 0}ms</span> <span style="opacity:0.6; font-size:0.65rem;">[${rdr.synthesizer_model || "N/A"}]</span></div>
                             <div class="timing-item">✅ Kalite: <span style="color:var(--matrix-green)">${rdr.quality_ms || 0}ms</span></div>
                         </div>
                     </div>

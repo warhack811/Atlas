@@ -19,5 +19,6 @@ jobs:
             git pull
             /home/ubuntu/Atlas/.venv/bin/pip install -r requirements.txt
             /home/ubuntu/Atlas/.venv/bin/pip install -e .
+            sed -i "s/BUILD_TIMESTAMP_PLACEHOLDER/$(date '+%d.%m.%Y %H:%M:%S')/g" /home/ubuntu/Atlas/Atlas/ui/index.html
             sudo systemctl restart atlas
             sudo systemctl status atlas --no-pager -l

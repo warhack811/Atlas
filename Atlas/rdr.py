@@ -100,14 +100,12 @@ class RDR:
     
     # Teknik Yürütme Detayları
     task_details: list = field(default_factory=list)
-    raw_expert_responses: list = field(default_factory=list) # [{"model": "...", "response": "..."}]
-    synthesizer_model: str = ""
-    
-    is_urgent: bool = False
-    urgency_keywords: list = field(default_factory=list)
-    
     # Yakalanan Teknik Hatalar
     technical_errors: list = field(default_factory=list)
+    
+    # Model Detayları
+    orchestrator_model: str = ""
+    synthesizer_model: str = ""
     
     # Enjekte edilen ham istemler
     orchestrator_prompt: str = ""

@@ -15,10 +15,11 @@ Temel Sorumluluklar:
 
 import os
 import time
-from datetime import datetime
 import asyncio
 import json
 import logging
+import traceback
+from datetime import datetime
 from typing import Optional
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, BackgroundTasks, File, UploadFile
@@ -235,15 +236,18 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
 
     async def event_generator():
         """Süreç adımlarını ve metin parçalarını ileten jeneratör."""
-        start_time = time.time()
-        session = SessionManager.get_or_create(request.session_id)
-        session_id = session.id
-        MessageBuffer.add_user_message(session_id, request.message)
-
         from Atlas import rdr, safety
         record = rdr.RDR.create(request.message)
 
         try:
+            start_time = time.time()
+            from Atlas.memory import SessionManager, MessageBuffer
+            from Atlas import orchestrator, dag_executor, synthesizer
+            
+            session = SessionManager.get_or_create(request.session_id)
+            session_id = session.id
+            MessageBuffer.add_user_message(session_id, request.message)
+
             safety_start = time.time()
             is_safe, sanitized_text, issues = await safety.safety_gate.check_input_safety(request.message)
             safety_ms = int((time.time() - safety_start) * 1000)
@@ -254,7 +258,9 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             record.pii_redacted = any(i.type == "PII" for i in issues)
 
             if not is_safe:
-                yield f"data: {json.dumps({'type': 'error', 'content': '[GÜVENLİK ENGELİ] Güvenlik engeli.'})}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'content': '[GÜVENLİK ENGELİ] Güvenlik engeli.'}, default=str)}\n\n"
+                rdr.save_rdr(record)
+                yield f"data: {json.dumps({'type': 'done', 'rdr': record.to_dict()}, default=str)}\n\n"
                 return
 
             classify_start = time.time()
@@ -262,9 +268,10 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             classify_ms = int((time.time() - classify_start) * 1000)
             
             record.intent = plan.active_intent
+            record.orchestrator_model = plan.orchestrator_model
             record.classification_ms = classify_ms
             record.orchestrator_prompt = plan.orchestrator_prompt
-            yield f"data: {json.dumps({'type': 'plan', 'intent': plan.active_intent})}\n\n"
+            yield f"data: {json.dumps({'type': 'plan', 'intent': plan.active_intent, 'model': plan.orchestrator_model}, default=str)}\n\n"
 
             exec_start = time.time()
             raw_results = await dag_executor.dag_executor.execute_plan(plan, session_id, request.message)
@@ -307,12 +314,13 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             yield f"data: {json.dumps({'type': 'done', 'rdr': record.to_dict()}, default=str)}\n\n"
 
         except Exception as e:
-            logger.error(f"Akış hatası: {e}")
+            import traceback
+            logger.error(f"Akış hatası: {e}\n{traceback.format_exc()}")
             error_msg = str(e)
             record.technical_errors.append({
                 "timestamp": datetime.now().isoformat(),
                 "error": error_msg,
-                "traceback": "api.py exception"
+                "traceback": traceback.format_exc()
             })
             rdr.save_rdr(record)
             yield f"data: {json.dumps({'type': 'error', 'content': error_msg}, default=str)}\n\n"

@@ -36,6 +36,7 @@ class OrchestrationPlan:
     rewritten_query: Optional[str] = None # İyileştirilmiş/Yeniden yazılmış kullanıcı sorgusu
     resilience_data: Dict[str, Any] = field(default_factory=dict) # Hata yönetim verileri
     orchestrator_prompt: str = ""      # Karar verilirken kullanılan tam prompt
+    orchestrator_model: str = ""       # Karar veren modelin ID'si
 
 from Atlas.prompts import ORCHESTRATOR_PROMPT
 
@@ -70,7 +71,7 @@ class Orchestrator:
         print(f"[HATA AYIKLAMA] Orkestratör Geçmişi: {len(history)} mesaj. Aktif Alan: {state.active_domain}")
 
         # 4. Beyin (LLM) Çağrısı: Mevcut bilgilerle en uygun planı oluşturması için modele danışılır
-        plan_data, used_prompt = await Orchestrator._call_brain(message, history_text, full_context)
+        plan_data, used_prompt, used_model = await Orchestrator._call_brain(message, history_text, full_context)
         
         print(f"[HATA AYIKLAMA] Orkestratör Plan Verisi: {json.dumps(plan_data, ensure_ascii=False)}")
         
@@ -88,11 +89,12 @@ class Orchestrator:
             context_focus=plan_data.get("context_focus", ""),
             rewritten_query=plan_data.get("rewritten_query"),
             resilience_data=plan_data.get("_resilience", {}),
-            orchestrator_prompt=used_prompt
+            orchestrator_prompt=used_prompt,
+            orchestrator_model=used_model
         )
 
     @staticmethod
-    async def _call_brain(message: str, history: str, context: str) -> tuple[Dict, str]:
+    async def _call_brain(message: str, history: str, context: str) -> tuple[Dict, str, str]:
         """
         Orkestrasyon kararı için modelli çağrı yapar. 
         Gemini 2.0 Flash birincil tercihtir; başarısızlık durumunda Llama modellerine döner.
@@ -152,7 +154,7 @@ class Orchestrator:
                             "attempts": attempt_count,
                             "models": used_models
                         }
-                        return data, prompt
+                        return data, prompt, model
 
                     except Exception as ge:
                         print(f"[HATA] Gemini çağrısı başarısız: {ge}")
@@ -181,7 +183,7 @@ class Orchestrator:
                                 "attempts": attempt_count,
                                 "models": used_models
                             }
-                            return data, prompt
+                            return data, prompt, model
                         except Exception as je:
                             print(f"[HATA] {model} için JSON ayrıştırma başarısız: {je}")
                             continue
@@ -194,10 +196,6 @@ class Orchestrator:
                 continue
                 
         # Tüm modeller başarısız olursa güvenli bir varsayılan plan döner
-        return {
-            "intent": "general", 
-            "is_follow_up": False, 
-            "tasks": [{"id": "t1", "type": "generation", "specialist": "logic", "instruction": "Lütfen yardımcı ol."}]
-        }, prompt
+        }, prompt, "fallback-safety"
 
 orchestrator = Orchestrator()
