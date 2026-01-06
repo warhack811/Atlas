@@ -15,20 +15,33 @@ jobs:
           username: ${{ secrets.OCI_USER }}
           key: ${{ secrets.OCI_SSH_KEY }}
           script: |
-            cd /home/ubuntu/Atlas
+            # Sunucu üzerindeki gerçek proje dizinine git
+            cd $HOME/atlas_root/Atlas || cd $HOME/Atlas || exit 1
+            
+            echo "Çalışma dizini: $(pwd)"
             git reset --hard
             git pull
-            /home/ubuntu/Atlas/.venv/bin/pip install -r requirements.txt
-            /home/ubuntu/Atlas/.venv/bin/pip install -e .
+            
+            # Sanal ortam yolunu belirle ve paketleri yönet
+            VENV_PATH="./.venv/bin/pip"
+            if [ ! -f "$VENV_PATH" ]; then
+                VENV_PATH="venv/bin/pip"
+            fi
+            
+            $VENV_PATH install -r requirements.txt
+            $VENV_PATH install -e .
             
             # Tarih damgasını bas ve kontrol et
             TIMESTAMP=$(date '+%d.%m.%Y %H:%M:%S')
             echo "Görünen saat: $TIMESTAMP"
+            
+            # index.html konumunu doğrula (Atlas/ui/index.html)
             if [ -f "Atlas/ui/index.html" ]; then
                 sed -i "s/BUILD_TIMESTAMP_PLACEHOLDER/$TIMESTAMP/g" Atlas/ui/index.html
                 echo "Zaman damgası basıldı."
             else
-                echo "HATA: Atlas/ui/index.html bulunamadı!"
+                echo "HATA: Atlas/ui/index.html bulunamadı! Mevcut dosyalar:"
+                find . -name index.html
             fi
             
             sudo systemctl restart atlas
