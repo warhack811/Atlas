@@ -109,10 +109,10 @@ class Neo4jManager:
         UNWIND $triplets AS t
         MERGE (s:Entity {name: t.subject})
         MERGE (o:Entity {name: t.object})
-        // İlişkiyi predicate ile birlikte MERGE et ki aynı iki entity arasında aynı ilişki tekrar etmesin
-        MERGE (s)-[r:FACT {predicate: t.predicate}]->(o)
+        // FAZ0.1-1: İlişkiyi hem predicate hem de user_id ile MERGE et (multi-user isolation)
+        // Bu sayede farklı kullanıcılar aynı entity'ler arasında farklı ilişkilere sahip olabilir
+        MERGE (s)-[r:FACT {predicate: t.predicate, user_id: $user_id}]->(o)
         ON CREATE SET 
-            r.user_id = $user_id,
             r.confidence = COALESCE(t.confidence, 1.0),
             r.category = COALESCE(t.category, 'general'),
             r.created_at = datetime(),
