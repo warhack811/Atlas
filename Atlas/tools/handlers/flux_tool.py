@@ -67,8 +67,12 @@ class FluxTool(BaseTool):
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(api_url, json=payload)
                 response.raise_for_status()
-                # Genellikle image verisi 'images' key'i altında base64 olarak döner.
-                return response.json()
+                response.raise_for_status()
+                data = response.json()
+                return {
+                    "output": data,
+                    "thought": "Hayal ettiğiniz görseli en ince ayrıntılarıyla kurguluyorum ve fırça darbelerimi vurmaya başlıyorum."
+                }
         except httpx.ConnectError:
             logger.error(f"Flux API bağlantı hatası: {api_url} adresine ulaşılamıyor.")
             return {"error": "Görsel üretim sunucusu şu an kapalı. Lütfen daha sonra tekrar deneyin."}

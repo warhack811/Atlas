@@ -301,7 +301,15 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             yield f"data: {json.dumps({'type': 'plan', 'intent': plan.active_intent, 'model': plan.orchestrator_model}, default=str)}\n\n"
 
             exec_start = time.time()
-            raw_results = await dag_executor.dag_executor.execute_plan(plan, session_id, request.message)
+            raw_results = []
+            async for event in dag_executor.dag_executor.execute_plan_stream(plan, session_id, request.message):
+                if event["type"] == "thought":
+                    thought_step = {"title": "İşlem Yürütülüyor", "content": event["thought"]}
+                    record.reasoning_steps.append(thought_step)
+                    yield f"data: {json.dumps({'type': 'thought', 'step': thought_step}, default=str)}\n\n"
+                elif event["type"] == "task_result":
+                    raw_results.append(event["result"])
+            
             exec_ms = int((time.time() - exec_start) * 1000)
             
             record.dag_execution_ms = exec_ms
@@ -309,6 +317,12 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
                 {"id": r.get("task_id") or r.get("id"), "model": r.get("model"), "status": "success", "result": r.get("output") or r.get("response"), "duration_ms": r.get("duration_ms", 0)}
                 for r in raw_results
             ]
+            
+            # Sentezleme adımı için düşünce ekle
+            synth_thought = {"title": "Yanıt Hazırlanıyor", "content": "Tüm veriler toplandı, size en uygun şekilde sentezleniyor..."}
+            record.reasoning_steps.append(synth_thought)
+            yield f"data: {json.dumps({'type': 'thought', 'step': synth_thought}, default=str)}\n\n"
+            
             yield f"data: {json.dumps({'type': 'tasks_done'}, default=str)}\n\n"
 
             full_response = ""

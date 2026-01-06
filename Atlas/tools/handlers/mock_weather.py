@@ -29,9 +29,10 @@ class MockWeatherTool(BaseTool):
     description = "Belirli bir şehir için güncel hava durumu bilgisini (rastgele) döndürür."
     input_schema = WeatherInput
 
-    async def execute(self, city: str) -> str:
+    async def execute(self, city: str) -> dict:
         """Belirtilen şehir için sahte hava durumu verisi üretir."""
-        # Rastgele sıcaklık değeri oluştur (15-35°C arası)
         temp = random.randint(15, 35)
-        # Kullanıcı dostu formatında sonuç döndür
-        return f"{city} şehri için hava durumu: {temp}°C, Güneşli."
+        return {
+            "output": f"{city} şehri için hava durumu: {temp}°C, Güneşli.",
+            "thought": f"{city} şehri için yerel meteoroloji istasyonlarından güncel verileri çekiyorum."
+        }

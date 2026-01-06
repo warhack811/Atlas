@@ -61,6 +61,7 @@ class GeneratorResult:
     retryable: bool = False
     tokens: int = 0
     model: str = ""
+    thought: Optional[str] = None # Kullanıcıya yönelik düşünce
 
     def __str__(self):
         return self.text

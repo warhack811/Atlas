@@ -65,7 +65,11 @@ class SerperTool(BaseTool):
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(url, headers=headers, json=payload)
                 response.raise_for_status()
-                return response.json()
+                search_data = response.json()
+                return {
+                    "output": search_data,
+                    "thought": f"'{query}' konusu hakkında internet üzerinde kapsamlı bir araştırma yapıyorum."
+                }
         except httpx.HTTPStatusError as e:
             logger.error(f"Serper API hatası: {e.response.status_code} - {e.response.text}")
             return {"error": f"Arama servisi hata döndürdü: {e.response.status_code}"}

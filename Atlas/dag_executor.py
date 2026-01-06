@@ -34,12 +34,18 @@ class DAGExecutor:
         self.tool_registry.load_tools(definitions_path)
 
     async def execute_plan(self, plan: Union[OrchestrationPlan, Dict[str, Any]], session_id: str, original_message: str) -> List[Dict[str, Any]]:
-        """Gelen planı (plan/dict) analiz eder ve tüm görevleri tamamlar."""
-        # 1. Veri Yapısı Uyumluluğu: Dict gelirse model objesine çevirir
+        """Geriye dönük uyumluluk için: Tüm sonuçları liste olarak döner."""
+        results = []
+        async for event in self.execute_plan_stream(plan, session_id, original_message):
+            if event["type"] == "task_result":
+                results.append(event["result"])
+        return results
+
+    async def execute_plan_stream(self, plan: Union[OrchestrationPlan, Dict[str, Any]], session_id: str, original_message: str):
+        """Görev akışını yürütür ve her adımda thought/result olaylarını yield eder."""
         if isinstance(plan, dict):
             plan = OrchestrationPlan(**plan)
 
-        # 2. Görev Normalizasyonu: Tüm görevlerin TaskSpec yapısında olduğundan emin olur
         normalized_tasks = []
         if hasattr(plan, 'tasks'):
             for t in plan.tasks:
@@ -50,48 +56,36 @@ class DAGExecutor:
             plan.tasks = normalized_tasks
 
         try:
-            executed_tasks = {} # Tamamlanan görev haritası: task_id -> sonuç
-            all_results = []
-            
-            # Görevleri kopyala
+            executed_tasks = {} 
             remaining_tasks = list(plan.tasks)
             
             while remaining_tasks:
-                # O anda çalıştırılmaya hazır olan (bağımlılığı olmayan veya çözülen) görevleri belirle
                 ready_tasks = [
                     t for t in remaining_tasks 
                     if not t.dependencies or all(dep in executed_tasks for dep in t.dependencies)
                 ]
                 
                 if not ready_tasks:
-                    logger.error(f"Döngüsel bağımlılık veya çözülemeyen görev: {[t.id for t in remaining_tasks]}")
                     break
                 
                 layer_coroutines = []
-                import time
                 for task_spec in ready_tasks:
                     layer_coroutines.append(self._execute_single_task(task_spec, plan, executed_tasks, session_id, original_message))
                 
                 layer_results = await asyncio.gather(*layer_coroutines)
                 
-                # Sonuçları kaydet
                 for res in layer_results:
                     executed_tasks[res["task_id"]] = res
-                    all_results.append(res)
+                    # Thought varsa yield et
+                    if res.get("thought"):
+                        yield {"type": "thought", "thought": res["thought"], "task_id": res["task_id"]}
+                    yield {"type": "task_result", "result": res}
                 
-                # Tamamlanan görevleri listeden güvenli bir şekilde çıkar
-                ready_ids = set()
-                for t in ready_tasks:
-                    tid = getattr(t, 'id', None) or (t.get('id') if isinstance(t, dict) else None)
-                    if tid: ready_ids.add(tid)
-                
-                remaining_tasks = [t for t in remaining_tasks if (getattr(t, 'id', None) or (t.get('id') if isinstance(t, dict) else None)) not in ready_ids]
-
-            return all_results
+                ready_ids = {getattr(t, 'id', None) or t.get('id') for t in ready_tasks if isinstance(t, dict) or hasattr(t, 'id')}
+                remaining_tasks = [t for t in remaining_tasks if (getattr(t, 'id', None) or t.get('id')) not in ready_ids]
 
         except Exception as e:
-            logger.error(f"DAG Yürütücü başarısız oldu: {e}")
-            traceback.print_exc()
+            logger.error(f"DAG Stream Hatası: {e}")
             raise e
 
     async def _execute_single_task(self, task: TaskSpec, plan: OrchestrationPlan, executed_tasks: Dict, session_id: str, original_message: str) -> Dict:
@@ -219,10 +213,17 @@ class DAGExecutor:
                     
                     if isinstance(result, GeneratorResult):
                         if result.ok:
+                            # Thought ayıkla (Örn: <thought>...</thought> formatını arar)
+                            import re
+                            raw_text = result.text
+                            thought_match = re.search(r"<thought>(.*?)</thought>", raw_text, re.DOTALL | re.IGNORECASE)
+                            clean_text = re.sub(r"<thought>.*?</thought>", "", raw_text, flags=re.DOTALL | re.IGNORECASE).strip()
+                            
                             return {
                                 "task_id": task_id,
                                 "type": "generation",
-                                "output": result.text,
+                                "output": clean_text,
+                                "thought": thought_match.group(1).strip() if thought_match else None,
                                 "model": model_id,
                                 "prompt": full_message,
                                 "status": "success"
