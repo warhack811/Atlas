@@ -239,7 +239,7 @@ KURALLAR:
 6. Bilgi yoksa [] döndür.
 
 İZİN VERİLEN PREDICATE'LER (sadece bunları kullan):
-- İSİM, YAŞI, MESLEĞİ, YAŞAR_YER, GELDİĞİ_YER
+- İSİM, LAKABI, YAŞI, MESLEĞİ, YAŞAR_YER, GELDİĞİ_YER
 - SEVER, SEVMİYOR, İSTİYOR, ÖĞRENMEK_İSTİYOR
 - SAHİP, EŞİ, ARKADAŞI, AİLE_ÜYESİ, ÇOCUĞU
 - PLANLIYOR, HAYAL_EDER, NEREDE, HİSSEDİYOR

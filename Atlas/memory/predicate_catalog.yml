@@ -15,6 +15,15 @@ ISIM:
   enabled: true
   example: "Benim adım Ali."
 
+LAKABI:
+  canonical: "LAKABI"
+  aliases: ["LAKAP", "MAHLAS", "NICK", "NICKNAME", "TAKMA_AD"]
+  type: "ADDITIVE"
+  category: "identity"
+  durability: "LONG_TERM"
+  enabled: true
+  example: "Bana Mami derler."
+
 YASI:
   canonical: "YAŞI"
   aliases: []
