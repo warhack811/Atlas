@@ -60,9 +60,9 @@ class TestBuildMemoryContextV3(unittest.IsolatedAsyncioTestCase):
         
         self.assertIn("Bellek sistemi geçici olarak kullanılamıyor", result)
     
-    @patch('Atlas.memory.context._retrieve_identity_facts')
-    @patch('Atlas.memory.context._retrieve_hard_facts')
-    @patch('Atlas.memory.context._retrieve_soft_signals')
+    @patch('Atlas.memory.context._retrieve_identity_facts', new_callable=AsyncMock)
+    @patch('Atlas.memory.context._retrieve_hard_facts', new_callable=AsyncMock)
+    @patch('Atlas.memory.context._retrieve_soft_signals', new_callable=AsyncMock)
     @patch('Atlas.memory.context.get_catalog')
     @patch('Atlas.memory.context.load_policy_for_user')
     async def test_standard_mode_retrieves_all_sections(
@@ -116,13 +116,13 @@ class TestBuildMemoryContextV3(unittest.IsolatedAsyncioTestCase):
 class TestRetrievalFunctions(unittest.IsolatedAsyncioTestCase):
     """Retrieval yardımcı fonksiyon testleri"""
     
-    @patch('Atlas.memory.context.neo4j_manager')
-    async def test_retrieve_identity_facts_active_only(self, mock_neo4j):
+    @patch('Atlas.memory.context.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
+    async def test_retrieve_identity_facts_active_only(self, mock_query):
         """Identity facts sadece ACTIVE olanları döner"""
-        mock_neo4j.query_graph = AsyncMock(return_value=[
+        mock_query.return_value = [
             {"predicate": "İSİM", "object": "Ali", "updated_at": "2024-01-01"},
             {"predicate": "YAŞI", "object": "25", "updated_at": "2024-01-02"}
-        ])
+        ]
         
         result = await _retrieve_identity_facts("user123", "__USER__::user123")
         
@@ -130,12 +130,12 @@ class TestRetrievalFunctions(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[0]["predicate"], "İSİM")
         
         # Query parametreleri doğru mu
-        call_args = mock_neo4j.query_graph.call_args
+        call_args = mock_query.call_args
         self.assertIn("status IS NULL OR r.status = 'ACTIVE'", call_args[0][0])
         self.assertEqual(call_args[0][1]["anchor"], "__USER__::user123")
     
-    @patch('Atlas.memory.context.neo4j_manager')
-    async def test_retrieve_hard_facts_exclusive_only(self, mock_neo4j):
+    @patch('Atlas.memory.context.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
+    async def test_retrieve_hard_facts_exclusive_only(self, mock_query):
         """Hard facts sadece EXCLUSIVE predicates"""
         mock_catalog = MagicMock()
         mock_catalog.by_key = {
@@ -144,9 +144,9 @@ class TestRetrievalFunctions(unittest.IsolatedAsyncioTestCase):
             "ISIM": {"type": "EXCLUSIVE", "canonical": "İSİM", "enabled": True}
         }
         
-        mock_neo4j.query_graph = AsyncMock(return_value=[
+        mock_query.return_value = [
             {"subject": "Ali", "predicate": "EŞİ", "object": "Ayşe", "updated_at": "2024-01-01"}
-        ])
+        ]
         
         result = await _retrieve_hard_facts("user123", "__USER__::user123", mock_catalog)
         
@@ -154,14 +154,14 @@ class TestRetrievalFunctions(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result), 1)
         
         # Query'de EXCLUSIVE predicates var mı
-        call_args = mock_neo4j.query_graph.call_args
+        call_args = mock_query.call_args
         predicates = call_args[0][1]["predicates"]
         self.assertIn("EŞİ", predicates)
         self.assertNotIn("SEVER", predicates)  # ADDITIVE olduğu için yok
         self.assertNotIn("İSİM", predicates)  # Identity olduğu için hariç
     
-    @patch('Atlas.memory.context.neo4j_manager')
-    async def test_retrieve_soft_signals_additive_temporal(self, mock_neo4j):
+    @patch('Atlas.memory.context.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
+    async def test_retrieve_soft_signals_additive_temporal(self, mock_query):
         """Soft signals sadece ADDITIVE/TEMPORAL predicates"""
         mock_catalog = MagicMock()
         mock_catalog.by_key = {
@@ -170,17 +170,17 @@ class TestRetrievalFunctions(unittest.IsolatedAsyncioTestCase):
             "ESI": {"type": "EXCLUSIVE", "canonical": "EŞİ", "enabled": True}
         }
         
-        mock_neo4j.query_graph = AsyncMock(return_value=[
+        mock_query.return_value = [
             {"subject": "Ali", "predicate": "SEVER", "object": "Pizza", "updated_at": "2024-01-01"},
             {"subject": "Ali", "predicate": "HİSSEDİYOR", "object": "Mutlu", "updated_at": "2024-01-02"}
-        ])
+        ]
         
         result = await _retrieve_soft_signals("user123", mock_catalog)
         
         self.assertEqual(len(result), 2)
         
         # Query'de ADDITIVE/TEMPORAL predicates var mı
-        call_args = mock_neo4j.query_graph.call_args
+        call_args = mock_query.call_args
         predicates = call_args[0][1]["predicates"]
         self.assertIn("SEVER", predicates)
         self.assertIn("HİSSEDİYOR", predicates)
@@ -190,15 +190,15 @@ class TestRetrievalFunctions(unittest.IsolatedAsyncioTestCase):
 class TestStatusFiltering(unittest.IsolatedAsyncioTestCase):
     """SUPERSEDED/RETRACTED filtering testleri"""
     
-    @patch('Atlas.memory.context.neo4j_manager')
-    async def test_superseded_not_in_results(self, mock_neo4j):
+    @patch('Atlas.memory.context.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
+    async def test_superseded_not_in_results(self, mock_query):
         """SUPERSEDED relationship'ler retrieval'e düşmez"""
         # Query'de status filter olduğunu doğrula
-        mock_neo4j.query_graph = AsyncMock(return_value=[])
+        mock_query.return_value = []
         
         await _retrieve_identity_facts("user123", "__USER__::user123")
         
-        call_args = mock_neo4j.query_graph.call_args
+        call_args = mock_query.call_args
         query = call_args[0][0]
         self.assertIn("status IS NULL OR r.status = 'ACTIVE'", query)
         self.assertNotIn("SUPERSEDED", query)
@@ -298,17 +298,17 @@ class TestEmptyGraph(unittest.TestCase):
 class TestAnchorUsage(unittest.IsolatedAsyncioTestCase):
     """Anchor subject kullanımı testleri"""
     
-    @patch('Atlas.memory.context.neo4j_manager')
+    @patch('Atlas.memory.context.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
     @patch('Atlas.memory.context.get_user_anchor')
-    async def test_anchor_subject_used_correctly(self, mock_get_anchor, mock_neo4j):
+    async def test_anchor_subject_used_correctly(self, mock_get_anchor, mock_query):
         """Anchor subject doğru kullanılıyor"""
         mock_get_anchor.return_value = "__USER__::user123"
-        mock_neo4j.query_graph = AsyncMock(return_value=[])
+        mock_query.return_value = []
         
         await _retrieve_identity_facts("user123", "__USER__::user123")
         
         # Query parametrelerinde anchor kullanılmış mı
-        call_args = mock_neo4j.query_graph.call_args
+        call_args = mock_query.call_args
         self.assertEqual(call_args[0][1]["anchor"], "__USER__::user123")
         self.assertIn("name: $anchor", call_args[0][0])
 
