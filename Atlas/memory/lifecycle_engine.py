@@ -43,7 +43,7 @@ async def resolve_conflicts(
     """
     from Atlas.memory.neo4j_manager import neo4j_manager
     
-   new_triplets = []
+    new_triplets = []
     supersede_operations = []
     
     for triplet in triplets:
