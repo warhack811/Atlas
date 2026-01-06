@@ -56,8 +56,8 @@ KULLANICI MESAJI:
   "intent": "coding" | "general" | "search" | "creative",
   "is_follow_up": false,
   "context_focus": "...",
-  "reasoning": "Planın seçilme nedeni (teknik analiz).",
-  "user_thought": "Kullanıcıya yönelik profesyonel ve güven veren iş özeti (1 paragraf).",
+  "reasoning": "Planın seçilme nedeni (teknik analiz, İngilizce olabilir).",
+  "user_thought": "Kullanıcıya yönelik profesyonel, yapıcı ve güven veren iş özeti. SADECE TÜRKÇE yaz. (Örn: Talebinizi analiz ediyorum, en uygun uzmanı görevlendiriyorum.)",
   "tasks": [
     {{
       "id": "t1",
