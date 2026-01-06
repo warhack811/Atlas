@@ -148,6 +148,8 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         cb.with_neo4j_context(neo4j_context)
         
         record = rdr.RDR.create(user_message)
+        if neo4j_context:
+            record.full_context_injection = f"[NEO4J MEMORY]: {neo4j_context}"
         
         # 1. PLANLAMA (ORKESTRASYON): Kullanıcı niyetini anlar ve bir iş planı oluşturur
         from Atlas import orchestrator
@@ -267,13 +269,23 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
                 return
 
             classify_start = time.time()
-            plan = await orchestrator.orchestrator.plan(session_id, request.message, use_mock=request.use_mock)
+            # 1. Bellek ve Bağlam Hazırlığı (Neo4j Hatırlama)
+            from Atlas.memory.context import ContextBuilder
+            cb = ContextBuilder(session_id)
+            graph_context = await cb.get_neo4j_context(session_id, request.message)
+            cb.with_neo4j_context(graph_context)
+            
+            # 2. Orkestrasyon: Niyet analizi ve DAG planı oluşturma
+            plan = await orchestrator.orchestrator.plan(session_id, request.message, use_mock=request.use_mock, context_builder=cb)
             classify_ms = int((time.time() - classify_start) * 1000)
             
             record.intent = plan.active_intent
             record.orchestrator_model = plan.orchestrator_model
             record.classification_ms = classify_ms
             record.orchestrator_prompt = plan.orchestrator_prompt
+            if graph_context:
+                record.full_context_injection = f"[NEO4J MEMORY]: {graph_context}"
+            
             yield f"data: {json.dumps({'type': 'plan', 'intent': plan.active_intent, 'model': plan.orchestrator_model}, default=str)}\n\n"
 
             exec_start = time.time()

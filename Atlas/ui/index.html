@@ -860,7 +860,11 @@
                 
                 <div class="tab-content" id="orch-${msgId}">
                     <div class="stat-label">Intent: <span style="color:var(--cyan)">${rdr.intent || "Unknown"}</span></div>
-                    <div class="stat-label" style="margin-top:10px">Raw Orchestrator Prompt:</div>
+                    <div class="stat-label" style="margin-top:10px">Graf Hafıza Bağlamı:</div>
+                    <div style="font-size:0.7rem; color:var(--matrix-green); background:rgba(0,255,150,0.1); padding:5px; border-radius:4px; margin-bottom:10px; border:1px dashed var(--matrix-green);">
+                        ${rdr.full_context_injection || "Hafıza vuruşu (hit) yok."}
+                    </div>
+                    <div class="stat-label">Raw Orchestrator Prompt:</div>
                     <pre class="code-block">${rdr.orchestrator_prompt || "Loglanmadı"}</pre>
                 </div>
 
