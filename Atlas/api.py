@@ -304,7 +304,19 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             raw_results = []
             async for event in dag_executor.dag_executor.execute_plan_stream(plan, session_id, request.message):
                 if event["type"] == "thought":
-                    thought_step = {"title": "İşlem Yürütülüyor", "content": event["thought"]}
+                    # Dinamik başlık belirle (Task ID veya tipinden)
+                    task_id = event.get("task_id", "")
+                    task = next((t for t in plan.tasks if t.id == task_id), None)
+                    
+                    title = "Operasyonel Adım"
+                    if task:
+                        if task.type == "tool":
+                            title = f"🛠️ {task.tool_name.replace('_', ' ').title()}"
+                        elif task.type == "generation":
+                            spec_titles = {"logic": "🧠 Mantıksal Analiz", "coding": "💻 Kod Yapılandırma", "search": "🔍 Bilgi Tarama", "tr_creative": "🎭 Yaratıcı Yazım"}
+                            title = spec_titles.get(task.specialist, "⚙️ Derin Düşünce")
+                    
+                    thought_step = {"title": title, "content": event["thought"]}
                     record.reasoning_steps.append(thought_step)
                     yield f"data: {json.dumps({'type': 'thought', 'step': thought_step}, default=str)}\n\n"
                 elif event["type"] == "task_result":
@@ -319,7 +331,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             ]
             
             # Sentezleme adımı için düşünce ekle
-            synth_thought = {"title": "Yanıt Hazırlanıyor", "content": "Tüm veriler toplandı, size en uygun şekilde sentezleniyor..."}
+            synth_thought = {"title": "✨ Final Sentez", "content": "Tüm veriler toplandı, stratejik harekat planı tamamlanıyor ve yanıtınız oluşturuluyor..."}
             record.reasoning_steps.append(synth_thought)
             yield f"data: {json.dumps({'type': 'thought', 'step': synth_thought}, default=str)}\n\n"
             

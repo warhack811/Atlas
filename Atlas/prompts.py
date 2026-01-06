@@ -57,8 +57,8 @@ KULLANICI MESAJI:
   "intent": "coding" | "general" | "search" | "creative",
   "is_follow_up": false,
   "context_focus": "...",
-  "reasoning": "Planın seçilme nedeni (teknik analiz, İngilizce olabilir).",
-  "user_thought": "Kullanıcıya yönelik profesyonel, yapıcı ve güven veren iş özeti. SADECE TÜRKÇE yaz. Talebiniz için ne yapacağınızı (arama, analiz vb.) madde madde değil ama akıcı bir paragraf olarak anlat. (Örn: Talebinizi analiz ediyorum, geçmiş verilerinize bakarak Düzce için yarınki hava durumunu kontrol ediyorum...)",
+  "reasoning": "Planın seçilme nedeni (Stratejik analiz).",
+  "user_thought": "Kullanıcıya yönelik STRATEJİK İŞ PLANI. Kesinlikle 'Merhaba', 'Nasılsınız' gibi asistan selamlaşmaları kullanma. Doğrudan operasyonel süreci anlat. (Örn: 'Sorgunuzdaki karmaşıklık analizi yapıldı. Güncel verileri doğrulamak için internet kaynaklarını tarayıp mantıksal sentez aşamasına geçeceğim.') SADECE TÜRKÇE.",
   "tasks": [
     {{
       "id": "t1",

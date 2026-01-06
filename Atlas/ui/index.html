@@ -854,17 +854,19 @@
                 const bubble = document.getElementById(`bubble-${aiMsgId}`);
                 bubble.innerHTML = `
                     <div class="thought-container collapsed" id="thought-container-${aiMsgId}">
-                        <div class="thought-header" onclick="toggleThought('${aiMsgId}')">
-                            <span><span class="pulse-thinking"></span>Atlas Düşünüyor...</span>
+                        <div class="thought-header" id="thought-header-${aiMsgId}" onclick="toggleThought('${aiMsgId}')">
+                            <span><span class="pulse-thinking"></span><span id="header-text-${aiMsgId}">Atlas Düşünüyor...</span></span>
                             <i class="fas fa-chevron-down"></i>
                         </div>
                         <div class="thought-content" id="thought-content-${aiMsgId}"></div>
                     </div>
                     <div class="final-answer" id="answer-${aiMsgId}">...</div>
                 `;
+                const thoughtHeader = document.getElementById(`header-text-${aiMsgId}`);
                 const thoughtContent = document.getElementById(`thought-content-${aiMsgId}`);
                 const answerContainer = document.getElementById(`answer-${aiMsgId}`);
                 const thoughtContainer = document.getElementById(`thought-container-${aiMsgId}`);
+                let thoughtResolved = false;
 
                 let buffer = "";
                 while (true) {
@@ -886,6 +888,10 @@
                                     statusLabel.innerText = "PLANNING: " + (data.intent || "GENERAL").toUpperCase();
                                 } else if (data.type === 'thought') {
                                     const step = data.step;
+                                    // Başlığı güncelle (Eğer henüz cevap gelmediyse)
+                                    if (!thoughtResolved) {
+                                        thoughtHeader.innerText = step.content.substring(0, 60) + (step.content.length > 60 ? "..." : "");
+                                    }
                                     const stepHtml = `
                                         <div class="thought-step">
                                             <div class="thought-step-title">${step.title}</div>
@@ -895,15 +901,18 @@
                                     thoughtContent.innerHTML += stepHtml;
                                     chatView.scrollTop = chatView.scrollHeight;
                                 } else if (data.type === 'chunk') {
+                                    if (!thoughtResolved) {
+                                        thoughtResolved = true;
+                                        thoughtHeader.innerText = "Atlas Düşünce Sistemi";
+                                        const pulse = thoughtContainer.querySelector('.pulse-thinking');
+                                        if (pulse) pulse.style.animation = 'none';
+                                        if (pulse) pulse.style.opacity = '0.5';
+                                    }
                                     fullText += data.content;
                                     answerContainer.innerHTML = marked.parse(fullText);
                                     chatView.scrollTop = chatView.scrollHeight;
                                 } else if (data.type === 'tasks_done') {
                                     statusLabel.innerText = "SYNTHESIZING...";
-                                    // Senteze geçildiğinde düşünce kutusunun "aktif" halini durdurabiliriz
-                                    const pulse = thoughtContainer.querySelector('.pulse-thinking');
-                                    if (pulse) pulse.style.animation = 'none';
-                                    if (pulse) pulse.style.opacity = '0.5';
                                 } else if (data.type === 'done') {
                                     console.log("RDR Received:", data.rdr);
                                     if (data.rdr) {
