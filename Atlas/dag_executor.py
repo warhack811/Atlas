@@ -75,10 +75,22 @@ class DAGExecutor:
                 layer_results = await asyncio.gather(*layer_coroutines)
                 
                 for res in layer_results:
-                    executed_tasks[res["task_id"]] = res
-                    # Thought varsa yield et
-                    if res.get("thought"):
-                        yield {"type": "thought", "thought": res["thought"], "task_id": res["task_id"]}
+                    task_id = res["task_id"]
+                    
+                    # Eğer sonuç bir dict ise ve içinde 'thought' varsa ayıkla
+                    thought = None
+                    if res.get("thought"): # Generation'dan gelen
+                        thought = res["thought"]
+                    elif isinstance(res.get("output"), dict) and "thought" in res["output"]: # Tool'dan gelen
+                        thought = res["output"]["thought"]
+                        # Output'u sadeleştir (sadece gerçek sonucu kalsın)
+                        res["output"] = res["output"]["output"]
+                    
+                    executed_tasks[task_id] = res
+                    
+                    if thought:
+                        yield {"type": "thought", "thought": thought, "task_id": task_id}
+                    
                     yield {"type": "task_result", "result": res}
                 
                 ready_ids = {getattr(t, 'id', None) or t.get('id') for t in ready_tasks if isinstance(t, dict) or hasattr(t, 'id')}

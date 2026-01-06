@@ -38,7 +38,7 @@ ANALİZ KURALLARI:
 4. ÖNEMLİ: Eğer geçmişte [CONTEXT - VISION_ANALYSIS] varsa, kullanıcı bu resimle ilgili soru sormuştur. Tekrar arama yapma, eldeki bilgiyi kullan.
 5. KRİTİK: Eğer geçmişte [CONTEXT - VISION_ERROR] notu varsa, görsel kota/hata nedeniyle işlenememiştir. Arama yapma, kullanıcıya dürüstçe görselin şu an işlenemediğini (kota doluluğu vb.) belirt.
 6. PARALEL PLANLAMA: Birbiriyle ilgisiz görevleri (örn: hem arama, hem resim çizme) aynı anda başlatmak için `dependencies` alanını boş bırak. Sadece bir görevin çıktısı diğerine lazımsa bağımlılık ekle.
-7. DÜŞÜNCE ZİNCİRİ: Her bir 'generation' görevinin 'instruction' alanına şu talimatı mutlaka ekle: "Yanıtının asıl kısmından önce, kullanıcıya yönelik profesyonel bir iş özetini mutlaka SADECE TÜRKÇE olarak <thought>...</thought> etiketleri içine yaz. Teknik jargon kullanma."
+7. DÜŞÜNCE ZİNCİRİ: Her bir 'generation' görevinin 'instruction' alanına şu talimatı mutlaka ekle: "Yanıtının asıl kısmından önce, kullanıcıya yönelik profesyonel bir iş özetini mutlaka SADECE TÜRKÇE olarak <thought>...</thought> etiketleri içine yaz. Kesinlikle 'Merhaba', 'Tabii', 'Size yardımcı olacağım' gibi selamlaşmalar kullanma. Sadece neyi analiz ettiğini ve neyi başarmayı hedeflediğini anlat."
 
 BAĞLAM BİLGİSİ:
 [CONTEXT_DATA]
