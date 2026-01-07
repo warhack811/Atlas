@@ -39,9 +39,26 @@ async def create_task(
         >>> print(f"Task oluşturuldu: {task_id}")
     """
     from Atlas.memory.neo4j_manager import neo4j_manager
+    import dateparser
     
     task_id = str(uuid.uuid4())[:8]
     
+    # FAZ7: due_at parsing (Türkçe destekli)
+    due_at_dt = None
+    if due_at:
+        try:
+            # dateparser ile doğal dil işleme (yarın, 3 gün sonra vb.)
+            parsed_dt = dateparser.parse(
+                due_at, 
+                languages=['tr'],
+                settings={'PREFER_DATES_FROM': 'future', 'RELATIVE_BASE': datetime.now()}
+            )
+            if parsed_dt:
+                due_at_dt = parsed_dt.isoformat()
+        except Exception as e:
+            from Atlas.logger import logger
+            logger.warning(f"Tarih ayrıştırma hatası ('{due_at}'): {e}")
+
     query = """
     MERGE (u:User {id: $uid})
     CREATE (t:Task {
@@ -51,7 +68,8 @@ async def create_task(
         status: 'OPEN',
         raw_text: $raw_text,
         source_turn_id: $source_turn_id,
-        due_at: $due_at
+        due_at_raw: $due_at_raw,
+        due_at_dt: $due_at_dt
     })
     MERGE (u)-[:HAS_TASK]->(t)
     RETURN t.id as task_id
@@ -63,7 +81,8 @@ async def create_task(
             "task_id": task_id,
             "raw_text": raw_text,
             "source_turn_id": source_turn_id,
-            "due_at": due_at  # MVP: None, FAZ7'de parse
+            "due_at_raw": due_at,
+            "due_at_dt": due_at_dt
         })
         return task_id
     except Exception as e:
@@ -95,7 +114,8 @@ async def list_open_tasks(user_id: str, limit: int = 10) -> List[Dict]:
     
     query = """
     MATCH (u:User {id: $uid})-[:HAS_TASK]->(t:Task {status: 'OPEN'})
-    RETURN t.id as id, t.raw_text as text, t.created_at as created, t.due_at as due
+    RETURN t.id as id, t.raw_text as text, t.created_at as created, 
+           t.due_at_raw as due_raw, t.due_at_dt as due_dt
     ORDER BY t.created_at DESC
     LIMIT $limit
     """
