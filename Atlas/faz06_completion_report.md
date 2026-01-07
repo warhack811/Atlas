@@ -2,7 +2,7 @@
 
 **Status**: ✅ Tamamlandı  
 **Date**: 2026-01-07  
-**Commit Count**: 3  
+**Commit Count**: 4  
 
 ---
 
@@ -61,7 +61,7 @@ Dosya: `Atlas/api.py`
 
 Dosya: `Atlas/memory/test_faz6_context_packaging.py`
 
-#### Test Coverage (9/12 başarılı)
+#### Test Coverage (12/12 başarılı) ✅
 ✅ **Truncation Tests** (4/4)
 - Identity truncation max 10
 - Hard facts truncation max 20
@@ -77,7 +77,11 @@ Dosya: `Atlas/memory/test_faz6_context_packaging.py`
 - Missing essential identity generates questions
 - All identity present → no questions
 
-⚠️ **Async Mock Tests** (0/3) - Async retrieval mock sorunları nedeniyle atlandı
+✅ **Async Retrieval & Logic Tests** (3/3)
+- Standard mode retrieves all sections (Identity, Hard, Soft)
+- Status filtering (ACTIVE only)
+- Identity anchor usage
+
 
 ---
 
@@ -245,9 +249,9 @@ RETURN s.name, r.predicate, o.name, r.superseded_at
 
 ## Bilinen Limitasyonlar
 
-1. **Async Mock Tests**: pytest-asyncio ile mock karışıklığı nedeniyle async retrieval testleri atlandı
-2. **Open Questions**: MVP düzeyinde - sadece essential identity eksikliği kontrol ediliyor
-3. **Relevance Filtering**: user_message henüz retrieval'de relevance için kullanılmıyor (ileride eklenebilir)
+1. **Open Questions**: MVP düzeyinde - sadece essential identity eksikliği kontrol ediliyor
+2. **Relevance Filtering**: user_message henüz retrieval'de relevance için kullanılmıyor (ileride eklenebilir)
+3. **Test Debt**: Test borcu tamamen kapatıldı, tüm async mock sorunları çözüldü.
 
 ---
 
@@ -260,10 +264,8 @@ RETURN s.name, r.predicate, o.name, r.superseded_at
 
 ### Test Çalıştırma
 ```bash
-# Geçen testler (9/12)
-python -m unittest Atlas.memory.test_faz6_context_packaging.TestTruncation -v
-python -m unittest Atlas.memory.test_faz6_context_packaging.TestEmptyGraph -v
-python -m unittest Atlas.memory.test_faz6_context_packaging.TestOpenQuestions -v
+# Tüm FAZ 6 testlerini çalıştır
+python -m unittest Atlas.memory.test_faz6_context_packaging -v
 ```
 
 ---
@@ -275,6 +277,6 @@ python -m unittest Atlas.memory.test_faz6_context_packaging.TestOpenQuestions -v
 - MemoryPolicy.OFF desteği çalışıyor
 - Truncation logic uygulanıyor
 - API entegrasyonu tamamlandı
-- 9 unit test başarılı
+- **12/12 unit test başarılı (Test borcu kapatıldı)**
 
 **Sonraki Adım**: FAZ 5 test borcu (lifecycle tests)

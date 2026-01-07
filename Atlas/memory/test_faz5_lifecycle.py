@@ -25,7 +25,6 @@ class TestExclusiveOverwrite(unittest.IsolatedAsyncioTestCase):
     """EXCLUSIVE predicate overwrite testleri"""
     
     @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
-    @patch('Atlas.memory.neo4j_manager.neo4j_manager.fact_exists', new_callable=AsyncMock)
     async def test_exclusive_different_value_supersedes_old(self, mock_query):
         """EXCLUSIVE predicate: farklı değer ile eski SUPERSEDED olur"""
         # Mock catalog
@@ -90,7 +89,7 @@ class TestAdditiveAccumulate(unittest.IsolatedAsyncioTestCase):
     
     @patch('Atlas.memory.neo4j_manager.neo4j_manager.fact_exists', new_callable=AsyncMock)
     @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
-    async def test_additive_accumulates_multiple_values(self, mock_query):
+    async def test_additive_accumulates_multiple_values(self, mock_query, mock_exists):
         """ADDITIVE predicate: birden fazla değer accumulate edilir"""
         # Mock catalog
         mock_catalog = MagicMock()
@@ -163,9 +162,9 @@ class TestMultiUserIsolation(unittest.IsolatedAsyncioTestCase):
         # Supersede operation userA için
         self.assertEqual(supersede_ops[0]["user_id"], "userA")
         
-        # Query user_id ile filtrelenmiş mi?
+        # Query uid ile filtrelenmiş mi?
         call_args = mock_query.call_args
-        self.assertIn("user_id", call_args[0][1])
+        self.assertIn("uid", call_args[0][1])
         self.assertEqual(call_args[0][1]["uid"], "userA")
 
 

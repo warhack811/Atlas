@@ -463,6 +463,105 @@ class Neo4jManager:
         await self.query_graph(query, params)
         return await self.get_user_settings(user_id)
 
+    # --- RC-3: Transcript & Episodic Memory ---
+
+    async def append_turn(self, user_id: str, session_id: str, role: str, content: str) -> int:
+        """
+        Oturuma yeni bir konuşma turu (turn) ekler. (RC-3)
+        Geriye dönük uyumluluk: user_id yoksa session_id kullanılır.
+        """
+        query = """
+        MATCH (s:Session {id: $sid})
+        WHERE s.user_id = $uid OR $uid IS NULL
+        OPTIONAL MATCH (s)-[:HAS_TURN]->(t:Turn)
+        WITH s, count(t) as turn_count
+        CREATE (nt:Turn {
+            id: $sid + "::" + toString(turn_count),
+            turn_index: turn_count,
+            role: $role,
+            content: $content,
+            created_at: datetime()
+        })
+        MERGE (s)-[:HAS_TURN]->(nt)
+        RETURN nt.turn_index as index
+        """
+        results = await self.query_graph(query, {
+            "uid": user_id,
+            "sid": session_id,
+            "role": role,
+            "content": content
+        })
+        return results[0]["index"] if results else 0
+
+    async def get_recent_turns(self, user_id: str, session_id: str, limit: int = 12) -> list:
+        """
+        Son N konuşma turunu getirir. (RC-3)
+        Returns: List of {role, content, turn_index}
+        """
+        query = """
+        MATCH (s:Session {id: $sid})-[:HAS_TURN]->(t:Turn)
+        WHERE s.user_id = $uid OR $uid IS NULL
+        RETURN t.role as role, t.content as content, t.turn_index as turn_index
+        ORDER BY t.turn_index DESC
+        LIMIT $limit
+        """
+        results = await self.query_graph(query, {
+            "uid": user_id,
+            "sid": session_id,
+            "limit": limit
+        })
+        # UI/LLM beklediği sıra için reverse et (Chronological order)
+        return sorted(results, key=lambda x: x["turn_index"])
+
+    async def count_turns(self, user_id: str, session_id: str) -> int:
+        """Oturumdaki toplam tur (mesaj) sayısını döner. (RC-3)"""
+        query = """
+        MATCH (s:Session {id: $sid})-[:HAS_TURN]->(t:Turn)
+        WHERE s.user_id = $uid OR $uid IS NULL
+        RETURN count(t) as total
+        """
+        results = await self.query_graph(query, {"uid": user_id, "sid": session_id})
+        return results[0]["total"] if results else 0
+
+    async def create_episode(self, user_id: str, session_id: str, summary: str, start_turn: int, end_turn: int):
+        """
+        Konuşma grubundan bir episod özeti oluşturur. (RC-3)
+        """
+        query = """
+        MATCH (s:Session {id: $sid})
+        WHERE s.user_id = $uid OR $uid IS NULL
+        CREATE (e:Episode {
+            id: $sid + "::ep_" + toString(start_turn) + "_" + toString(end_turn),
+            user_id: $uid,
+            session_id: $sid,
+            summary: $summary,
+            start_turn: $start_turn,
+            end_turn: $end_turn,
+            created_at: datetime()
+        })
+        MERGE (s)-[:HAS_EPISODE]->(e)
+        RETURN e.id as episode_id
+        """
+        await self.query_graph(query, {
+            "uid": user_id,
+            "sid": session_id,
+            "summary": summary,
+            "start_turn": start_turn,
+            "end_turn": end_turn
+        })
+
+    async def get_recent_episodes(self, user_id: str, session_id: str, limit: int = 3) -> list:
+        """Son N episod özetini döner. (RC-3)"""
+        query = """
+        MATCH (s:Session {id: $sid})-[:HAS_EPISODE]->(e:Episode)
+        WHERE s.user_id = $uid OR $uid IS NULL
+        RETURN e.summary as summary, e.start_turn as start_turn, e.end_turn as end_turn
+        ORDER BY e.created_at DESC
+        LIMIT $limit
+        """
+        results = await self.query_graph(query, {"uid": user_id, "sid": session_id, "limit": limit})
+        return results
+
     async def try_acquire_lock(self, lock_name: str, holder_id: str, ttl_seconds: int) -> bool:
         """
         Neo4j üzerinde dağıtık kilit (Distributed Lock) almaya çalışır. (FAZ7-R)

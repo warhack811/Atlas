@@ -183,6 +183,9 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         from Atlas.memory.neo4j_manager import neo4j_manager
         await neo4j_manager.ensure_user_session(user_id, session_id)
         
+        # RC-3: Transcript Persistence (User Turn)
+        await neo4j_manager.append_turn(user_id, session_id, "user", user_message)
+        
         MessageBuffer.add_user_message(session_id, user_message)
         
         # GRAF VERİTABANI BAĞLAMI: FAZ6 - v3 context packaging
@@ -257,6 +260,21 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         
         MessageBuffer.add_assistant_message(session_id, response_text)
         
+        # RC-3: Transcript Persistence (Assistant Turn)
+        from Atlas.memory.neo4j_manager import neo4j_manager
+        await neo4j_manager.append_turn(user_id, session_id, "assistant", response_text)
+        
+        # RC-3: Episodic Memory Trigger (Her 20 turn'de bir)
+        count = await neo4j_manager.count_turns(user_id, session_id)
+        if count > 0 and count % 20 == 0:
+            logger.info(f"RC-3: Episodic summary trigger for session {session_id} (count: {count})")
+            # TODO: Gerçek summary worker entegrasyonu. Şimdilik stub yaratıyoruz.
+            await neo4j_manager.create_episode(
+                user_id, session_id, 
+                f"Sohbet özeti (Turn {count-19}-{count}) - [STUB]", 
+                count-19, count
+            )
+        
         record.dag_execution_ms = exec_ms
         record.synthesis_ms = synth_ms
         record.quality_ms = quality_ms
@@ -306,6 +324,9 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             # RC-2: Kullanıcı-Session eşleşmesini sağla
             from Atlas.memory.neo4j_manager import neo4j_manager
             await neo4j_manager.ensure_user_session(user_id, session_id)
+            
+            # RC-3: Transcript Persistence (User Turn)
+            await neo4j_manager.append_turn(user_id, session_id, "user", request.message)
             
             MessageBuffer.add_user_message(session_id, request.message)
 
@@ -411,6 +432,20 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             record.synthesis_ms = synth_ms
 
             MessageBuffer.add_assistant_message(session_id, full_response)
+            
+            # RC-3: Transcript Persistence (Assistant Turn)
+            from Atlas.memory.neo4j_manager import neo4j_manager
+            await neo4j_manager.append_turn(user_id, session_id, "assistant", full_response)
+            
+            # RC-3: Episodic Memory Trigger (Her 20 turn'de bir)
+            count = await neo4j_manager.count_turns(user_id, session_id)
+            if count > 0 and count % 20 == 0:
+                await neo4j_manager.create_episode(
+                    user_id, session_id, 
+                    f"Sohbet akış özeti (Turn {count-19}-{count}) - [STUB]", 
+                    count-19, count
+                )
+
             record.total_ms = int((time.time() - start_time) * 1000)
             record.generation_ms = record.total_ms
             # Arka planda bilgi çıkarımı yaparak graf veritabanını günceller

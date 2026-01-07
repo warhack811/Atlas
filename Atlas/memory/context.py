@@ -58,11 +58,11 @@ class ContextBuilder:
 
     async def get_neo4j_context(self, user_id: str, message: str) -> str:
         """
-        Neo4j'den kullanıcıya özel bağlamı (context) çeker. (RC-1/RC-2)
+        Neo4j'den kullanıcıya özel hibrit bağlamı (context) çeker. (RC-3)
+        Transcript + Episodic + Context V3 birleşimi.
         """
-        from Atlas.memory.context import build_memory_context_v3
-        # ContextBuilder'ın session_id'sini de ilet (audit/tracking için)
-        return await build_memory_context_v3(user_id, message, session_id=self.session_id)
+        from Atlas.memory.context import build_chat_context_v1
+        return await build_chat_context_v1(user_id, self.session_id, message)
     def build(self, current_message: str, history_limit: int = 5, signal_only: bool = False) -> list[dict]:
         """
         LLM için messages listesi oluşturur.
@@ -515,3 +515,56 @@ def _format_context_v3(
         parts.append("(Şu an açık soru yok)")
     
     return "\n".join(parts)
+
+async def build_chat_context_v1(
+    user_id: str,
+    session_id: str,
+    user_message: str
+) -> str:
+    """
+    Atlas Hibrit Bağlam Paketleyicisi (V1). (RC-3)
+    -------------------------------------------
+    1. Yakın Geçmiş (Transcript - Son 12 Mesaj)
+    2. Uzak Geçmiş (Episodic - Son 3 Özet)
+    3. Kişisel Hafıza (Context V3 - Facts/Signals)
+    """
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    
+    # 1. Transcript (Son 12 Turn)
+    turns = await neo4j_manager.get_recent_turns(user_id, session_id, limit=12)
+    transcript_text = ""
+    if turns:
+        lines = []
+        for t in turns:
+            role = "Kullanıcı" if t["role"] == "user" else "Atlas"
+            lines.append(f"{role}: {t['content']}")
+        transcript_text = "\n".join(lines)
+    else:
+        transcript_text = "(Henüz bu oturumda konuşma yapılmadı)"
+
+    # 2. Episodic (Son 3 Episode)
+    episodes = await neo4j_manager.get_recent_episodes(user_id, session_id, limit=3)
+    episodic_text = ""
+    if episodes:
+        lines = []
+        for ep in episodes:
+            lines.append(f"- {ep['summary']} (Turn {ep['start_turn']}-{ep['end_turn']})")
+        episodic_text = "\n".join(lines)
+    else:
+        episodic_text = "(Henüz özetlenmiş eski bir konuşma yok)"
+
+    # 3. Kişisel Hafıza (Context V3)
+    memory_v3 = await build_memory_context_v3(user_id, user_message, session_id=session_id)
+
+    # Hibrit Paketleme
+    full_context = f"""
+### YAKIN GEÇMİŞ (Transcript)
+{transcript_text}
+
+### OTURUM ÖZETLERİ (Uzak Geçmiş)
+{episodic_text}
+
+### KAYITLI KİŞİSEL BİLGİLER (Long-term)
+{memory_v3}
+"""
+    return full_context.strip()

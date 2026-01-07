@@ -20,8 +20,13 @@ class TestDueParser(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(params["due_at_dt"])
         
         # Verify it's a future date
-        due_dt = datetime.fromisoformat(params["due_at_dt"])
-        self.assertTrue(due_dt > datetime.now())
+        due_dt = datetime.fromisoformat(params["due_at_dt"].replace('Z', '+00:00'))
+        # Ensure comparison is timezone-aware if the parsed one is
+        now = datetime.now()
+        if due_dt.tzinfo:
+            import datetime as dt_mod
+            now = datetime.now(dt_mod.timezone.utc)
+        self.assertTrue(due_dt > now)
 
     @patch('Atlas.memory.neo4j_manager.neo4j_manager.query_graph', new_callable=AsyncMock)
     async def test_create_task_with_specific_date(self, mock_query):
@@ -33,7 +38,7 @@ class TestDueParser(unittest.IsolatedAsyncioTestCase):
         args = mock_query.call_args[0]
         params = args[1]
         
-        due_dt = datetime.fromisoformat(params["due_at_dt"])
+        due_dt = datetime.fromisoformat(params["due_at_dt"].replace('Z', '+00:00'))
         self.assertEqual(due_dt.month, 1)
         self.assertEqual(due_dt.day, 15)
         self.assertEqual(due_dt.hour, 14)

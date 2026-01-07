@@ -47,5 +47,9 @@ class TestRC1Scheduler(unittest.IsolatedAsyncioTestCase):
         # u2 job should be removed
         self.assertIsNone(scheduler.get_job("obs:u2"))
 
+    async def asyncTearDown(self):
+        if scheduler.running:
+            scheduler.shutdown(wait=False)
+
 if __name__ == "__main__":
     unittest.main()

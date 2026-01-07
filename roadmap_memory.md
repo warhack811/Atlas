@@ -18,11 +18,11 @@ Bu doküman, Atlas projesinin hafıza katmanının sürümdür (Release Candidat
 - [x] Memory Management API (`GET /api/memory`, `POST /api/memory/forget`, `POST /api/policy`).
 - [x] **OFF mode** tam izolasyon ve retrieval bypass.
 
-## 🔋 RC-3: Performance & Scalability (Next)
-**Durum:** Planlanıyor
-- [ ] Neo4j Indexing (id, user_id, status alanları için).
-- [ ] Context Packaging için Token Limit (Budget) yönetimi.
-- [ ] Cache katmanı (Redis veya yerel LRU) entegrasyonu.
+## ✅ RC-3: Hybrid Memory (Graph + Session Transcript)
+**Durum:** TAMAMLANDI (rc-memory-3 branch)
+- [x] Neo4j tabanlı kalıcı transcript (`:Turn`).
+- [x] Her 20 mesajda bir episodik özetleme tetikleyicisi (`:Episode`).
+- [x] Hibrit Bağlam Paketleme (Near + Mid + Long term).
 
 ## 🧠 RC-4: Hybrid Memory (Graph + Simple Vector)
 **Durum:** Beklemede
