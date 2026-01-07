@@ -27,26 +27,51 @@ INSTANCE_ID = f"{socket.gethostname()}:{uuid.uuid4().hex[:6]}"
 # Merkezi Zamanlayıcı Nesnesi (Singleton)
 scheduler = AsyncIOScheduler()
 
+# Global Liderlik Durumu
+_IS_LEADER = False
+
 async def start_scheduler():
-    """Arka plan zamanlayıcısını ve tanımlı tüm görevleri başlatır.
-    FAZ 7-R: Leader Lock kontrolü ve dinamik job kaydı.
+    """Arka plan zamanlayıcısını başlatır. (RC-2 Hardening)
+    Tüm instance'larda her zaman çalışır ve periyodik olarak liderlik için yarışır.
     """
     if scheduler.running:
-        await refresh_scheduler_jobs()
-        return
-
-    # 1. LEADER LOCK KONTROLÜ (Dinamik dağıtık kilit)
-    # TTL: 90 saniye (kalp atışı her 60 saniyede bir tazelenmeli)
-    is_leader = await neo4j_manager.try_acquire_lock("global_scheduler", INSTANCE_ID, 90)
-    
-    if not is_leader:
-        logger.info(f"Scheduler: {INSTANCE_ID} lider kilidini alamadı. Yedek modda bekleniyor.")
         return
 
     scheduler.start()
-    logger.info(f"Scheduler: {INSTANCE_ID} LİDER olarak başlatıldı.")
+    logger.info(f"Scheduler: {INSTANCE_ID} başlatıldı (Follower modunda).")
+
+    # Leader Election job'u her zaman çalışır (30 saniyede bir)
+    scheduler.add_job(
+        check_leader_election,
+        trigger=IntervalTrigger(seconds=30),
+        id="leader_election",
+        replace_existing=True
+    )
     
-    # 2. Kalp atışı (Lock Refresh) görevi ekle
+    # İlk kontrolü hemen yap
+    await check_leader_election()
+
+async def check_leader_election():
+    """Liderlik durumunu kontrol eder ve gerekirse promote/demote işlemlerini yapar."""
+    global _IS_LEADER
+    
+    # Liderlik kilidini almaya çalış (TTL: 90sn)
+    is_leader_now = await neo4j_manager.try_acquire_lock("global_scheduler", INSTANCE_ID, 90)
+    
+    if is_leader_now:
+        if not _IS_LEADER:
+            await _promote_to_leader()
+    else:
+        if _IS_LEADER:
+            await _demote_to_follower()
+
+async def _promote_to_leader():
+    """Instance'ı LİDER moduna yükseltir ve lider görevlerini başlatır."""
+    global _IS_LEADER
+    _IS_LEADER = True
+    logger.info(f"Scheduler: {INSTANCE_ID} LİDER olarak atandı! Görevler başlatılıyor.")
+    
+    # 1. Kalp atışı (Lock Refresh) görevi ekle (Lider'de 60 saniyede bir)
     scheduler.add_job(
         _refresh_leader_lock,
         trigger=IntervalTrigger(seconds=60),
@@ -54,22 +79,37 @@ async def start_scheduler():
         replace_existing=True
     )
     
+    # 2. İşleri senkronize et (Observer/Due Scanner)
     await refresh_scheduler_jobs()
+
+async def _demote_to_follower():
+    """Instance'ı FOLLOWER moduna düşürür ve lider görevlerini temizler."""
+    global _IS_LEADER
+    _IS_LEADER = False
+    logger.warning(f"Scheduler: {INSTANCE_ID} Liderliği KAYBETTİ veya devretti. Lider görevleri temizleniyor.")
+    
+    # Lider görevlerini kaldır
+    leader_job_ids = ["leader_heartbeat"]
+    # obs:* ve due:* işlerini de kaldır (Sadece liderde çalışmalı)
+    for job in scheduler.get_jobs():
+        if job.id.startswith(("obs:", "due:", "leader_heartbeat")):
+            scheduler.remove_job(job.id)
+            logger.debug(f"Job kaldırıldı (Demote): {job.id}")
 
 async def _refresh_leader_lock():
     """Liderlik kilidini periyodik olarak tazeler."""
     success = await neo4j_manager.try_acquire_lock("global_scheduler", INSTANCE_ID, 90)
     if not success:
-        logger.warning("Scheduler: Liderlik kilidi tazelenemedi! Durduruluyor...")
-        stop_scheduler()
+        logger.warning("Scheduler: Liderlik kilidi tazelenemedi!")
+        await _demote_to_follower()
 
 async def sync_scheduler_jobs():
     """
     Kullanıcı bazlı job'ları (observer, due_scanner) veritabanı ile senkronize eder (RC-1 Hardening).
     Aktif olanları ekler, devre dışı kalanları (opt-out) temizler.
     """
-    if not scheduler.running:
-        logger.warning("Sync çağrıldı ama scheduler çalışmıyor.")
+    if not scheduler.running or not _IS_LEADER:
+        logger.debug("Sync atlanıyor: Scheduler çalışmıyor veya instance lider değil.")
         return
         
     logger.info("Scheduler: Kullanıcı job'ları senkronize ediliyor...")

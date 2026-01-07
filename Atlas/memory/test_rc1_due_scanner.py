@@ -6,13 +6,15 @@ class TestRC1DueScanner(unittest.IsolatedAsyncioTestCase):
 
     @patch('Atlas.memory.neo4j_manager.Neo4jManager.query_graph', new_callable=AsyncMock)
     @patch('Atlas.memory.neo4j_manager.Neo4jManager.create_notification', new_callable=AsyncMock)
-    async def test_scan_tasks_includes_cooldown_and_counter(self, mock_create, mock_query):
+    @patch('Atlas.notification_gatekeeper.should_emit_notification', new_callable=AsyncMock)
+    async def test_scan_tasks_includes_cooldown_and_counter(self, mock_gate, mock_create, mock_query):
         # Mock finding 1 task
         mock_query.side_effect = [
             [{"id": "t1", "text": "Task 1", "due_raw": "yarın", "due_dt_obj": "2026-01-08T10:00:00Z"}], # Selection query
             [{"updated": 1}] # Update query
         ]
         mock_create.return_value = "notif_uuid"
+        mock_gate.return_value = (True, "test_ok")
         
         await scan_due_tasks("u1")
         
@@ -28,10 +30,10 @@ class TestRC1DueScanner(unittest.IsolatedAsyncioTestCase):
         self.assertIn("SET t.last_notified_at = datetime()", update_query)
         self.assertIn("t.notified_count = coalesce(t.notified_count, 0) + 1", update_query)
         
-        # 3. Verify notification reason explainability
+        # 3. Verify notification reason explainability (RC-2 Update)
         notif_call = mock_create.call_args
         notif_data = notif_call[0][1]
-        self.assertIn("Task deadline reached at", notif_data["reason"])
+        self.assertIn("gate=test_ok", notif_data["reason"])
         self.assertEqual(notif_data["related_task_id"], "t1")
 
 if __name__ == "__main__":

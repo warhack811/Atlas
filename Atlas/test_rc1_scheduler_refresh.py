@@ -11,6 +11,9 @@ class TestRC1SchedulerRefresh(unittest.IsolatedAsyncioTestCase):
         # Clean jobs
         for job in scheduler.get_jobs():
             scheduler.remove_job(job.id)
+            
+        import Atlas.scheduler
+        Atlas.scheduler._IS_LEADER = True
 
     @patch('Atlas.memory.neo4j_manager.Neo4jManager.query_graph', new_callable=AsyncMock)
     async def test_sync_adds_new_jobs(self, mock_query):

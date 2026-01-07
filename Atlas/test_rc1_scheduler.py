@@ -13,24 +13,26 @@ class TestRC1Scheduler(unittest.IsolatedAsyncioTestCase):
         for job in scheduler.get_jobs():
             scheduler.remove_job(job.id)
 
-    @patch('Atlas.memory.neo4j_manager.Neo4jManager.try_acquire_lock', new_callable=AsyncMock)
-    @patch('Atlas.scheduler.refresh_scheduler_jobs', new_callable=AsyncMock)
-    async def test_start_scheduler_leader_lock(self, mock_refresh, mock_lock):
-        # Case 1: Lider kilidini alamazsa
+    @patch('Atlas.scheduler.neo4j_manager.try_acquire_lock', new_callable=AsyncMock)
+    async def test_start_scheduler_always_runs(self, mock_lock):
+        """Scheduler her durumda (follower bile olsa) çalışmalı. (RC-2 Update)"""
+        # Case 1: Lider kilidini alamazsa bile scheduler.running olmalı
         mock_lock.return_value = False
         await start_scheduler()
-        self.assertFalse(scheduler.running)
+        self.assertTrue(scheduler.running)
         
         # Case 2: Lider kilidini alırsa
         mock_lock.return_value = True
-        await start_scheduler()
+        await start_scheduler() # Bu check_leader_election tetikler
         self.assertTrue(scheduler.running)
-        mock_refresh.assert_called()
 
     @patch('Atlas.memory.neo4j_manager.Neo4jManager.query_graph', new_callable=AsyncMock)
     async def test_refresh_scheduler_jobs_sync(self, mock_query):
-        # Mock active users: u1 exists, u2 removed
+        # Mock active users
         mock_query.return_value = [{"id": "u1"}]
+        
+        import Atlas.scheduler
+        Atlas.scheduler._IS_LEADER = True # Lider taklidi yap
         
         if not scheduler.running:
             scheduler.start()

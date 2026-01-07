@@ -44,23 +44,12 @@ class Observer:
             logger.info(f"Gözlemci: {user_id} için kontrol atlanıyor, yakın zamanda kontrol edildi.")
             return
 
-        # 0. GATEKEEPING (FAZ7)
-        settings = await neo4j_manager.get_notification_settings(user_id)
+        # 0. GATEKEEPING (RC-2 Hardening)
+        from Atlas.notification_gatekeeper import should_emit_notification
+        is_allowed, reason = await should_emit_notification(user_id, neo4j_manager, now)
         
-        # Opt-in kontrolü
-        if not settings.get("enabled"):
-            logger.info(f"Gözlemci GATEKEEPER: {user_id} için bildirimler kapalı.")
-            return
-
-        # Sessiz Saatler kontrolü
-        if self._is_quiet_hours(settings.get("quiet_start"), settings.get("quiet_end")):
-            logger.info(f"Gözlemci GATEKEEPER: {user_id} şu an sessiz saatlerde.")
-            return
-
-        # Yorgunluk (Fatigue) kontrolü
-        daily_count = await neo4j_manager.count_daily_notifications(user_id)
-        if daily_count >= settings.get("max_daily", 5):
-            logger.info(f"Gözlemci GATEKEEPER: {user_id} günlük bildirim limitine ulaştı ({daily_count}).")
+        if not is_allowed:
+            logger.info(f"Gözlemci GATEKEEPER: {user_id} engellendi. Sebep: {reason}")
             return
 
         logger.info(f"Gözlemci: {user_id} kullanıcısı için tetikleyiciler kontrol ediliyor...")
@@ -92,7 +81,7 @@ class Observer:
                 "message": warning,
                 "type": "proactive_warning",
                 "source": "observer",
-                "reason": f"LLM reasoning with memory context. Daily count: {daily_count}"
+                "reason": f"gate={reason}"
             }
             notif_id = await neo4j_manager.create_notification(user_id, notif_data)
             if notif_id:

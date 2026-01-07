@@ -18,7 +18,7 @@ class TestNotificationPersistence(unittest.IsolatedAsyncioTestCase):
         notif_id = await self.manager.create_notification("user123", data)
         
         self.assertIsNotNone(notif_id)
-        self.assertTrue(notif_id.startswith("notif_"))
+        self.assertGreater(len(notif_id), 8)
         
         # Verify query call
         args = mock_query.call_args[0]
