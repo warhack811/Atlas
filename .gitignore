@@ -41,3 +41,8 @@ rdr_records/
 # Project Specific
 standalone_router/benchmark/
 tests/__pycache__/
+
+# Temporary Artifacts
+temp_*.py
+*_test_output.txt
+*_audit_results.json
