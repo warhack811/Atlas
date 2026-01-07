@@ -4,43 +4,44 @@ Bu doküman, Atlas projesinin hafıza katmanının sürümdür (Release Candidat
 
 ---
 
-## 🚀 RC-1: Hardening & Operational Safety (Current)
-- **Hedef:** Mevcut FAZ7 özelliklerinin her türlü hata durumuna karşı dayanıklı hale getirilmesi.
-- **Kritik Gelişmeler:**
-    - Scheduler gerçek zamanlı senkronizasyon (sync_scheduler_jobs).
-    - Distributed Leader Lock (FARKLI instance'ların çatışmaması).
-    - Due Scanner Cooldown (PT60M) ve Counter mekanizması.
-    - JSON Serialization (Neo4j datetime uyumluluğu).
-- **Exit Criteria:** Tüm FAZ7 ve RC-1 testlerinin %100 başarılı olması.
+## ✅ RC-1: Hardening & Operational Safety
+**Durum:** TAMAMLANDI (Merge Ready)
+- [x] Scheduler gerçek zamanlı senkronizasyon (sync_scheduler_jobs).
+- [x] Distributed Leader Lock (FARKLI instance'ların çatışmaması).
+- [x] Due Scanner Cooldown (PT60M) ve Counter mekanizması.
+- [x] JSON Serialization (Neo4j datetime uyumluluğu).
 
-## 🔋 RC-2: Performance & Scalability
-- **Hedef:** Büyük veri setlerinde retrieval performansının optimize edilmesi.
-- **Kritik Gelişmeler:**
-    - Neo4j Indexing (id, user_id, status alanları için).
-    - Context Packaging için Token Limit (Budget) yönetimi.
-    - Cache katmanı (Redis veya yerel LRU) entegrasyonu.
+## ✅ RC-2: Identity, User Controls & Policy Persistence
+**Durum:** TAMAMLANDI (rc-memory-2 branch)
+- [x] `user_id` vs `session_id` ayrımı ve fallback mantığı.
+- [x] Kalıcı kullanıcı politikaları (Neo4j node üzerinde storage).
+- [x] Memory Management API (`GET /api/memory`, `POST /api/memory/forget`, `POST /api/policy`).
+- [x] **OFF mode** tam izolasyon ve retrieval bypass.
 
-## 🧠 RC-3: Hybrid Memory (Graph + Simple Vector)
-- **Hedef:** İlişkisel olmayan ama anlamsal olarak yakın verilerin yakalanması.
-- **Kritik Gelişmeler:**
-    - Vektör tabanlı benzerlik araması (pgvector).
-    - Reranking mekanizması (Graph vs Vector sonuçları).
+## 🔋 RC-3: Performance & Scalability (Next)
+**Durum:** Planlanıyor
+- [ ] Neo4j Indexing (id, user_id, status alanları için).
+- [ ] Context Packaging için Token Limit (Budget) yönetimi.
+- [ ] Cache katmanı (Redis veya yerel LRU) entegrasyonu.
 
-## 🛡️ RC-4: Privacy & Compliance
-- **Hedef:** Çoklu kullanıcı ortamında veri gizliliğinin en üst düzeye çıkarılması.
-- **Kritik Gelişmeler:**
-    - PII (Kişisel Veri) Maskeleme (Hafızaya yazılmadan önce).
-    - Kullanıcı bazlı "Unut Beni" (Purge) komutu.
+## 🧠 RC-4: Hybrid Memory (Graph + Simple Vector)
+**Durum:** Beklemede
+- [ ] Vektör tabanlı benzerlik araması (pgvector).
+- [ ] Reranking mekanizması (Graph vs Vector sonuçları).
 
-## 🎯 RC-5: Final Stability & Roadmap FAZ 8-15
-- **Hedef:** Genel kullanıma hazır, %99.9 çalışma süresi hedefli kararlı sürüm.
-- **Kritik Gelişmeler:**
-    - Kapsamlı Stress Testleri.
-    - FAZ 8-15 için altyapı hazırlığı.
+## 🎯 RC-5: Final Stability & Readiness
+**Durum:** Beklemede
+- [ ] PII (Kişisel Veri) Maskeleme (Hafızaya yazılmadan önce).
+- [ ] Kapsamlı Stress Testleri ve FAZ 8-15 hazırlığı.
 
 ---
 
 ## 🔍 Neo4j Doğrulama Sorguları
+
+### Kullanıcı Ayarlarını Kontrol Et
+```cypher
+MATCH (u:User {id: 'user_id'}) RETURN u
+```
 
 ### Bildirim Sayaçlarını Kontrol Et
 ```cypher
@@ -49,13 +50,8 @@ WHERE t.notified_count > 0
 RETURN t.id, t.raw_text, t.notified_count, t.last_notified_at
 ```
 
-### Liderlik Kilidini Kontrol Et
-```cypher
-MATCH (l:SchedulerLock) 
-RETURN l.name, l.holder, l.expires_at
-```
-
 ## 🛠️ Test Komutları
-- `python -m unittest Atlas.memory.test_rc1_hardening`
-- `python -m unittest Atlas.test_rc1_scheduler_refresh`
-- `python -m unittest Atlas.memory.test_rc1_due_scanner`
+- `python -m unittest Atlas.test_rc2_identity`
+- `python -m unittest Atlas.test_rc2_policy`
+- `python -m unittest Atlas.test_rc2_forget`
+- `python -m unittest Atlas.test_rc2_api_contract`
