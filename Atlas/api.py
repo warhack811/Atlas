@@ -264,14 +264,13 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         from Atlas.memory.neo4j_manager import neo4j_manager
         await neo4j_manager.append_turn(user_id, session_id, "assistant", response_text)
         
-        # RC-3: Episodic Memory Trigger (Her 20 turn'de bir)
+        # RC-3/4: Episodic Memory Trigger (Her 20 turn'de bir)
         count = await neo4j_manager.count_turns(user_id, session_id)
         if count > 0 and count % 20 == 0:
-            logger.info(f"RC-3: Episodic summary trigger for session {session_id} (count: {count})")
-            # TODO: Gerçek summary worker entegrasyonu. Şimdilik stub yaratıyoruz.
-            await neo4j_manager.create_episode(
+            logger.info(f"RC-4: Episodic PENDING trigger for session {session_id} (count: {count})")
+            # Prod Safety: Sadece PENDING oluştur, özetleme worker'da yapılacak.
+            await neo4j_manager.create_episode_pending(
                 user_id, session_id, 
-                f"Sohbet özeti (Turn {count-19}-{count}) - [STUB]", 
                 count-19, count
             )
         

@@ -15,7 +15,9 @@ async def scan_due_tasks(user_id: str):
     Kullanıcının zamanı gelen görevlerini tarar ve bildirim oluşturur.
     RC-1: Datetime kıyaslaması, 60 dk cooldown ve sayaç yönetimi.
     """
-    # Zamanı gelmiş (due_at_dt <= now), hala OPEN olan ve cooldown süresi geçmiş görevleri bul
+    # RC-4: Zamanı gelmiş (due_at_dt <= now) görevleri bul.
+    # Neo4j'de datetime($iso) offset'i korur, datetime() ise DB local time döner.
+    # Güvenli kıyaslama için Cypher içinde datetime() çağrısını kullanıyoruz.
     query = """
     MATCH (u:User {id: $uid})-[:HAS_TASK]->(t:Task {status: 'OPEN'})
     WHERE t.due_at_dt IS NOT NULL 

@@ -415,6 +415,16 @@ class Neo4jManager:
             "default_mode": os.getenv("ATLAS_DEFAULT_MEMORY_MODE", "STANDARD")
         })
 
+    async def get_user_timezone(self, user_id: str) -> str:
+        """
+        Kullanıcının zaman dilimini (timezone) getirir. Varsayılan: Europe/Istanbul
+        """
+        query = "MATCH (u:User {id: $uid}) RETURN u.timezone as tz"
+        results = await self.query_graph(query, {"uid": user_id})
+        if results and results[0].get("tz"):
+            return results[0]["tz"]
+        return "Europe/Istanbul"
+
     async def get_user_settings(self, user_id: str) -> dict:
         """
         Kullanıcının politikalarını ve bildirim ayarlarını getirir. (RC-2)
@@ -549,6 +559,70 @@ class Neo4jManager:
             "start_turn": start_turn,
             "end_turn": end_turn
         })
+
+    async def create_episode_pending(self, user_id: str, session_id: str, start_turn: int, end_turn: int):
+        """
+        Idempotent olarak PENDING durumunda bir episode oluşturur.
+        Aynı aralık için zaten varsa oluşturmaz.
+        """
+        query = """
+        MATCH (s:Session {id: $sid})
+        WHERE s.user_id = $uid OR $uid IS NULL
+        MERGE (e:Episode {
+            id: $sid + "::ep_" + toString(start_turn) + "_" + toString(end_turn)
+        })
+        ON CREATE SET 
+            e.user_id = $uid,
+            e.session_id = $sid,
+            e.status = "PENDING",
+            e.start_turn_index = $start_turn,
+            e.end_turn_index = $end_turn,
+            e.created_at = datetime(),
+            e.updated_at = datetime()
+        MERGE (s)-[:HAS_EPISODE]->(e)
+        RETURN e.id as episode_id
+        """
+        await self.query_graph(query, {
+            "uid": user_id,
+            "sid": session_id,
+            "start_turn": start_turn,
+            "end_turn": end_turn
+        })
+
+    async def claim_pending_episode(self) -> Optional[dict]:
+        """
+        PENDING durumundaki bir episode'u atomik olarak IN_PROGRESS yapar ve döner.
+        """
+        query = """
+        MATCH (e:Episode {status: "PENDING"})
+        WITH e ORDER BY e.created_at ASC LIMIT 1
+        SET e.status = "IN_PROGRESS", e.updated_at = datetime()
+        RETURN e.id as id, e.user_id as user_id, e.session_id as session_id, 
+               e.start_turn_index as start_turn, e.end_turn_index as end_turn
+        """
+        results = await self.query_graph(query)
+        return results[0] if results else None
+
+    async def mark_episode_ready(self, episode_id: str, summary: str, model: str):
+        """Episode'u READY yapar."""
+        query = """
+        MATCH (e:Episode {id: $id})
+        SET e.status = "READY",
+            e.summary = $summary,
+            e.model = $model,
+            e.updated_at = datetime()
+        """
+        await self.query_graph(query, {"id": episode_id, "summary": summary, "model": model})
+
+    async def mark_episode_failed(self, episode_id: str, error: str):
+        """Episode'u FAILED yapar."""
+        query = """
+        MATCH (e:Episode {id: $id})
+        SET e.status = "FAILED",
+            e.error = $error,
+            e.updated_at = datetime()
+        """
+        await self.query_graph(query, {"id": episode_id, "error": error})
 
     async def get_recent_episodes(self, user_id: str, session_id: str, limit: int = 3) -> list:
         """Son N episod özetini döner. (RC-3)"""

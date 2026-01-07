@@ -542,18 +542,26 @@ async def build_chat_context_v1(
     else:
         transcript_text = "(Henüz bu oturumda konuşma yapılmadı)"
 
-    # 2. Episodic (Son 3 Episode)
-    episodes = await neo4j_manager.get_recent_episodes(user_id, session_id, limit=3)
+    # 2. Episodic (Son 3 READY Episode)
+    # RC-4: Sadece hazır olan özetleri getir
+    query = """
+    MATCH (s:Session {id: $sid})-[:HAS_EPISODE]->(e:Episode {status: 'READY'})
+    WHERE s.user_id = $uid OR $uid IS NULL
+    RETURN e.summary as summary, e.start_turn_index as start, e.end_turn_index as end
+    ORDER BY e.created_at DESC
+    LIMIT 3
+    """
+    episodes = await neo4j_manager.query_graph(query, {"uid": user_id, "sid": session_id})
     episodic_text = ""
     if episodes:
         lines = []
         for ep in episodes:
-            lines.append(f"- {ep['summary']} (Turn {ep['start_turn']}-{ep['end_turn']})")
+            lines.append(f"- {ep['summary']} (Turn {ep['start']}-{ep['end']})")
         episodic_text = "\n".join(lines)
     else:
         episodic_text = "(Henüz özetlenmiş eski bir konuşma yok)"
 
-    # 3. Kişisel Hafıza (Context V3)
+    # 3. Kişisel Hafıza (Context V3) - Long-term facts
     memory_v3 = await build_memory_context_v3(user_id, user_message, session_id=session_id)
 
     # Hibrit Paketleme

@@ -6,20 +6,35 @@ Quiet hours (sessiz saatler), günlük yorgunluk (fatigue) ve opt-in ayarların�
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
+from zoneinfo import ZoneInfo
 from typing import Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
 async def should_emit_notification(user_id: str, neo4j_manager, now: Optional[datetime] = None) -> tuple[bool, str]:
     """
-    Bildirim gönderimini kurallara göre denetler. (RC-2 Hardening)
+    Bildirim gönderimini kurallara göre denetler. (RC-4: Timezone aware)
     
     Returns:
         (bool, reason_code): (True, "ok") veya (False, "reason_why_blocked")
     """
+    # 0. TIMEZONE AYARI
+    tz_str = await neo4j_manager.get_user_timezone(user_id)
+    try:
+        user_tz = ZoneInfo(tz_str)
+    except Exception:
+        user_tz = ZoneInfo("Europe/Istanbul")
+
     if now is None:
-        now = datetime.now()
+        # Sistem zamanını UTC olarak al ve kullanıcı zaman dilimine çevir
+        now = datetime.now(dt_timezone.utc).astimezone(user_tz)
+    elif now.tzinfo is None:
+        # Naive datetime ise kullanıcı zaman diliminde varsay
+        now = now.replace(tzinfo=user_tz)
+    else:
+        # Zaten aware ise kullanıcı zaman dilimine convert et
+        now = now.astimezone(user_tz)
         
     # 1. AYARLARI ÇEK
     settings = await neo4j_manager.get_user_settings(user_id)

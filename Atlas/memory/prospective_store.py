@@ -40,25 +40,36 @@ async def create_task(
     """
     from Atlas.memory.neo4j_manager import neo4j_manager
     import dateparser
+    from zoneinfo import ZoneInfo
     
     task_id = str(uuid.uuid4())[:8]
+    
+    # RC-4: User timezone fetch
+    tz_str = await neo4j_manager.get_user_timezone(user_id)
+    try:
+        user_tz = ZoneInfo(tz_str)
+    except Exception:
+        user_tz = ZoneInfo("Europe/Istanbul")
     
     # FAZ7: due_at parsing (Türkçe destekli)
     due_at_dt = None
     if due_at:
         try:
             # dateparser ile doğal dil işleme (yarın, 3 gün sonra vb.)
+            # RC-4: Kullanıcı zaman dilimine göre base al
+            from datetime import timezone as dt_timezone
+            now_local = datetime.now(dt_timezone.utc).astimezone(user_tz)
+            
             parsed_dt = dateparser.parse(
                 due_at, 
                 languages=['tr'],
-                settings={'PREFER_DATES_FROM': 'future', 'RELATIVE_BASE': datetime.now()}
+                settings={'PREFER_DATES_FROM': 'future', 'RELATIVE_BASE': now_local}
             )
             if parsed_dt:
-                # RC-1: Timezone yoksa UTC varsay ve 'Z' ekle
+                # RC-4: Timezone aware ISO output
                 if parsed_dt.tzinfo is None:
-                    due_at_dt = parsed_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-                else:
-                    due_at_dt = parsed_dt.isoformat()
+                    parsed_dt = parsed_dt.replace(tzinfo=user_tz)
+                due_at_dt = parsed_dt.isoformat()
         except Exception as e:
             from Atlas.logger import logger
             logger.warning(f"Tarih ayrıştırma hatası ('{due_at}'): {e}")

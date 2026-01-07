@@ -15,6 +15,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from Atlas.observer import observer
 from Atlas.memory.neo4j_manager import neo4j_manager
 from Atlas.memory.due_scanner import scan_due_tasks
+from Atlas.generator import generate_response
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,22 @@ scheduler = AsyncIOScheduler()
 
 # Global Liderlik Durumu
 _IS_LEADER = False
+
+EPISODE_WORKER_PROMPT = """
+Aşağıdaki konuşma dökümünü kullanarak kısa ve öz bir oturum özeti (episodic memory) oluştur.
+Sadece verilen metni kullan, uydurma bilgi ekleme.
+
+Çıktı formatı:
+### Oturum Özeti
+- [Madde 1]
+- ...
+- [Madde 6-10]
+
+### Açık Sorular / Kararlar
+- [Madde 1-3]
+
+Dil: Türkçe
+"""
 
 async def start_scheduler():
     """Arka plan zamanlayıcısını başlatır. (RC-2 Hardening)
@@ -82,6 +99,14 @@ async def _promote_to_leader():
     # 2. İşleri senkronize et (Observer/Due Scanner)
     await refresh_scheduler_jobs()
 
+    # 3. Episode Worker job'u ekle (2 dakikada bir)
+    scheduler.add_job(
+        run_episode_worker,
+        trigger=IntervalTrigger(minutes=2),
+        id="episode_worker",
+        replace_existing=True
+    )
+
 async def _demote_to_follower():
     """Instance'ı FOLLOWER moduna düşürür ve lider görevlerini temizler."""
     global _IS_LEADER
@@ -92,7 +117,7 @@ async def _demote_to_follower():
     leader_job_ids = ["leader_heartbeat"]
     # obs:* ve due:* işlerini de kaldır (Sadece liderde çalışmalı)
     for job in scheduler.get_jobs():
-        if job.id.startswith(("obs:", "due:", "leader_heartbeat")):
+        if job.id.startswith(("obs:", "due:", "leader_heartbeat", "episode_worker")):
             scheduler.remove_job(job.id)
             logger.debug(f"Job kaldırıldı (Demote): {job.id}")
 
@@ -162,6 +187,54 @@ async def sync_scheduler_jobs():
         logger.info(f"Scheduler: Senkronizasyon tamamlandı ({len(active_uids)} aktif kullanıcı)")
     except Exception as e:
         logger.error(f"Job senkronizasyon hatası: {e}")
+
+async def run_episode_worker():
+    """PENDING episodeları tarayan ve özetleyen worker job. (RC-4)"""
+    if not _IS_LEADER: return
+
+    logger.debug("Episode Worker: Bekleyen işler kontrol ediliyor...")
+    
+    # 1. Bekleyen bir iş al (claim)
+    episode = await neo4j_manager.claim_pending_episode()
+    if not episode:
+        return
+
+    ep_id = episode["id"]
+    user_id = episode["user_id"]
+    session_id = episode["session_id"]
+    start = episode["start_turn"]
+    end = episode["end_turn"]
+
+    try:
+        logger.info(f"Episode Worker: İşleniyor -> {ep_id}")
+        
+        # 2. Turn metinlerini getir
+        turns = await neo4j_manager.get_recent_turns(user_id, session_id, limit=40) # Geniş limit
+        # Sadece ilgili aralıktaki turnleri filtrele
+        relevant_turns = [t for t in turns if start <= t["turn_index"] <= end]
+        
+        if not relevant_turns:
+            await neo4j_manager.mark_episode_failed(ep_id, "No turns found in range")
+            return
+
+        # 3. Metni birleştir
+        transcript = "\n".join([f"{'Kullanıcı' if t['role']=='user' else 'Atlas'}: {t['content']}" for t in relevant_turns])
+        
+        # 4. LLM ile özetle
+        message = f"DÖKÜM:\n{transcript}\n\nÖzetle."
+        # Not: generate_response model_id=gemini-2.0-flash, intent=analysis (structured output formatı için uygun)
+        result = await generate_response(message, "gemini-2.0-flash", "analysis", style_profile={"persona": "standard"})
+        
+        if result.ok:
+            await neo4j_manager.mark_episode_ready(ep_id, result.text, result.model)
+            logger.info(f"Episode Worker: Tamamlandı -> {ep_id}")
+        else:
+            await neo4j_manager.mark_episode_failed(ep_id, result.text)
+            logger.error(f"Episode Worker: LLM hatası -> {ep_id}: {result.text}")
+
+    except Exception as e:
+        logger.exception(f"Episode Worker: Kritik hata -> {ep_id}")
+        await neo4j_manager.mark_episode_failed(ep_id, str(e))
 
 async def refresh_scheduler_jobs():
     """Zamanlayıcıdaki job'ları günceller (sync_scheduler_jobs alias)."""
