@@ -238,7 +238,8 @@ async def build_memory_context_v3(
     user_id: str,
     user_message: str,
     policy = None,
-    session_id: Optional[str] = None
+    session_id: Optional[str] = None,
+    stats: Optional[dict] = None
 ) -> str:
     """
     FAZ 6: LLM için 3-bölmeli hafıza context'i oluşturur.
@@ -279,6 +280,8 @@ async def build_memory_context_v3(
     # MemoryPolicy.OFF ise kişisel hafıza kapalı
     if policy.mode == "OFF":
         logger.info(f"Memory: {user_id} için hafıza modu OFF. Retrieval bypass ediliyor.")
+        if stats is not None:
+            stats["semantic_mode"] = "OFF"
         return "[BİLGİ]: Kullanıcı tercihi gereği kişisel hafıza erişimi kapalıdır."
     
     # Catalog yükle
@@ -555,7 +558,8 @@ def _format_context_v3(
 async def build_chat_context_v1(
     user_id: str,
     session_id: str,
-    user_message: str
+    user_message: str,
+    stats: Optional[dict] = None
 ) -> str:
     """
     Atlas Hibrit Bağlam Paketleyicisi (V2 - RC-5).
@@ -571,6 +575,11 @@ async def build_chat_context_v1(
     mode = await neo4j_manager.get_user_memory_mode(user_id)
     budgeter = ContextBudgeter(mode=mode)
     all_context_texts = [] # Dedupe için havuz
+    
+    if stats is not None:
+        stats["mode"] = mode
+        stats["layer_usage"] = {"transcript": 0, "episodic": 0, "semantic": 0}
+        stats["dedupe_count"] = 0
     
     # 1. Transcript (Son 20 Turn fetched, budgeted chars)
     # Skorlama: Son mesajlar daha önemli (implicit weight by order)
@@ -589,13 +598,17 @@ async def build_chat_context_v1(
                 all_context_texts.append(line)
             else:
                 break
+        
+        if stats is not None:
+            stats["layer_usage"]["transcript"] = current_transcript_size
+            
         transcript_text = "\n".join(transcript_lines)
     else:
         transcript_text = "(Henüz bu oturumda konuşma yapılmadı)"
 
     # 3. Kişisel Hafıza (Context V3) - Long-term facts (Fetch early for dedupe priority)
     semantic_budget = budgeter.get_layer_budget("semantic")
-    memory_v3_raw = await build_memory_context_v3(user_id, user_message, session_id=session_id)
+    memory_v3_raw = await build_memory_context_v3(user_id, user_message, session_id=session_id, stats=stats)
     v3_lines = memory_v3_raw.split("\n")
     final_v3_lines = []
     current_v3_size = 0
@@ -608,12 +621,16 @@ async def build_chat_context_v1(
             final_v3_lines.append(line)
             continue
         if is_duplicate(line, all_context_texts):
+            if stats is not None: stats["dedupe_count"] += 1
             continue
         if current_v3_size + len(line) + 1 <= semantic_budget:
             final_v3_lines.append(line)
             current_v3_size += len(line) + 1
             all_context_texts.append(line) # Pool'a ekle (episodic dedupe için)
             
+    if stats is not None:
+        stats["layer_usage"]["semantic"] = current_v3_size
+        
     memory_v3 = "\n".join(final_v3_lines)
 
     # 2. Episodic (Son 10 READY Episode getirilir, RC-6 Consolidation dahil)
@@ -663,6 +680,7 @@ async def build_chat_context_v1(
 
         line = f"- {ep['summary']} (Turn {ep.get('start', 0)}-{ep.get('end', 0)})"
         if is_duplicate(line, all_context_texts):
+             if stats is not None: stats["dedupe_count"] += 1
              continue
              
         if current_episodic_size + len(line) + 1 <= episodic_budget:
@@ -673,6 +691,10 @@ async def build_chat_context_v1(
             else: cons_count += 1
             
         if len(episodic_lines) >= 3: break 
+
+    if stats is not None:
+        stats["layer_usage"]["episodic"] = current_episodic_size
+        stats["total_chars"] = current_transcript_size + current_v3_size + current_episodic_size
 
     episodic_text = "\n".join(episodic_lines) if episodic_lines else "(İlgili özet yok)"
 

@@ -1,0 +1,35 @@
+name: ATLAS CI Gate (RC-7)
+
+on:
+  push:
+    branches: [ main, rc-* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Reals dependencies would be here (e.g., pip install -r requirements.txt)
+          # For this MVP, we assume core library deps are mockable or minimal.
+          pip install apscheduler neo4j # Minimal needed for imports
+
+      - name: Run RC-7 Golden Set
+        run: python -m unittest Atlas.memory.test_rc7_golden_set -v
+
+      - name: Run Critical Regressions
+        run: |
+          python -m unittest Atlas.test_rc6_pruning Atlas.test_rc6_consolidation -v
+          python -m unittest Atlas.test_rc4_episode_worker Atlas.test_rc3_episode_trigger -v
+          python -m unittest Atlas.test_rc2_identity -v
