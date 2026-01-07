@@ -1,0 +1,60 @@
+
+--- FAILED SCENARIO: GS5 ---
+CONTEXT:
+### YAKIN GEÇMİŞ (Transcript)
+(Henüz bu oturumda konuşma yapılmadı)
+
+### OTURUM ÖZETLERİ (Uzak Geçmiş)
+- Toplantıda bütçe aşımı tartışıldı. (Turn 1-5)
+- Hava durumu raporu. (Turn 6-10)
+
+### KAYITLI KİŞİSEL BİLGİLER (Long-term)
+-------------------
+
+--- FAILED SCENARIO: GS7 ---
+CONTEXT:
+### YAKIN GEÇMİŞ (Transcript)
+(Henüz bu oturumda konuşma yapılmadı)
+
+### OTURUM ÖZETLERİ (Uzak Geçmiş)
+(İlgili özet yok)
+
+### KAYITLI KİŞİSEL BİLGİLER (Long-term)
+### Kullanıcı Profili
+-------------------
+
+--- FAILED SCENARIO: GS5 ---
+CONTEXT:
+### YAKIN GEÇMİŞ (Transcript)
+(Henüz bu oturumda konuşma yapılmadı)
+
+### OTURUM ÖZETLERİ (Uzak Geçmiş)
+- Toplantıda bütçe aşımı tartışıldı. (Turn 1-5)
+- Hava durumu raporu. (Turn 6-10)
+
+### KAYITLI KİŞİSEL BİLGİLER (Long-term)
+-------------------
+
+--- FAILED SCENARIO: GS7 ---
+CONTEXT:
+### YAKIN GEÇMİŞ (Transcript)
+(Henüz bu oturumda konuşma yapılmadı)
+
+### OTURUM ÖZETLERİ (Uzak Geçmiş)
+(İlgili özet yok)
+
+### KAYITLI KİŞİSEL BİLGİLER (Long-term)
+### Kullanıcı Profili
+-------------------
+
+--- FAILED SCENARIO: GS7 ---
+CONTEXT:
+### YAKIN GEÇMİŞ (Transcript)
+(Henüz bu oturumda konuşma yapılmadı)
+
+### OTURUM ÖZETLERİ (Uzak Geçmiş)
+(İlgili özet yok)
+
+### KAYITLI KİŞİSEL BİLGİLER (Long-term)
+### Kullanıcı Profili
+-------------------

@@ -115,6 +115,16 @@ MODEL_GOVERNANCE = {
     ]
 }
 
+# --- CONTEXT QUALITY & BUDGET (RC-5) ---
+CONTEXT_BUDGET = {
+    "max_total_chars": 6000,
+    "weights": {
+        "transcript": 0.4,   # max 2400 chars
+        "episodic": 0.3,     # max 1800 chars
+        "semantic": 0.3      # max 1800 chars
+    }
+}
+
 # Time & Context Awareness
 URGENCY_KEYWORDS = ["acil", "hemen", "urgent", "asap", "deadline", "yarın", "bugün", "şimdi"]
 

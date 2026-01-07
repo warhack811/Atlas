@@ -14,11 +14,47 @@ Temel Sorumluluklar:
 """
 
 import logging
-from typing import Optional
+import re
+from typing import Optional, List, Dict
 from Atlas.memory.buffer import MessageBuffer
-from Atlas.memory.neo4j_manager import neo4j_manager  # Modül seviyesi import: test mocking için standardizasyon
+from Atlas.memory.neo4j_manager import neo4j_manager
 
 logger = logging.getLogger(__name__)
+
+class ContextBudgeter:
+    """RC-5: Katman bazlı bütçe yönetimi sınıfı."""
+    def __init__(self, mode: str = "STD"):
+        from Atlas.config import CONTEXT_BUDGET
+        self.max_total = CONTEXT_BUDGET.get("max_total_chars", 6000)
+        self.weights = CONTEXT_BUDGET.get("weights", {"transcript": 0.4, "episodic": 0.3, "semantic": 0.3})
+        
+        # OFF modunda semantic bütçesi 0, diğerlerine dağıtılır
+        if mode == "OFF":
+            self.weights = {"transcript": 0.6, "episodic": 0.4, "semantic": 0.0}
+            
+    def get_layer_budget(self, layer_name: str) -> int:
+        return int(self.max_total * self.weights.get(layer_name, 0))
+
+def normalize_text_for_dedupe(text: str) -> str:
+    """Dedupe için metni normalize eder."""
+    text = text.lower().strip()
+    text = re.sub(r'\s+', ' ', text)
+    # Turn bazlı rol eklerini temizle (Kullanıcı:, Atlas:)
+    text = re.sub(r'^(kullanıcı|atlas|asistan):\s*', '', text)
+    # Predicate temizle (örn. 'YAŞAR_YER: Ankara' -> 'Ankara')
+    text = re.sub(r'^[a-z_şığüçö]+:\s*', '', text)
+    # Baştaki tire ve noktaları temizle
+    text = text.lstrip("- ").rstrip(".")
+    return text
+
+def is_duplicate(new_text: str, existing_texts: List[str], threshold: float = 0.85) -> bool:
+    """Basit prefix ve exact match ile dublike kontrolü."""
+    norm_new = normalize_text_for_dedupe(new_text)
+    for ext in existing_texts:
+        norm_ext = normalize_text_for_dedupe(ext)
+        if norm_new in norm_ext or norm_ext in norm_new:
+            return True
+    return False
 
 
 # Yaklaşık token limitleri ve tahminleri
@@ -522,47 +558,108 @@ async def build_chat_context_v1(
     user_message: str
 ) -> str:
     """
-    Atlas Hibrit Bağlam Paketleyicisi (V1). (RC-3)
+    Atlas Hibrit Bağlam Paketleyicisi (V2 - RC-5).
     -------------------------------------------
-    1. Yakın Geçmiş (Transcript - Son 12 Mesaj)
-    2. Uzak Geçmiş (Episodic - Son 3 Özet)
-    3. Kişisel Hafıza (Context V3 - Facts/Signals)
+    1. Bütçeleme (ContextBudgeter)
+    2. Tekilleştirme (Cross-layer Dedupe)
+    3. Skorlama (Weighted Selection)
     """
     from Atlas.memory.neo4j_manager import neo4j_manager
+    from Atlas.memory.memory_policy import load_policy_for_user
     
-    # 1. Transcript (Son 12 Turn)
-    turns = await neo4j_manager.get_recent_turns(user_id, session_id, limit=12)
-    transcript_text = ""
+    # Policy ve Bütçe Hazırlığı
+    mode = await neo4j_manager.get_user_memory_mode(user_id)
+    budgeter = ContextBudgeter(mode=mode)
+    all_context_texts = [] # Dedupe için havuz
+    
+    # 1. Transcript (Son 20 Turn fetched, budgeted chars)
+    # Skorlama: Son mesajlar daha önemli (implicit weight by order)
+    transcript_budget = budgeter.get_layer_budget("transcript")
+    turns = await neo4j_manager.get_recent_turns(user_id, session_id, limit=20)
+    transcript_lines = []
+    current_transcript_size = 0
+    
     if turns:
-        lines = []
         for t in turns:
             role = "Kullanıcı" if t["role"] == "user" else "Atlas"
-            lines.append(f"{role}: {t['content']}")
-        transcript_text = "\n".join(lines)
+            line = f"{role}: {t['content']}"
+            if current_transcript_size + len(line) + 1 <= transcript_budget:
+                transcript_lines.append(line)
+                current_transcript_size += len(line) + 1
+                all_context_texts.append(line)
+            else:
+                break
+        transcript_text = "\n".join(transcript_lines)
     else:
         transcript_text = "(Henüz bu oturumda konuşma yapılmadı)"
 
-    # 2. Episodic (Son 3 READY Episode)
-    # RC-4: Sadece hazır olan özetleri getir
+    # 3. Kişisel Hafıza (Context V3) - Long-term facts (Fetch early for dedupe priority)
+    semantic_budget = budgeter.get_layer_budget("semantic")
+    memory_v3_raw = await build_memory_context_v3(user_id, user_message, session_id=session_id)
+    v3_lines = memory_v3_raw.split("\n")
+    final_v3_lines = []
+    current_v3_size = 0
+    
+    for line in v3_lines:
+        if line.startswith("###") or not line.strip():
+            final_v3_lines.append(line)
+            continue
+        if "[BİLGİ]" in line:
+            final_v3_lines.append(line)
+            continue
+        if is_duplicate(line, all_context_texts):
+            continue
+        if current_v3_size + len(line) + 1 <= semantic_budget:
+            final_v3_lines.append(line)
+            current_v3_size += len(line) + 1
+            all_context_texts.append(line) # Pool'a ekle (episodic dedupe için)
+            
+    memory_v3 = "\n".join(final_v3_lines)
+
+    # 2. Episodic (Son 5 READY Episode, keyword based weighting)
+    episodic_budget = budgeter.get_layer_budget("episodic")
     query = """
     MATCH (s:Session {id: $sid})-[:HAS_EPISODE]->(e:Episode {status: 'READY'})
     WHERE s.user_id = $uid OR $uid IS NULL
-    RETURN e.summary as summary, e.start_turn_index as start, e.end_turn_index as end
-    ORDER BY e.created_at DESC
-    LIMIT 3
+    RETURN e.summary as summary, e.start_turn_index as start, e.end_turn_index as end, e.updated_at as updated_at
+    ORDER BY e.updated_at DESC
+    LIMIT 10
     """
-    episodes = await neo4j_manager.query_graph(query, {"uid": user_id, "sid": session_id})
-    episodic_text = ""
-    if episodes:
-        lines = []
-        for ep in episodes:
-            lines.append(f"- {ep['summary']} (Turn {ep['start']}-{ep['end']})")
-        episodic_text = "\n".join(lines)
-    else:
-        episodic_text = "(Henüz özetlenmiş eski bir konuşma yok)"
+    ep_results = await neo4j_manager.query_graph(query, {"uid": user_id, "sid": session_id})
+    
+    scored_episodes = []
+    user_msg_norm = user_message.lower()
+    has_high_score = False
+    
+    for ep in ep_results:
+        score = 1.0
+        summary_norm = ep['summary'].lower()
+        keywords = user_msg_norm.split()
+        if any(kw in summary_norm for kw in keywords if len(kw) > 3):
+            score += 0.5
+            has_high_score = True
+        scored_episodes.append((score, ep))
+    
+    scored_episodes.sort(key=lambda x: x[0], reverse=True)
+    
+    episodic_lines = []
+    current_episodic_size = 0
+    for score, ep in scored_episodes:
+        # RC-5: Alakasız hafıza basmayı engelle (Eğer yüksek skorlu (1.5) varsa, 1.0 olanları ele)
+        if has_high_score and score == 1.0:
+            continue
+            
+        line = f"- {ep['summary']} (Turn {ep['start']}-{ep['end']})"
+        if is_duplicate(line, all_context_texts):
+             continue
+             
+        if current_episodic_size + len(line) + 1 <= episodic_budget:
+            episodic_lines.append(line)
+            current_episodic_size += len(line) + 1
+            all_context_texts.append(line)
+        if len(episodic_lines) >= 3: break 
 
-    # 3. Kişisel Hafıza (Context V3) - Long-term facts
-    memory_v3 = await build_memory_context_v3(user_id, user_message, session_id=session_id)
+    episodic_text = "\n".join(episodic_lines) if episodic_lines else "(İlgili özet yok)"
 
     # Hibrit Paketleme
     full_context = f"""
