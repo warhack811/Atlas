@@ -394,17 +394,26 @@ class Neo4jManager:
 
     async def ensure_user_session(self, user_id: str, session_id: str):
         """
-        Kullanıcı ve oturum arasındaki ilişkiyi kurar/günceller. (RC-2)
+        Kullanıcı ve oturum arasındaki ilişkiyi kurar/günceller. (RC-2.1)
+        Varsayılanlar: notifications_enabled=false (opt-in), memory_mode='STANDARD'.
+        Oturumlar user_id kapsamındadır.
         """
         query = """
         MERGE (u:User {id: $uid})
-        ON CREATE SET u.created_at = datetime(), u.notifications_enabled = true
-        MERGE (s:Session {id: $sid})
+        ON CREATE SET 
+            u.created_at = datetime(), 
+            u.notifications_enabled = false,
+            u.memory_mode = COALESCE($default_mode, 'STANDARD')
+        MERGE (s:Session {id: $sid, user_id: $uid})
         ON CREATE SET s.created_at = datetime()
         SET s.last_seen_at = datetime()
         MERGE (u)-[:HAS_SESSION]->(s)
         """
-        await self.query_graph(query, {"uid": user_id, "sid": session_id})
+        await self.query_graph(query, {
+            "uid": user_id, 
+            "sid": session_id,
+            "default_mode": os.getenv("ATLAS_DEFAULT_MEMORY_MODE", "STANDARD")
+        })
 
     async def get_user_settings(self, user_id: str) -> dict:
         """

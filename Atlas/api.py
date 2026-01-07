@@ -597,12 +597,21 @@ async def forget_memory(request: MemoryForgetRequest):
     params = {"uid": uid}
     
     if request.scope == "all":
-        # Kullanıcının tüm FACT ilişkilerini sil
-        query = "MATCH (u:User {id: $uid})-[r:HAS_FACT|KNOWS|HAS_TASK|HAS_NOTIFICATION]->() DELETE r"
+        # Kullanıcının tüm ilişkilerini sil (FACT, KNOWS, TASK, NOTIFICATION, SESSION)
+        # Node silme yapılmaz, sadece sahiplik bağları koparılır.
+        query = """
+        MATCH (u:User {id: $uid})-[r:KNOWS|HAS_TASK|HAS_NOTIFICATION|HAS_SESSION|HAS_ANCHOR|HAS_FACT]->() DELETE r
+        WITH 1 as dummy
+        MATCH ()-[r:FACT {user_id: $uid}]->() DELETE r
+        """
     elif request.scope == "predicate" and request.predicate:
-        # Belirli bir predicate tipindeki ilişkileri sil
-        query = "MATCH (u:User {id: $uid})-[r:KNOWS|HAS_FACT]->(e:Entity) WHERE r.predicate = $pred DELETE r"
-        params["pred"] = request.predicate
+        # Belirli bir predicate tipindeki FACT ve KNOWS ilişkilerini sil
+        query = """
+        MATCH (u:User {id: $uid})-[r:KNOWS]->(e:Entity) WHERE r.predicate = $pred DELETE r
+        WITH 1 as dummy
+        MATCH ()-[r:FACT {user_id: $uid}]->() WHERE r.predicate = $pred DELETE r
+        """
+        params["pred"] = request.predicate.upper()
     elif request.scope == "item" and request.item_id:
         # Belirli bir item'a olan ilişkiyi sil
         query = "MATCH (u:User {id: $uid})-[r:KNOWS|HAS_FACT]->(e:Entity {id: $eid}) DELETE r"
