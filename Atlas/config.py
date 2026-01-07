@@ -115,7 +115,7 @@ MODEL_GOVERNANCE = {
     ]
 }
 
-# --- CONTEXT QUALITY & BUDGET (RC-5) ---
+# --- CONTEXT QUALITY & BUDGET (RC-5/RC-8) ---
 CONTEXT_BUDGET = {
     "max_total_chars": 6000,
     "weights": {
@@ -123,6 +123,15 @@ CONTEXT_BUDGET = {
         "episodic": 0.3,     # max 1800 chars
         "semantic": 0.3      # max 1800 chars
     }
+}
+
+# RC-8: Niyete göre dinamik bütçe profilleri
+CONTEXT_BUDGET_PROFILES = {
+    "GENERAL":   {"transcript": 0.80, "episodic": 0.20, "semantic": 0.00},
+    "FOLLOWUP":  {"transcript": 0.60, "episodic": 0.25, "semantic": 0.15},
+    "PERSONAL":  {"transcript": 0.30, "episodic": 0.20, "semantic": 0.50},
+    "TASK":      {"transcript": 0.35, "episodic": 0.25, "semantic": 0.40},
+    "MIXED":     {"transcript": 0.40, "episodic": 0.30, "semantic": 0.30},
 }
 
 # --- RETENTION & FORGETFULNESS (RC-6) ---

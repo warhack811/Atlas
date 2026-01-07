@@ -22,15 +22,30 @@ from Atlas.memory.neo4j_manager import neo4j_manager
 logger = logging.getLogger(__name__)
 
 class ContextBudgeter:
-    """RC-5: Katman bazlı bütçe yönetimi sınıfı."""
-    def __init__(self, mode: str = "STD"):
-        from Atlas.config import CONTEXT_BUDGET
+    """RC-5/RC-8: Katman bazlı bütçe yönetimi sınıfı."""
+    def __init__(self, mode: str = "STD", intent: str = "MIXED"):
+        from Atlas.config import CONTEXT_BUDGET, CONTEXT_BUDGET_PROFILES
         self.max_total = CONTEXT_BUDGET.get("max_total_chars", 6000)
-        self.weights = CONTEXT_BUDGET.get("weights", {"transcript": 0.4, "episodic": 0.3, "semantic": 0.3})
+        
+        # RC-8: Niyete göre profil seçimi
+        profile = CONTEXT_BUDGET_PROFILES.get(intent, CONTEXT_BUDGET_PROFILES["MIXED"])
+        self.weights = profile.copy()
         
         # OFF modunda semantic bütçesi 0, diğerlerine dağıtılır
         if mode == "OFF":
-            self.weights = {"transcript": 0.6, "episodic": 0.4, "semantic": 0.0}
+            # Semantic bütçesini sıfırla ve diğerlerine oransal dağıt
+            old_sem = self.weights.get("semantic", 0)
+            self.weights["semantic"] = 0.0
+            if old_sem > 0:
+                # Kalan ağırlıkların toplamı
+                other_sum = self.weights["transcript"] + self.weights["episodic"]
+                if other_sum > 0:
+                    self.weights["transcript"] += old_sem * (self.weights["transcript"] / other_sum)
+                    self.weights["episodic"] += old_sem * (self.weights["episodic"] / other_sum)
+                else:
+                    # Teorik olarak imkansız ama fallback
+                    self.weights["transcript"] = 0.6
+                    self.weights["episodic"] = 0.4
             
     def get_layer_budget(self, layer_name: str) -> int:
         return int(self.max_total * self.weights.get(layer_name, 0))
@@ -56,6 +71,20 @@ def is_duplicate(new_text: str, existing_texts: List[str], threshold: float = 0.
             return True
     return False
 
+def get_token_overlap(text1: str, text2: str) -> float:
+    """İki metin arasındaki token overlap oranını döner."""
+    def get_tokens(t):
+        t = re.sub(r'[^\w\s]', ' ', t.lower())
+        return set(t.split())
+    
+    tokens1 = get_tokens(text1)
+    tokens2 = get_tokens(text2)
+    if not tokens1 or not tokens2:
+        return 0.0
+    
+    intersection = tokens1.intersection(tokens2)
+    # user_message'a (tokens2) göre ne kadar kapsıyor?
+    return len(intersection) / len(tokens1) if tokens1 else 0.0
 
 # Yaklaşık token limitleri ve tahminleri
 MAX_CONTEXT_TOKENS = 4000
@@ -239,38 +268,36 @@ async def build_memory_context_v3(
     user_message: str,
     policy = None,
     session_id: Optional[str] = None,
-    stats: Optional[dict] = None
+    stats: Optional[dict] = None,
+    intent: str = "MIXED"
 ) -> str:
-    # neo4j_manager modül seviyesinde import edilmiş (test mocking için)
-    from Atlas.memory.identity_resolver import get_user_anchor
-    from Atlas.memory.predicate_catalog import get_catalog
-    from Atlas.memory.memory_policy import load_policy_for_user
-    
     # Policy kontrolü
     if policy is None:
-        # RC-1: Kullanıcı bazlı modu Neo4j'den çek
         from Atlas.memory.neo4j_manager import neo4j_manager
         mode = await neo4j_manager.get_user_memory_mode(user_id)
         from Atlas.memory.memory_policy import get_default_policy
         policy = get_default_policy(mode)
     
-    # MemoryPolicy.OFF ise kişisel hafıza kapalı
+    # RC-1/RC-7/RC-8: MemoryPolicy.OFF ise kişisel hafıza kapalı uyarısı her zaman dönmeli
     if policy.mode == "OFF":
-        logger.info(f"Memory: {user_id} için hafıza modu OFF. Retrieval bypass ediliyor.")
-        if stats is not None:
-            stats["semantic_mode"] = "OFF"
+        if stats is not None: stats["semantic_mode"] = "OFF"
         return "[BİLGİ]: Kullanıcı tercihi gereği kişisel hafıza erişimi kapalıdır."
     
     # RC-7: Alakasız sorgularda hafıza basmama (Noise/Leak Guard)
     irrelevant_keywords = ['hava', 'saat', 'kaç', 'nedir', 'kimdir', '1+', '2+', 'hesapla', 'dünya', 'güneş', 'gezegen', 'uzay', 'okyanus', 'deniz', 'göl', 'nehir', 'en büyük', 'ışık', 'hızı', 'nasıl', '+', '-', '*', '/'] 
     is_irrelevant = any(kw in user_message.lower() for kw in irrelevant_keywords)
-    if is_irrelevant:
+    
+    # RC-8: GENERAL intent ise Noise Guard daha agresif
+    if intent == "GENERAL" or (is_irrelevant and len(user_message.split()) < 5):
         return ""
+    
+    # neo4j_manager modül seviyesinde import edilmiş (test mocking için)
+    from Atlas.memory.identity_resolver import get_user_anchor
+    from Atlas.memory.predicate_catalog import get_catalog
     
     # Catalog yükle
     catalog = get_catalog()
     if not catalog:
-        logger.warning("FAZ6: Predicate catalog yüklenemedi, minimal context döndürülüyor")
         return _build_minimal_context()
     
     # Anchor-based identity retrieval
@@ -278,13 +305,36 @@ async def build_memory_context_v3(
     identity_facts = await _retrieve_identity_facts(user_id, user_anchor)
     
     # Hard Facts (EXCLUSIVE predicates)
-    hard_facts = await _retrieve_hard_facts(user_id, user_anchor, catalog)
+    raw_hard_facts = await _retrieve_hard_facts(user_id, user_anchor, catalog)
     
     # Soft Signals (ADDITIVE/TEMPORAL predicates)
-    soft_signals = await _retrieve_soft_signals(user_id, catalog)
+    raw_soft_signals = await _retrieve_soft_signals(user_id, catalog)
     
-    # Open Questions (eksik EXCLUSIVE'ler)
-    open_questions = _generate_open_questions(identity_facts, hard_facts, catalog)
+    # RC-8: Precision Filtering
+    hard_facts = []
+    soft_signals = []
+    
+    # PERSONAL/TASK/FOLLOWUP ise alaka süzgeci
+    for fact in raw_hard_facts:
+        fact_str = f"{fact.get('subject','')} {fact.get('predicate','')} {fact.get('object','')}"
+        overlap = get_token_overlap(fact_str, user_message)
+        if overlap > 0 or intent in ["PERSONAL", "TASK"]:
+            hard_facts.append(fact)
+        elif stats is not None:
+             stats["semantic_filtered_out_count"] = stats.get("semantic_filtered_out_count", 0) + 1
+
+    for signal in raw_soft_signals:
+        sig_str = f"{signal.get('subject','')} {signal.get('predicate','')} {signal.get('object','')}"
+        overlap = get_token_overlap(sig_str, user_message)
+        if overlap > 0 or intent == "PERSONAL":
+            soft_signals.append(signal)
+        elif stats is not None:
+             stats["semantic_filtered_out_count"] = stats.get("semantic_filtered_out_count", 0) + 1
+
+    # Open Questions (eksik EXCLUSIVE'ler) - Sadece PERSONAL/TASK'ta göster
+    open_questions = []
+    if intent in ["PERSONAL", "TASK", "MIXED"]:
+        open_questions = _generate_open_questions(identity_facts, hard_facts, catalog)
     
     # Format oluştur
     return _format_context_v3(identity_facts, hard_facts, soft_signals, open_questions)
@@ -551,32 +601,39 @@ async def build_chat_context_v1(
     stats: Optional[dict] = None
 ) -> str:
     """
-    Atlas Hibrit Bağlam Paketleyicisi (V2 - RC-5).
+    Atlas Hibrit Bağlam Paketleyicisi (V3 - RC-8).
     -------------------------------------------
-    1. Bütçeleme (ContextBudgeter)
-    2. Tekilleştirme (Cross-layer Dedupe)
-    3. Skorlama (Weighted Selection)
+    1. İntent Sınıflandırma
+    2. Niyete Göre Adaptive Bütçeleme
+    3. Skorlama & Hassas Filtreleme
     """
     from Atlas.memory.neo4j_manager import neo4j_manager
-    from Atlas.memory.memory_policy import load_policy_for_user
+    from Atlas.memory.intent import classify_intent_tr
     
-    # Policy ve Bütçe Hazırlığı
-    mode = await neo4j_manager.get_user_memory_mode(user_id)
-    budgeter = ContextBudgeter(mode=mode)
-    all_context_texts = [] # Dedupe için havuz
-    
+    # 0. Stats Hazırlığı
     if stats is not None:
-        stats["mode"] = mode
         stats["layer_usage"] = {"transcript": 0, "episodic": 0, "semantic": 0}
         stats["dedupe_count"] = 0
+        stats["semantic_filtered_out_count"] = 0
+        stats["episode_filtered_out_count"] = 0
+
+    # 1. Niyet ve Bütçe (RC-8)
+    intent = classify_intent_tr(user_message)
+    if stats is not None: stats["intent"] = intent
+
+    mode = await neo4j_manager.get_user_memory_mode(user_id)
+    budgeter = ContextBudgeter(mode=mode, intent=intent)
     
-    # 1. Transcript (Son 20 Turn fetched, budgeted chars)
-    # Skorlama: Son mesajlar daha önemli (implicit weight by order)
+    all_context_texts = [] # Dedupe havuzu
+
+    # 2. Katmanlar (Transcript -> Semantic -> Episodic önceliği)
+    
+    # A. Transcript (Son konuşmalar)
     transcript_budget = budgeter.get_layer_budget("transcript")
     turns = await neo4j_manager.get_recent_turns(user_id, session_id, limit=20)
+    
     transcript_lines = []
     current_transcript_size = 0
-    
     if turns:
         for t in turns:
             role = "Kullanıcı" if t["role"] == "user" else "Atlas"
@@ -595,107 +652,100 @@ async def build_chat_context_v1(
     else:
         transcript_text = "(Henüz bu oturumda konuşma yapılmadı)"
 
-    # 3. Kişisel Hafıza (Context V3) - Long-term facts (Fetch early for dedupe priority)
+    # B. Semantic Memory (RC-3/RC-8 Context V3 with Filter)
     semantic_budget = budgeter.get_layer_budget("semantic")
-    memory_v3_raw = await build_memory_context_v3(user_id, user_message, session_id=session_id, stats=stats)
-    v3_lines = memory_v3_raw.split("\n")
-    final_v3_lines = []
-    current_v3_size = 0
-    
-    for line in v3_lines:
-        if line.startswith("###") or not line.strip():
-            final_v3_lines.append(line)
-            continue
-        if "[BİLGİ]" in line:
-            final_v3_lines.append(line)
-            continue
-        if is_duplicate(line, all_context_texts):
-            if stats is not None: stats["dedupe_count"] += 1
-            continue
-        if current_v3_size + len(line) + 1 <= semantic_budget:
-            final_v3_lines.append(line)
-            current_v3_size += len(line) + 1
-            all_context_texts.append(line) # Pool'a ekle (episodic dedupe için)
-            
-    if stats is not None:
-        stats["layer_usage"]["semantic"] = current_v3_size
+    memory_v3 = ""
+    # OFF modunda bütçe 0 olsa bile uyarıyı almak için içeri giriyoruz 
+    # veya doğrudan build_memory_context_v3 çağırıyoruz.
+    if mode == "OFF" or semantic_budget > 0:
+        memory_v3_raw = await build_memory_context_v3(user_id, user_message, session_id=session_id, stats=stats, intent=intent)
+        v3_lines = memory_v3_raw.split("\n")
+        final_v3_lines = []
+        current_v3_size = 0
         
-    memory_v3 = "\n".join(final_v3_lines)
+        for line in v3_lines:
+            if line.startswith("###") or not line.strip():
+                final_v3_lines.append(line)
+                continue
+            if "[BİLGİ]" in line: # OFF modu uyarısı bütçeye takılmamalı veya bütçesiz eklenmeli
+                final_v3_lines.append(line)
+                continue
+            if is_duplicate(line, all_context_texts):
+                if stats is not None: stats["dedupe_count"] += 1
+                continue
+            if current_v3_size + len(line) + 1 <= semantic_budget:
+                final_v3_lines.append(line)
+                current_v3_size += len(line) + 1
+                all_context_texts.append(line)
+                
+        if stats is not None:
+            stats["layer_usage"]["semantic"] = current_v3_size
+        memory_v3 = "\n".join(final_v3_lines)
 
-    # 2. Episodic (Son 10 READY Episode getirilir, RC-6 Consolidation dahil)
+    # C. Episodic (RC-8 Scoring V2: Overlap + Recency)
     episodic_budget = budgeter.get_layer_budget("episodic")
-    query = """
-    MATCH (s:Session {id: $sid})-[:HAS_EPISODE]->(e:Episode {status: 'READY'})
-    WHERE s.user_id = $uid OR $uid IS NULL
-    RETURN e.summary as summary, e.start_turn_index as start, e.end_turn_index as end, 
-           e.updated_at as updated_at, COALESCE(e.kind, 'REGULAR') as kind
-    ORDER BY e.updated_at DESC
-    LIMIT 15
-    """
-    ep_results = await neo4j_manager.query_graph(query, {"uid": user_id, "sid": session_id})
-    
-    scored_episodes = []
-    user_msg_norm = user_message.lower()
-    has_high_score = False
-    
-    for ep in ep_results:
-        score = 1.0
-        # Consolidation önceliği (Eskiler için meta-özet)
-        if ep.get('kind') == 'CONSOLIDATED':
-            score += 0.2 
+    episodic_text = ""
+    if episodic_budget > 0:
+        query = """
+        MATCH (s:Session {id: $sid})-[:HAS_EPISODE]->(e:Episode {status: 'READY'})
+        RETURN e.summary as summary, e.start_turn_index as start, e.end_turn_index as end, 
+               e.updated_at as updated_at, COALESCE(e.kind, 'REGULAR') as kind
+        ORDER BY e.updated_at DESC
+        LIMIT 15
+        """
+        ep_results = await neo4j_manager.query_graph(query, {"sid": session_id})
+        
+        scored_episodes = []
+        for i, ep in enumerate(ep_results):
+            # RC-8 Scoring: Overlap + Recency Bonus
+            overlap = get_token_overlap(ep['summary'], user_message)
+            # Recency: En yeni 3'e 0.2, sonrakilere 0.1 bonus
+            recency_bonus = 0.2 if i < 3 else 0.1
+            score = overlap + recency_bonus
             
-        summary_norm = ep['summary'].lower()
-        keywords = user_msg_norm.split()
-        if any(kw in summary_norm for kw in keywords if len(kw) > 3):
-            score += 0.5
-            has_high_score = True
-        scored_episodes.append((score, ep))
-    
-    scored_episodes.sort(key=lambda x: x[0], reverse=True)
-    
-    episodic_lines = []
-    current_episodic_size = 0
-    reg_count = 0
-    cons_count = 0
-    
-    for score, ep in scored_episodes:
-        # RC-5: Alakasız hafıza basmayı engelle
-        if has_high_score and score < 1.4: # 1.5 keyword, 1.7 keyword+consolidated, 1.2 consolidated
-            if ep.get('kind', 'REGULAR') == 'REGULAR': continue
+            if score >= 0.15: # Min threshold
+                scored_episodes.append((score, ep))
+            elif stats is not None:
+                stats["episode_filtered_out_count"] += 1
+        
+        scored_episodes.sort(key=lambda x: x[0], reverse=True)
+        
+        selected_ep_lines = []
+        curr_ep_size = 0
+        reg_count = 0
+        cons_count = 0
+        
+        for score, ep in scored_episodes:
+            if ep['kind'] == 'REGULAR' and reg_count >= 2: continue
+            if ep['kind'] == 'CONSOLIDATED' and cons_count >= 1: continue
             
-        # RC-6: Limitler (2 Regular + 1 Consolidated)
-        if ep.get('kind', 'REGULAR') == 'REGULAR' and reg_count >= 2: continue
-        if ep.get('kind') == 'CONSOLIDATED' and cons_count >= 1: continue
+            line = f"- {ep['summary']} (Turn {ep.get('start', 0)}-{ep.get('end', 0)})"
+            if is_duplicate(line, all_context_texts):
+                if stats is not None: stats["dedupe_count"] += 1
+                continue
+            
+            if curr_ep_size + len(line) + 1 <= episodic_budget:
+                selected_ep_lines.append(line)
+                curr_ep_size += len(line) + 1
+                all_context_texts.append(line)
+                if ep['kind'] == 'REGULAR': reg_count += 1
+                else: cons_count += 1
+        
+        if stats is not None:
+            stats["layer_usage"]["episodic"] = curr_ep_size
+        episodic_text = "\n".join(selected_ep_lines)
 
-        line = f"- {ep['summary']} (Turn {ep.get('start', 0)}-{ep.get('end', 0)})"
-        if is_duplicate(line, all_context_texts):
-             if stats is not None: stats["dedupe_count"] += 1
-             continue
-             
-        if current_episodic_size + len(line) + 1 <= episodic_budget:
-            episodic_lines.append(line)
-            current_episodic_size += len(line) + 1
-            all_context_texts.append(line)
-            if ep.get('kind', 'REGULAR') == 'REGULAR': reg_count += 1
-            else: cons_count += 1
-            
-        if len(episodic_lines) >= 3: break 
-
+    # 3. Nihai Birleştirme
+    final_parts = []
+    if transcript_text:
+        final_parts.append(f"SON KONUŞMALAR:\n{transcript_text}")
+    if episodic_text:
+        final_parts.append(f"İLGİLİ GEÇMİŞ BÖLÜMLER:\n{episodic_text}")
+    if memory_v3:
+        final_parts.append(memory_v3)
+        
+    final_output = "\n\n".join(final_parts).strip()
     if stats is not None:
-        stats["layer_usage"]["episodic"] = current_episodic_size
-        stats["total_chars"] = current_transcript_size + current_v3_size + current_episodic_size
-
-    episodic_text = "\n".join(episodic_lines) if episodic_lines else "(İlgili özet yok)"
-
-    # Hibrit Paketleme
-    full_context = f"""
-### YAKIN GEÇMİŞ (Transcript)
-{transcript_text}
-
-### OTURUM ÖZETLERİ (Uzak Geçmiş)
-{episodic_text}
-
-### KAYITLI KİŞİSEL BİLGİLER (Long-term)
-{memory_v3}
-"""
-    return full_context.strip()
+        stats["total_chars"] = len(final_output)
+        
+    return final_output
