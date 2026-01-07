@@ -221,9 +221,12 @@ async def run_episode_worker():
         transcript = "\n".join([f"{'Kullanıcı' if t['role']=='user' else 'Atlas'}: {t['content']}" for t in relevant_turns])
         
         # 4. LLM ile özetle
+        from Atlas.config import MODEL_GOVERNANCE
+        model_id = MODEL_GOVERNANCE.get("episodic_summary", ["gemini-2.0-flash"])[0]
+        
         message = f"DÖKÜM:\n{transcript}\n\nÖzetle."
-        # Not: generate_response model_id=gemini-2.0-flash, intent=analysis (structured output formatı için uygun)
-        result = await generate_response(message, "gemini-2.0-flash", "analysis", style_profile={"persona": "standard"})
+        # Not: generate_response model_id ve intent=analysis (structured output formatı için uygun)
+        result = await generate_response(message, model_id, "analysis", style_profile={"persona": "standard"})
         
         if result.ok:
             await neo4j_manager.mark_episode_ready(ep_id, result.text, result.model)

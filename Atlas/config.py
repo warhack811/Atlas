@@ -108,6 +108,10 @@ MODEL_GOVERNANCE = {
         "moonshotai/kimi-k2-instruct",
         "llama-3.3-70b-versatile",
         "openai/gpt-oss-120b"     
+    ],
+    "episodic_summary": [
+        "gemini-2.0-flash",
+        "llama-3.3-70b-versatile"
     ]
 }
 

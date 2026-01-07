@@ -1,10 +1,11 @@
 import unittest
 from unittest.mock import patch, AsyncMock, MagicMock
 import asyncio
-from Atlas.api import chat, ChatRequest
 
 class TestRC3EpisodeTrigger(unittest.TestCase):
-    """Event-loop sorunlarını aşmak için asyncio.run kullanan izole test."""
+    """
+    Extremely isolated test for RC-3 Episode Trigger.
+    """
 
     @patch('Atlas.memory.neo4j_manager.neo4j_manager.ensure_user_session', new_callable=AsyncMock)
     @patch('Atlas.memory.neo4j_manager.neo4j_manager.append_turn', new_callable=AsyncMock)
@@ -16,26 +17,33 @@ class TestRC3EpisodeTrigger(unittest.TestCase):
     @patch('Atlas.rdr.save_rdr')
     def test_episode_trigger_at_20_turns(self, mock_rdr, mock_synth, mock_exec, mock_plan, mock_ep, mock_count, mock_append, mock_ensure):
         
-        async def run_async_test():
-            # Setup
+        # Local import to avoid top-level loop issues
+        from Atlas.api import chat, ChatRequest
+        
+        async def run_test():
             mock_count.return_value = 20
             mock_synth.return_value = ("Yanıt", "model-x", "prompt", {"persona": "default"})
             mock_exec.return_value = []
-            mock_plan.return_value = MagicMock(active_intent="test", user_thought="...")
             
-            request = ChatRequest(message="merhaba", session_id="s_test")
+            plan_mock = MagicMock()
+            plan_mock.active_intent = "test"
+            plan_mock.user_thought = "..."
+            mock_plan.return_value = plan_mock
+            
+            request = ChatRequest(message="hello", session_id="s_test")
             mock_bt = MagicMock()
             
-            # Action
             await chat(request, mock_bt)
-            
-            # Assert
             return mock_ep.called, mock_ep.call_args
 
-        # Run in a clean loop
-        called, call_args = asyncio.run(run_async_test())
-        
-        # Final Assertions
+        # Use a new loop to be sure
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            called, call_args = loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
         self.assertTrue(called)
         args, kwargs = call_args
         self.assertEqual(args[2], 1)
