@@ -63,12 +63,16 @@ async def _refresh_leader_lock():
         logger.warning("Scheduler: Liderlik kilidi tazelenemedi! Durduruluyor...")
         stop_scheduler()
 
-async def refresh_scheduler_jobs():
-    """Zamanlayıcıdaki job'ları günceller (Yeni kullanıcılar, opt-out olanlar vb.)."""
+async def sync_scheduler_jobs():
+    """
+    Kullanıcı bazlı job'ları (observer, due_scanner) veritabanı ile senkronize eder (RC-1 Hardening).
+    Aktif olanları ekler, devre dışı kalanları (opt-out) temizler.
+    """
     if not scheduler.running:
+        logger.warning("Sync çağrıldı ama scheduler çalışmıyor.")
         return
         
-    logger.info("Scheduler: Kullanıcı job'ları güncelleniyor...")
+    logger.info("Scheduler: Kullanıcı job'ları senkronize ediliyor...")
     
     # 1. Aktif (opt-in) kullanıcıları bul
     query = "MATCH (u:User) WHERE u.notifications_enabled = true RETURN u.id as id"
@@ -82,40 +86,46 @@ async def refresh_scheduler_jobs():
         
         # 3. Yeni/Eski job senkronizasyonu
         for uid in active_uids:
-            # Observer Job
+            # Observer Job (15 dk)
             obs_id = f"obs:{uid}"
             if obs_id not in existing_job_ids:
                 scheduler.add_job(
                     observer.check_triggers,
                     trigger=IntervalTrigger(minutes=15),
                     args=[uid],
-                    id=obs_id
+                    id=obs_id,
+                    replace_existing=True
                 )
-                logger.info(f"Job eklendi: {obs_id}")
+                logger.debug(f"Job eklendi: {obs_id}")
             
-            # Due Task Scanner Job
+            # Due Task Scanner Job (5 dk)
             due_id = f"due:{uid}"
             if due_id not in existing_job_ids:
                 scheduler.add_job(
                     scan_due_tasks,
                     trigger=IntervalTrigger(minutes=5),
                     args=[uid],
-                    id=due_id
+                    id=due_id,
+                    replace_existing=True
                 )
-                logger.info(f"Job eklendi: {due_id}")
+                logger.debug(f"Job eklendi: {due_id}")
 
-        # 4. Devre dışı kalan kullanıcıları temizle
-        for jid in existing_job_ids:
+        # 4. Devre dışı kalan kullanıcıları temizle (Dynamic Cleanup)
+        for jid in list(existing_job_ids):
             if jid.startswith(("obs:", "due:")):
                 parts = jid.split(":")
                 uid_in_job = parts[1] if len(parts) > 1 else ""
                 if uid_in_job not in active_uids:
                     scheduler.remove_job(jid)
-                    logger.info(f"Job kaldırıldı (Opt-out): {jid}")
+                    logger.info(f"Job kaldırıldı (Kullanıcı opt-out veya pasif): {jid}")
 
-        logger.info(f"Scheduler: Senkronizasyon tamamlandı. Aktif kullanıcı: {len(active_uids)}")
+        logger.info(f"Scheduler: Senkronizasyon tamamlandı ({len(active_uids)} aktif kullanıcı)")
     except Exception as e:
-        logger.error(f"Job refresh hatası: {e}")
+        logger.error(f"Job senkronizasyon hatası: {e}")
+
+async def refresh_scheduler_jobs():
+    """Zamanlayıcıdaki job'ları günceller (sync_scheduler_jobs alias)."""
+    await sync_scheduler_jobs()
 
 def stop_scheduler():
     """Zamanlayıcıyı ve çalışan görevleri güvenli bir şekilde kapatır."""

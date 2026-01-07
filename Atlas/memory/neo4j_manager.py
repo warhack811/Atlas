@@ -263,7 +263,7 @@ class Neo4jManager:
         """
         Yeni bir bildirim (Notification) oluşturur ve kullanıcıya bağlar. (FAZ7)
         """
-        notification_id = f"notif_{uuid.uuid4().hex[:12]}"
+        notification_id = uuid.uuid4().hex
         query = """
         MATCH (u:User {id: $uid})
         CREATE (n:Notification {
@@ -386,6 +386,19 @@ class Neo4jManager:
         except Exception as e:
             logger.error(f"Günlük bildirim sayma hatası: {e}")
             return 0
+
+    async def get_user_memory_mode(self, user_id: str) -> str:
+        """
+        Kullanıcının hafıza modunu (OFF/STANDARD/FULL) Neo4j'den çeker. (RC-1)
+        """
+        query = "MATCH (u:User {id: $uid}) RETURN u.memory_mode as mode"
+        try:
+            results = await self.query_graph(query, {"uid": user_id})
+            if results and results[0].get("mode"):
+                return results[0]["mode"].upper()
+        except Exception as e:
+            logger.error(f"Hafıza modu çekme hatası: {e}")
+        return "STANDARD"
 
     async def try_acquire_lock(self, lock_name: str, holder_id: str, ttl_seconds: int) -> bool:
         """

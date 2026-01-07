@@ -27,9 +27,8 @@ class TestRC1Hardening(unittest.IsolatedAsyncioTestCase):
         data = {"message": "test"}
         notif_id = await self.manager.create_notification("u1", data)
         
-        self.assertTrue(notif_id.startswith("notif_"))
-        # UUID hex length (12) + "notif_" (6) = 18
-        self.assertEqual(len(notif_id), 18)
+        # RC-1 Hardening: UUID hex format (32 chars)
+        self.assertEqual(len(notif_id), 32)
 
     @patch('Atlas.memory.neo4j_manager.Neo4jManager.query_graph', new_callable=AsyncMock)
     @patch('Atlas.memory.neo4j_manager.Neo4jManager.create_notification', new_callable=AsyncMock)

@@ -54,7 +54,11 @@ async def create_task(
                 settings={'PREFER_DATES_FROM': 'future', 'RELATIVE_BASE': datetime.now()}
             )
             if parsed_dt:
-                due_at_dt = parsed_dt.isoformat()
+                # RC-1: Timezone yoksa UTC varsay ve 'Z' ekle
+                if parsed_dt.tzinfo is None:
+                    due_at_dt = parsed_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+                else:
+                    due_at_dt = parsed_dt.isoformat()
         except Exception as e:
             from Atlas.logger import logger
             logger.warning(f"Tarih ayrıştırma hatası ('{due_at}'): {e}")
@@ -69,7 +73,9 @@ async def create_task(
         raw_text: $raw_text,
         source_turn_id: $source_turn_id,
         due_at_raw: $due_at_raw,
-        due_at_dt: $due_at_dt
+        due_at_dt: datetime($due_at_dt),
+        last_notified_at: null,
+        notified_count: 0
     })
     MERGE (u)-[:HAS_TASK]->(t)
     RETURN t.id as task_id
