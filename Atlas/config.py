@@ -125,6 +125,21 @@ CONTEXT_BUDGET = {
     }
 }
 
+# --- RETENTION & FORGETFULNESS (RC-6) ---
+RETENTION_SETTINGS = {
+    "TURN_RETENTION_DAYS": 30,
+    "MAX_TURNS_PER_SESSION": 400,
+    "EPISODE_RETENTION_DAYS": 180,
+    "NOTIFICATION_RETENTION_DAYS": 30,
+    "DONE_TASK_RETENTION_DAYS": 30
+}
+
+CONSOLIDATION_SETTINGS = {
+    "ENABLE_CONSOLIDATION": True,
+    "CONSOLIDATION_EPISODE_WINDOW": 10,  # 10 REGULAR -> 1 CONSOLIDATED
+    "CONSOLIDATION_MIN_AGE_DAYS": 7      # 7 günden eski olanlar
+}
+
 # Time & Context Awareness
 URGENCY_KEYWORDS = ["acil", "hemen", "urgent", "asap", "deadline", "yarın", "bugün", "şimdi"]
 

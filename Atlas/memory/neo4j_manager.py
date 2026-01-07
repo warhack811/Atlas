@@ -560,21 +560,23 @@ class Neo4jManager:
             "end_turn": end_turn
         })
 
-    async def create_episode_pending(self, user_id: str, session_id: str, start_turn: int, end_turn: int):
+    async def create_episode_pending(self, user_id: str, session_id: str, start_turn: int, end_turn: int, kind: str = "REGULAR"):
         """
         Idempotent olarak PENDING durumunda bir episode oluşturur.
         Aynı aralık için zaten varsa oluşturmaz.
+        RC-6: 'kind' alanı eklendi (REGULAR/CONSOLIDATED).
         """
         query = """
         MATCH (s:Session {id: $sid})
         WHERE s.user_id = $uid OR $uid IS NULL
         MERGE (e:Episode {
-            id: $sid + "::ep_" + toString(start_turn) + "_" + toString(end_turn)
+            id: $sid + "::ep_" + toString(start_turn) + "_" + toString(end_turn) + "_" + $kind
         })
         ON CREATE SET 
             e.user_id = $uid,
             e.session_id = $sid,
             e.status = "PENDING",
+            e.kind = $kind,
             e.start_turn_index = $start_turn,
             e.end_turn_index = $end_turn,
             e.created_at = datetime(),
@@ -586,15 +588,17 @@ class Neo4jManager:
             "uid": user_id,
             "sid": session_id,
             "start_turn": start_turn,
-            "end_turn": end_turn
+            "end_turn": end_turn,
+            "kind": kind
         })
 
     async def claim_pending_episode(self) -> Optional[dict]:
         """
-        PENDING durumundaki bir episode'u atomik olarak IN_PROGRESS yapar ve döner.
+        PENDING durumundaki bir REGULAR episode'u atomik olarak IN_PROGRESS yapar ve döner.
         """
         query = """
         MATCH (e:Episode {status: "PENDING"})
+        WHERE e.kind IS NULL OR e.kind = "REGULAR"
         WITH e ORDER BY e.created_at ASC LIMIT 1
         SET e.status = "IN_PROGRESS", e.updated_at = datetime()
         RETURN e.id as id, e.user_id as user_id, e.session_id as session_id, 
@@ -677,6 +681,102 @@ class Neo4jManager:
         except Exception as e:
             logger.error(f"Kilit bırakma hatası ({lock_name}): {e}")
             return False
+
+    # --- RC-6: Retention & Consolidation ---
+
+    async def prune_turns(self, retention_days: int, max_per_session: int):
+        """Eski ve limit aşan konuşma turlarını siler."""
+        # 1. Zamana göre silme
+        query_time = """
+        MATCH (t:Turn)
+        WHERE t.created_at < datetime() - duration('P' + toString($days) + 'D')
+        DELETE t
+        """
+        await self.query_graph(query_time, {"days": retention_days})
+
+        # 2. Session başına limit aşımına göre silme
+        query_limit = """
+        MATCH (s:Session)-[:HAS_TURN]->(t:Turn)
+        WITH s, t ORDER BY t.turn_index DESC
+        WITH s, collect(t)[$max..] AS extra_turns
+        UNWIND extra_turns AS et
+        DELETE et
+        """
+        await self.query_graph(query_limit, {"max": max_per_session})
+
+    async def prune_episodes(self, retention_days: int):
+        """Eski episodları siler."""
+        query = """
+        MATCH (e:Episode)
+        WHERE e.created_at < datetime() - duration('P' + toString($days) + 'D')
+        DELETE e
+        """
+        await self.query_graph(query, {"days": retention_days})
+
+    async def prune_notifications(self, retention_days: int):
+        """Okunmuş ve eski bildirimleri siler."""
+        query = """
+        MATCH (n:Notification)
+        WHERE n.read = true AND n.created_at < datetime() - duration('P' + toString($days) + 'D')
+        DELETE n
+        """
+        await self.query_graph(query, {"days": retention_days})
+
+    async def prune_tasks(self, retention_days: int):
+        """Tamamlanmış ve eski görevleri siler."""
+        query = """
+        MATCH (task:Task)
+        WHERE task.status IN ['DONE', 'CLOSED'] 
+          AND task.updated_at < datetime() - duration('P' + toString($days) + 'D')
+        DELETE task
+        """
+        await self.query_graph(query, {"days": retention_days})
+
+    async def create_consolidation_pending(self, session_id: str, window: int, min_age_days: int):
+        """Çok sayıdaki REGULAR episoddan konsolide bir episod tetikler."""
+        query = """
+        MATCH (s:Session {id: $sid})-[:HAS_EPISODE]->(e:Episode {status: 'READY'})
+        WHERE (e.kind IS NULL OR e.kind = 'REGULAR')
+          AND e.created_at < datetime() - duration('P' + toString($min_age) + 'D')
+          AND NOT (s)-[:HAS_EPISODE]->(:Episode {kind: 'CONSOLIDATED', start_turn_index: e.start_turn_index})
+        WITH s, e ORDER BY e.start_turn_index ASC
+        WITH s, collect(e) as episodes
+        WHERE size(episodes) >= $window
+        WITH s, episodes[0..$window] as batch
+        WITH s, batch, batch[0] as first, batch[-1] as last
+        MERGE (ce:Episode {
+            id: $sid + "::consolidated_" + toString(first.start_turn_index) + "_" + toString(last.end_turn_index)
+        })
+        ON CREATE SET
+            ce.user_id = s.user_id,
+            ce.session_id = $sid,
+            ce.status = "PENDING",
+            ce.kind = "CONSOLIDATED",
+            ce.start_turn_index = first.start_turn_index,
+            ce.end_turn_index = last.end_turn_index,
+            ce.source_episode_ids = [ep in batch | ep.id],
+            ce.created_at = datetime(),
+            ce.updated_at = datetime()
+        MERGE (s)-[:HAS_EPISODE]->(ce)
+        """
+        await self.query_graph(query, {"sid": session_id, "window": window, "min_age": min_age_days})
+
+    async def claim_pending_consolidation(self) -> Optional[dict]:
+        """PENDING durumundaki bir CONSOLIDATED episod'u atomik olarak devralır."""
+        query = """
+        MATCH (e:Episode {status: "PENDING", kind: "CONSOLIDATED"})
+        WITH e ORDER BY e.created_at ASC LIMIT 1
+        SET e.status = "IN_PROGRESS", e.updated_at = datetime()
+        RETURN e.id as id, e.user_id as user_id, e.session_id as session_id, 
+               e.source_episode_ids as source_ids
+        """
+        results = await self.query_graph(query)
+        return results[0] if results else None
+
+    async def get_episodes_by_ids(self, episode_ids: List[str]) -> List[Dict]:
+        """ID listesine göre episodları getirir."""
+        query = "MATCH (e:Episode) WHERE e.id IN $ids RETURN e.summary as summary, e.id as id"
+        return await self.query_graph(query, {"ids": episode_ids})
 
 # Tekil örnek
 neo4j_manager = Neo4jManager()

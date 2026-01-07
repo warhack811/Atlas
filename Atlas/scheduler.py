@@ -16,6 +16,7 @@ from Atlas.observer import observer
 from Atlas.memory.neo4j_manager import neo4j_manager
 from Atlas.memory.due_scanner import scan_due_tasks
 from Atlas.generator import generate_response
+from Atlas.config import RETENTION_SETTINGS, CONSOLIDATION_SETTINGS
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,22 @@ Sadece verilen metni kullan, uydurma bilgi ekleme.
 - [Madde 6-10]
 
 ### Açık Sorular / Kararlar
+- [Madde 1-3]
+
+Dil: Türkçe
+"""
+
+CONSOLIDATION_WORKER_PROMPT = """
+Aşağıdaki episod özetlerini (episodic memories) kullanarak daha üst seviye bir konsolide dönem özeti oluştur.
+Sadece verilen özetlerdeki bilgileri kullan, uydurma yapma.
+
+Çıktı formatı:
+### Dönem Özeti
+- [Madde 1]
+- ...
+- [Madde 6-10]
+
+### Açık Konular / Bekleyen İşler
 - [Madde 1-3]
 
 Dil: Türkçe
@@ -107,6 +124,23 @@ async def _promote_to_leader():
         replace_existing=True
     )
 
+    # 4. Maintenance Job (Her gün 03:30'da çalışacak şekilde interval simülasyonu veya daily trigger)
+    scheduler.add_job(
+        run_maintenance_worker,
+        trigger=IntervalTrigger(hours=24),
+        id="maintenance",
+        replace_existing=True
+    )
+
+    # 5. Consolidation Job (Her 60 dakikada bir)
+    if CONSOLIDATION_SETTINGS.get("ENABLE_CONSOLIDATION", True):
+        scheduler.add_job(
+            run_consolidation_worker,
+            trigger=IntervalTrigger(minutes=60),
+            id="consolidate",
+            replace_existing=True
+        )
+
 async def _demote_to_follower():
     """Instance'ı FOLLOWER moduna düşürür ve lider görevlerini temizler."""
     global _IS_LEADER
@@ -117,7 +151,7 @@ async def _demote_to_follower():
     leader_job_ids = ["leader_heartbeat"]
     # obs:* ve due:* işlerini de kaldır (Sadece liderde çalışmalı)
     for job in scheduler.get_jobs():
-        if job.id.startswith(("obs:", "due:", "leader_heartbeat", "episode_worker")):
+        if job.id.startswith(("obs:", "due:", "leader_heartbeat", "episode_worker", "maintenance", "consolidate")):
             scheduler.remove_job(job.id)
             logger.debug(f"Job kaldırıldı (Demote): {job.id}")
 
@@ -238,6 +272,73 @@ async def run_episode_worker():
     except Exception as e:
         logger.exception(f"Episode Worker: Kritik hata -> {ep_id}")
         await neo4j_manager.mark_episode_failed(ep_id, str(e))
+
+async def run_maintenance_worker():
+    """Arka planda veri temizliği yapan job (RC-6)."""
+    if not _IS_LEADER: return
+    
+    logger.info("Maintenance Worker: Temizlik başlatıldı...")
+    try:
+        r = RETENTION_SETTINGS
+        await neo4j_manager.prune_turns(r["TURN_RETENTION_DAYS"], r["MAX_TURNS_PER_SESSION"])
+        await neo4j_manager.prune_episodes(r["EPISODE_RETENTION_DAYS"])
+        await neo4j_manager.prune_notifications(r["NOTIFICATION_RETENTION_DAYS"])
+        await neo4j_manager.prune_tasks(r["DONE_TASK_RETENTION_DAYS"])
+        logger.info("Maintenance Worker: Temizlik tamamlandı.")
+    except Exception as e:
+        logger.error(f"Maintenance Worker: Hata -> {e}")
+
+async def run_consolidation_worker():
+    """Eski episodları konsolide eden job (RC-6)."""
+    if not _IS_LEADER: return
+    
+    logger.debug("Consolidation Worker: Kontrol ediliyor...")
+    
+    # 1. Önce pending konsolidasyonları kontrol et ve oluştur (İstisna: çok fazla session varsa batchlemek gerekebilir)
+    # Şimdilik READY REGULAR episodi window'dan fazla olan tüm sessionlar için pending oluşturmayı tetikle
+    query = "MATCH (s:Session) RETURN s.id as id"
+    sessions = await neo4j_manager.query_graph(query)
+    c = CONSOLIDATION_SETTINGS
+    for s in sessions:
+        await neo4j_manager.create_consolidation_pending(s['id'], c["CONSOLIDATION_EPISODE_WINDOW"], c["CONSOLIDATION_MIN_AGE_DAYS"])
+
+    # 2. Bekleyen bir consolidation işi al
+    cons = await neo4j_manager.claim_pending_consolidation()
+    if not cons:
+        return
+
+    cons_id = cons["id"]
+    source_ids = cons["source_ids"]
+    
+    try:
+        logger.info(f"Consolidation Worker: İşleniyor -> {cons_id}")
+        
+        # 3. Kaynak episodların özetlerini çek
+        episodes = await neo4j_manager.get_episodes_by_ids(source_ids)
+        if not episodes:
+             await neo4j_manager.mark_episode_failed(cons_id, "Source episodes not found")
+             return
+             
+        # Kronolojik sıra (id içinde turn index varsa ona göre sort etsek iyi olur ama şimdilik liste sırası)
+        combined_summaries = "\n---\n".join([e['summary'] for e in episodes])
+        
+        # 4. LLM ile Konsolidasyon
+        from Atlas.config import MODEL_GOVERNANCE
+        model_id = MODEL_GOVERNANCE.get("episodic_summary", ["gemini-2.0-flash"])[0]
+        
+        prompt = f"{CONSOLIDATION_WORKER_PROMPT}\n\nKAYNAK ÖZETLER:\n{combined_summaries}"
+        result = await generate_response(prompt, model_id, "analysis", style_profile={"persona": "standard"})
+        
+        if result.ok:
+            await neo4j_manager.mark_episode_ready(cons_id, result.text, result.model)
+            logger.info(f"Consolidation Worker: Tamamlandı -> {cons_id}")
+        else:
+            await neo4j_manager.mark_episode_failed(cons_id, result.text)
+            logger.error(f"Consolidation Worker: LLM hatası -> {cons_id}: {result.text}")
+
+    except Exception as e:
+        logger.exception(f"Consolidation Worker: Kritik hata -> {cons_id}")
+        await neo4j_manager.mark_episode_failed(cons_id, str(e))
 
 async def refresh_scheduler_jobs():
     """Zamanlayıcıdaki job'ları günceller (sync_scheduler_jobs alias)."""

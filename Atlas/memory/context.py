@@ -616,14 +616,15 @@ async def build_chat_context_v1(
             
     memory_v3 = "\n".join(final_v3_lines)
 
-    # 2. Episodic (Son 5 READY Episode, keyword based weighting)
+    # 2. Episodic (Son 10 READY Episode getirilir, RC-6 Consolidation dahil)
     episodic_budget = budgeter.get_layer_budget("episodic")
     query = """
     MATCH (s:Session {id: $sid})-[:HAS_EPISODE]->(e:Episode {status: 'READY'})
     WHERE s.user_id = $uid OR $uid IS NULL
-    RETURN e.summary as summary, e.start_turn_index as start, e.end_turn_index as end, e.updated_at as updated_at
+    RETURN e.summary as summary, e.start_turn_index as start, e.end_turn_index as end, 
+           e.updated_at as updated_at, COALESCE(e.kind, 'REGULAR') as kind
     ORDER BY e.updated_at DESC
-    LIMIT 10
+    LIMIT 15
     """
     ep_results = await neo4j_manager.query_graph(query, {"uid": user_id, "sid": session_id})
     
@@ -633,6 +634,10 @@ async def build_chat_context_v1(
     
     for ep in ep_results:
         score = 1.0
+        # Consolidation önceliği (Eskiler için meta-özet)
+        if ep.get('kind') == 'CONSOLIDATED':
+            score += 0.2 
+            
         summary_norm = ep['summary'].lower()
         keywords = user_msg_norm.split()
         if any(kw in summary_norm for kw in keywords if len(kw) > 3):
@@ -644,12 +649,19 @@ async def build_chat_context_v1(
     
     episodic_lines = []
     current_episodic_size = 0
+    reg_count = 0
+    cons_count = 0
+    
     for score, ep in scored_episodes:
-        # RC-5: Alakasız hafıza basmayı engelle (Eğer yüksek skorlu (1.5) varsa, 1.0 olanları ele)
-        if has_high_score and score == 1.0:
-            continue
+        # RC-5: Alakasız hafıza basmayı engelle
+        if has_high_score and score < 1.4: # 1.5 keyword, 1.7 keyword+consolidated, 1.2 consolidated
+            if ep.get('kind', 'REGULAR') == 'REGULAR': continue
             
-        line = f"- {ep['summary']} (Turn {ep['start']}-{ep['end']})"
+        # RC-6: Limitler (2 Regular + 1 Consolidated)
+        if ep.get('kind', 'REGULAR') == 'REGULAR' and reg_count >= 2: continue
+        if ep.get('kind') == 'CONSOLIDATED' and cons_count >= 1: continue
+
+        line = f"- {ep['summary']} (Turn {ep.get('start', 0)}-{ep.get('end', 0)})"
         if is_duplicate(line, all_context_texts):
              continue
              
@@ -657,6 +669,9 @@ async def build_chat_context_v1(
             episodic_lines.append(line)
             current_episodic_size += len(line) + 1
             all_context_texts.append(line)
+            if ep.get('kind', 'REGULAR') == 'REGULAR': reg_count += 1
+            else: cons_count += 1
+            
         if len(episodic_lines) >= 3: break 
 
     episodic_text = "\n".join(episodic_lines) if episodic_lines else "(İlgili özet yok)"
