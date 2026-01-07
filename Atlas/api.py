@@ -53,7 +53,8 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     """Kullanıcıdan gelen sohbet isteğinin yapısı."""
     message: str
-    session_id: Optional[str] = None
+    session_id: str
+    user_id: Optional[str] = None
     use_mock: bool = False
     style: Optional[dict] = None
     mode: Optional[str] = "standard"
@@ -80,6 +81,23 @@ def serialize_neo4j_value(v):
 class NotificationAckRequest(BaseModel):
     session_id: str
     notification_id: str
+
+class MemoryForgetRequest(BaseModel):
+    session_id: str
+    user_id: Optional[str] = None
+    scope: str  # "predicate" | "item" | "all"
+    predicate: Optional[str] = None
+    item_id: Optional[str] = None
+
+class PolicyUpdateRequest(BaseModel):
+    session_id: str
+    user_id: Optional[str] = None
+    memory_mode: Optional[str] = None
+    notifications_enabled: Optional[bool] = None
+    quiet_hours_start: Optional[str] = None
+    quiet_hours_end: Optional[str] = None
+    max_notifications_per_day: Optional[int] = None
+    notification_mode: Optional[str] = None
 
 class TaskDoneRequest(BaseModel):
     session_id: str
@@ -158,16 +176,21 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     user_message = sanitized_text
     
     try:
-        session = SessionManager.get_or_create(request.session_id)
-        session_id = session.id
+        session_id = request.session_id
+        user_id = request.user_id if request.user_id else session_id
+        
+        # RC-2: Kullanıcı-Session eşleşmesini sağla
+        from Atlas.memory.neo4j_manager import neo4j_manager
+        await neo4j_manager.ensure_user_session(user_id, session_id)
+        
         MessageBuffer.add_user_message(session_id, user_message)
         
         # GRAF VERİTABANI BAĞLAMI: FAZ6 - v3 context packaging
         from Atlas.memory.context import ContextBuilder, build_memory_context_v3
         cb = ContextBuilder(session_id)
         
-        # FAZ6: Yeni v3 context packaging kullan (RC-1)
-        neo4j_context = await build_memory_context_v3(session_id, user_message)
+        # FAZ6: Yeni v3 context packaging kullan (RC-1/RC-2)
+        neo4j_context = await build_memory_context_v3(user_id, user_message, session_id=session_id)
         cb.with_neo4j_context(neo4j_context)
         
         record = rdr.RDR.create(user_message)
@@ -277,8 +300,13 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             from Atlas.memory import SessionManager, MessageBuffer
             from Atlas import orchestrator, dag_executor, synthesizer
             
-            session = SessionManager.get_or_create(request.session_id)
-            session_id = session.id
+            session_id = request.session_id
+            user_id = request.user_id if request.user_id else session_id
+            
+            # RC-2: Kullanıcı-Session eşleşmesini sağla
+            from Atlas.memory.neo4j_manager import neo4j_manager
+            await neo4j_manager.ensure_user_session(user_id, session_id)
+            
             MessageBuffer.add_user_message(session_id, request.message)
 
             safety_start = time.time()
@@ -302,8 +330,8 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             from Atlas.memory.context import ContextBuilder, build_memory_context_v3
             cb = ContextBuilder(session_id)
             
-            # RC-1: v3 context packaging
-            graph_context = await build_memory_context_v3(session_id, request.message)
+            # RC-1/RC-2: v3 context packaging
+            graph_context = await build_memory_context_v3(user_id, request.message, session_id=session_id)
             cb.with_neo4j_context(graph_context)
             
             # 2. Orkestrasyon: Niyet analizi ve DAG planı oluşturma
@@ -524,6 +552,78 @@ async def complete_task(request: TaskDoneRequest):
     from Atlas.memory.prospective_store import mark_task_done
     success = await mark_task_done(request.session_id, request.task_id)
     return {"status": "success" if success else "error"}
+
+# --- RC-2: Bellek Kontrol Endpoint'leri ---
+
+@app.get("/api/memory")
+async def get_memory_status(session_id: str, user_id: Optional[str] = None):
+    """Kullanıcının bellek durumunun bir özetini döndürür. (RC-2)"""
+    uid = user_id if user_id else session_id
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    from Atlas.memory.context import build_memory_context_v3
+    from Atlas.memory.prospective_store import list_open_tasks
+    from Atlas.observer import observer
+    
+    # 1. Context V3 (Kişisel hafıza özeti)
+    context = await build_memory_context_v3(uid, "summary_request", session_id=session_id)
+    
+    # 2. Son görevler
+    tasks = await list_open_tasks(uid)
+    
+    # 3. Bildirimler
+    notifications = await observer.get_notifications(uid)
+    
+    # 4. Ayarlar
+    settings = await neo4j_manager.get_user_settings(uid)
+    
+    return {
+        "user_id": uid,
+        "memory_summary": context,
+        "tasks": serialize_neo4j_value(tasks[:20]),
+        "notifications": serialize_neo4j_value(notifications[:20]),
+        "settings": settings
+    }
+
+@app.post("/api/memory/forget")
+async def forget_memory(request: MemoryForgetRequest):
+    """
+    Kullanıcının belirli bir bilgiyi veya tüm hafızasını 'unutmasını' sağlar. (RC-2)
+    Strateji: İlişkileri siler, node'ları bırakır.
+    """
+    uid = request.user_id if request.user_id else request.session_id
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    
+    query = ""
+    params = {"uid": uid}
+    
+    if request.scope == "all":
+        # Kullanıcının tüm FACT ilişkilerini sil
+        query = "MATCH (u:User {id: $uid})-[r:HAS_FACT|KNOWS|HAS_TASK|HAS_NOTIFICATION]->() DELETE r"
+    elif request.scope == "predicate" and request.predicate:
+        # Belirli bir predicate tipindeki ilişkileri sil
+        query = "MATCH (u:User {id: $uid})-[r:KNOWS|HAS_FACT]->(e:Entity) WHERE r.predicate = $pred DELETE r"
+        params["pred"] = request.predicate
+    elif request.scope == "item" and request.item_id:
+        # Belirli bir item'a olan ilişkiyi sil
+        query = "MATCH (u:User {id: $uid})-[r:KNOWS|HAS_FACT]->(e:Entity {id: $eid}) DELETE r"
+        params["eid"] = request.item_id
+    else:
+        raise HTTPException(status_code=400, detail="Geçersiz forget kapsamı veya eksik parametre.")
+        
+    await neo4j_manager.query_graph(query, params)
+    return {"success": True, "message": f"Memory scope '{request.scope}' forgotten for user."}
+
+@app.post("/api/policy")
+async def update_policy(request: PolicyUpdateRequest):
+    """Kullanıcının bellek ve bildirim politikalarını günceller. (RC-2)"""
+    uid = request.user_id if request.user_id else request.session_id
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    
+    # Sadece None olmayan alanları güncelle
+    patch = {k: v for k, v in request.dict().items() if v is not None and k not in ["session_id", "user_id"]}
+    
+    new_settings = await neo4j_manager.set_user_settings(uid, patch)
+    return {"success": True, "settings": new_settings}
 
 
 @app.get("/api/arena/leaderboard")

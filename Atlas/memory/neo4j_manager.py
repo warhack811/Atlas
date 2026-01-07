@@ -388,17 +388,71 @@ class Neo4jManager:
             return 0
 
     async def get_user_memory_mode(self, user_id: str) -> str:
+        """Kullanıcının hafıza modunu getirir (OFF/STANDARD/FULL)."""
+        settings = await self.get_user_settings(user_id)
+        return settings.get("memory_mode", "STANDARD")
+
+    async def ensure_user_session(self, user_id: str, session_id: str):
         """
-        Kullanıcının hafıza modunu (OFF/STANDARD/FULL) Neo4j'den çeker. (RC-1)
+        Kullanıcı ve oturum arasındaki ilişkiyi kurar/günceller. (RC-2)
         """
-        query = "MATCH (u:User {id: $uid}) RETURN u.memory_mode as mode"
-        try:
-            results = await self.query_graph(query, {"uid": user_id})
-            if results and results[0].get("mode"):
-                return results[0]["mode"].upper()
-        except Exception as e:
-            logger.error(f"Hafıza modu çekme hatası: {e}")
-        return "STANDARD"
+        query = """
+        MERGE (u:User {id: $uid})
+        ON CREATE SET u.created_at = datetime(), u.notifications_enabled = true
+        MERGE (s:Session {id: $sid})
+        ON CREATE SET s.created_at = datetime()
+        SET s.last_seen_at = datetime()
+        MERGE (u)-[:HAS_SESSION]->(s)
+        """
+        await self.query_graph(query, {"uid": user_id, "sid": session_id})
+
+    async def get_user_settings(self, user_id: str) -> dict:
+        """
+        Kullanıcının politikalarını ve bildirim ayarlarını getirir. (RC-2)
+        """
+        query = "MATCH (u:User {id: $uid}) RETURN u"
+        results = await self.query_graph(query, {"uid": user_id})
+        
+        default_settings = {
+            "memory_mode": os.getenv("ATLAS_DEFAULT_MEMORY_MODE", "STANDARD"),
+            "notifications_enabled": True,
+            "quiet_hours_start": "22:00",
+            "quiet_hours_end": "08:00",
+            "max_notifications_per_day": 5,
+            "notification_mode": "STANDARD"
+        }
+        
+        if results and results[0].get("u"):
+            # Neo4j node objesinden verileri çek
+            u = dict(results[0]["u"])
+            return {
+                "memory_mode": u.get("memory_mode", default_settings["memory_mode"]),
+                "notifications_enabled": u.get("notifications_enabled", default_settings["notifications_enabled"]),
+                "quiet_hours_start": u.get("quiet_hours_start", default_settings["quiet_hours_start"]),
+                "quiet_hours_end": u.get("quiet_hours_end", default_settings["quiet_hours_end"]),
+                "max_notifications_per_day": u.get("max_notifications_per_day", default_settings["max_notifications_per_day"]),
+                "notification_mode": u.get("notification_mode", default_settings["notification_mode"])
+            }
+        return default_settings
+
+    async def set_user_settings(self, user_id: str, patch: dict) -> dict:
+        """
+        Kullanıcının ayarlarını günceller. (RC-2)
+        """
+        keys = []
+        valid_keys = ["memory_mode", "notifications_enabled", "quiet_hours_start", "quiet_hours_end", "max_notifications_per_day", "notification_mode"]
+        for k in patch.keys():
+            if k in valid_keys:
+                keys.append(f"u.{k} = ${k}")
+        
+        if not keys:
+            return await self.get_user_settings(user_id)
+            
+        set_clause = ", ".join(keys)
+        query = f"MERGE (u:User {{id: $uid}}) SET {set_clause} RETURN u"
+        params = {"uid": user_id, **patch}
+        await self.query_graph(query, params)
+        return await self.get_user_settings(user_id)
 
     async def try_acquire_lock(self, lock_name: str, holder_id: str, ttl_seconds: int) -> bool:
         """
