@@ -387,5 +387,47 @@ class Neo4jManager:
             logger.error(f"Günlük bildirim sayma hatası: {e}")
             return 0
 
+    async def try_acquire_lock(self, lock_name: str, holder_id: str, ttl_seconds: int) -> bool:
+        """
+        Neo4j üzerinde dağıtık kilit (Distributed Lock) almaya çalışır. (FAZ7-R)
+        """
+        query = """
+        MERGE (l:SchedulerLock {name: $name})
+        WITH l
+        WHERE l.holder IS NULL 
+           OR datetime() >= l.expires_at 
+           OR l.holder = $holder
+        SET l.holder = $holder, 
+            l.expires_at = datetime() + duration({seconds: $ttl}),
+            l.updated_at = datetime()
+        RETURN count(l) > 0 as success
+        """
+        try:
+            results = await self.query_graph(query, {
+                "name": lock_name,
+                "holder": holder_id,
+                "ttl": ttl_seconds
+            })
+            return results[0]["success"] if results else False
+        except Exception as e:
+            logger.error(f"Kilit alma hatası ({lock_name}): {e}")
+            return False
+
+    async def release_lock(self, lock_name: str, holder_id: str) -> bool:
+        """
+        Kilidi serbest bırakır.
+        """
+        query = """
+        MATCH (l:SchedulerLock {name: $name, holder: $holder})
+        SET l.holder = null, l.expires_at = null
+        RETURN count(l) > 0 as success
+        """
+        try:
+            results = await self.query_graph(query, {"name": lock_name, "holder": holder_id})
+            return results[0]["success"] if results else False
+        except Exception as e:
+            logger.error(f"Kilit bırakma hatası ({lock_name}): {e}")
+            return False
+
 # Tekil örnek
 neo4j_manager = Neo4jManager()
