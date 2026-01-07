@@ -265,14 +265,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         await neo4j_manager.append_turn(user_id, session_id, "assistant", response_text)
         
         # RC-3/4: Episodic Memory Trigger (Her 20 turn'de bir)
-        count = await neo4j_manager.count_turns(user_id, session_id)
-        if count > 0 and count % 20 == 0:
-            logger.info(f"RC-4: Episodic PENDING trigger for session {session_id} (count: {count})")
-            # Prod Safety: Sadece PENDING oluştur, özetleme worker'da yapılacak.
-            await neo4j_manager.create_episode_pending(
-                user_id, session_id, 
-                count-19, count
-            )
+        await _maybe_trigger_episodic_memory(user_id, session_id)
         
         record.dag_execution_ms = exec_ms
         record.synthesis_ms = synth_ms
@@ -708,3 +701,16 @@ async def root():
 
 if UI_PATH.exists():
     app.mount("/static", StaticFiles(directory=str(UI_PATH)), name="static")
+
+async def _maybe_trigger_episodic_memory(user_id: str, session_id: str):
+    """
+    Her 20 konuşma turunda bir PENDING episod oluşturur. (RC-4 Refactor)
+    """
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    count = await neo4j_manager.count_turns(user_id, session_id)
+    if count > 0 and count % 20 == 0:
+        logger.info(f"RC-4: Episodic PENDING trigger for session {session_id} (count: {count})")
+        await neo4j_manager.create_episode_pending(
+            user_id, session_id, 
+            count-19, count
+        )

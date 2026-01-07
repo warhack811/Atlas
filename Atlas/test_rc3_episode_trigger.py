@@ -1,53 +1,34 @@
 import unittest
-from unittest.mock import patch, AsyncMock, MagicMock
-import asyncio
+from unittest.mock import patch, AsyncMock
+from Atlas.api import _maybe_trigger_episodic_memory
 
-class TestRC3EpisodeTrigger(unittest.TestCase):
+class TestRC3EpisodeTrigger(unittest.IsolatedAsyncioTestCase):
     """
-    Extremely isolated test for RC-3 Episode Trigger.
+    RC-3 Episodic Trigger testinin RC-4 standardına göre stabilizasyonu.
+    Helper fonksiyonu direkt test ederek event loop çakışmalarını önler.
     """
 
-    @patch('Atlas.memory.neo4j_manager.neo4j_manager.ensure_user_session', new_callable=AsyncMock)
-    @patch('Atlas.memory.neo4j_manager.neo4j_manager.append_turn', new_callable=AsyncMock)
     @patch('Atlas.memory.neo4j_manager.neo4j_manager.count_turns', new_callable=AsyncMock)
     @patch('Atlas.memory.neo4j_manager.neo4j_manager.create_episode_pending', new_callable=AsyncMock)
-    @patch('Atlas.orchestrator.orchestrator.plan', new_callable=AsyncMock)
-    @patch('Atlas.dag_executor.dag_executor.execute_plan', new_callable=AsyncMock)
-    @patch('Atlas.synthesizer.synthesizer.synthesize', new_callable=AsyncMock)
-    @patch('Atlas.rdr.save_rdr')
-    def test_episode_trigger_at_20_turns(self, mock_rdr, mock_synth, mock_exec, mock_plan, mock_ep, mock_count, mock_append, mock_ensure):
+    async def test_trigger_at_20_turns(self, mock_create, mock_count):
+        # Case 1: Tam 20 turn olduğunda tetiklenmeli
+        mock_count.return_value = 20
+        await _maybe_trigger_episodic_memory("user_1", "session_1")
         
-        # Local import to avoid top-level loop issues
-        from Atlas.api import chat, ChatRequest
+        self.assertTrue(mock_create.called)
+        args, _ = mock_create.call_args
+        # create_episode_pending(user_id, session_id, start_turn, end_turn)
+        self.assertEqual(args[2], 1)  # start_turn (20-19)
+        self.assertEqual(args[3], 20) # end_turn
+
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.count_turns', new_callable=AsyncMock)
+    @patch('Atlas.memory.neo4j_manager.neo4j_manager.create_episode_pending', new_callable=AsyncMock)
+    async def test_no_trigger_at_19_turns(self, mock_create, mock_count):
+        # Case 2: 19 turn olduğunda tetiklenmemeli
+        mock_count.return_value = 19
+        await _maybe_trigger_episodic_memory("user_1", "session_1")
         
-        async def run_test():
-            mock_count.return_value = 20
-            mock_synth.return_value = ("Yanıt", "model-x", "prompt", {"persona": "default"})
-            mock_exec.return_value = []
-            
-            plan_mock = MagicMock()
-            plan_mock.active_intent = "test"
-            plan_mock.user_thought = "..."
-            mock_plan.return_value = plan_mock
-            
-            request = ChatRequest(message="hello", session_id="s_test")
-            mock_bt = MagicMock()
-            
-            await chat(request, mock_bt)
-            return mock_ep.called, mock_ep.call_args
-
-        # Use a new loop to be sure
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            called, call_args = loop.run_until_complete(run_test())
-        finally:
-            loop.close()
-
-        self.assertTrue(called)
-        args, kwargs = call_args
-        self.assertEqual(args[2], 1)
-        self.assertEqual(args[3], 20)
+        self.assertFalse(mock_create.called)
 
 if __name__ == "__main__":
     unittest.main()
