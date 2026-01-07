@@ -85,7 +85,7 @@ async def keep_alive_pulse():
 async def startup_event():
     """Uygulama başladığında çalışacak görevler."""
     from Atlas.scheduler import start_scheduler
-    start_scheduler()
+    await start_scheduler()
     
     # Arka plan görevlerini ve veritabanı canlılık sinyalini başlat
     asyncio.create_task(keep_alive_pulse())
