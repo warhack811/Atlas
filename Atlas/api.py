@@ -64,6 +64,27 @@ class ChatResponse(BaseModel):
     session_id: str
     rdr: dict
 
+def serialize_neo4j_value(v):
+    """Neo4j'den gelen datetime ve diğer karmaşık nesneleri JSON uyumlu hale getirir."""
+    from neo4j.time import DateTime
+    if isinstance(v, DateTime):
+        return v.isoformat()
+    if isinstance(v, datetime):
+        return v.isoformat()
+    if isinstance(v, list):
+        return [serialize_neo4j_value(i) for i in v]
+    if isinstance(v, dict):
+        return {k: serialize_neo4j_value(val) for k, val in v.items()}
+    return v
+
+class NotificationAckRequest(BaseModel):
+    session_id: str
+    notification_id: str
+
+class TaskDoneRequest(BaseModel):
+    session_id: str
+    task_id: str
+
 
 async def keep_alive_pulse():
     """
@@ -145,7 +166,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         from Atlas.memory.context import ContextBuilder, build_memory_context_v3
         cb = ContextBuilder(session_id)
         
-        # FAZ6: Yeni v3 context packaging kullan
+        # FAZ6: Yeni v3 context packaging kullan (RC-1)
         neo4j_context = await build_memory_context_v3(session_id, user_message)
         cb.with_neo4j_context(neo4j_context)
         
@@ -277,11 +298,11 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
                 return
 
             classify_start = time.time()
-            # 1. Bellek ve Bağlam Hazırlığı - FAZ6: v3 context packaging
+            # 1. Bellek ve Bağlam Hazırlığı - RC-1: v3 context packaging
             from Atlas.memory.context import ContextBuilder, build_memory_context_v3
             cb = ContextBuilder(session_id)
             
-            # FAZ6: Yeni v3 context packaging kullan
+            # RC-1: v3 context packaging
             graph_context = await build_memory_context_v3(session_id, request.message)
             cb.with_neo4j_context(graph_context)
             
@@ -468,6 +489,41 @@ async def health():
         "available_keys": KeyManager.get_available_count(),
         "key_stats": KeyManager.get_stats()
     }
+
+
+# --- FAZ 7: Bildirim ve Görev Yönetimi ---
+
+@app.get("/api/notifications")
+async def get_notifications(session_id: str):
+    """Kullanıcının bekleyen bildirimlerini getirir (FAZ7)."""
+    from Atlas.observer import observer
+    notifications = await observer.get_notifications(session_id)
+    # RC-1: JSON serialization safety
+    safe_notifications = serialize_neo4j_value(notifications)
+    return {"notifications": safe_notifications}
+
+@app.post("/api/notifications/ack")
+async def acknowledge_notification(request: NotificationAckRequest):
+    """Bildirimi okundu olarak işaretler (FAZ7)."""
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    success = await neo4j_manager.acknowledge_notification(request.session_id, request.notification_id)
+    return {"status": "success" if success else "error"}
+
+@app.get("/api/tasks")
+async def get_tasks(session_id: str):
+    """Kullanıcının açık görevlerini listeler (FAZ7)."""
+    from Atlas.memory.prospective_store import list_open_tasks
+    tasks = await list_open_tasks(session_id)
+    # RC-1: JSON serialization safety
+    safe_tasks = serialize_neo4j_value(tasks)
+    return {"tasks": safe_tasks}
+
+@app.post("/api/tasks/done")
+async def complete_task(request: TaskDoneRequest):
+    """Görevi tamamlandı olarak işaretler (FAZ7)."""
+    from Atlas.memory.prospective_store import mark_task_done
+    success = await mark_task_done(request.session_id, request.task_id)
+    return {"status": "success" if success else "error"}
 
 
 @app.get("/api/arena/leaderboard")
