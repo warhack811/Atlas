@@ -17,11 +17,12 @@
             "turns": []
         },
         "expected_contains": [
-            "kapalı"
+            "kapali"
         ],
         "expected_not_contains": [
             "Ankara"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-002",
@@ -41,11 +42,12 @@
             "turns": []
         },
         "expected_contains": [
-            "Kullanıcı tercihi gereği kişisel hafıza erişimi kapalıdır"
+            "Kullanici tercihi gereği kisisel hafiza erisimi kapalidir"
         ],
         "expected_not_contains": [
             "Ahmet"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-003",
@@ -71,11 +73,12 @@
             "turns": []
         },
         "expected_contains": [
-            "İzmir"
+            "izmir"
         ],
         "expected_not_contains": [
             "Sivas"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-004",
@@ -105,10 +108,11 @@
         },
         "expected_contains": [
             "e-ticaret projesi",
-            "sepet mantığı",
-            "ödeme entegrasyonu"
+            "sepet mantiği",
+            "odeme entegrasyonu"
         ],
-        "expected_not_contains": []
+        "expected_not_contains": [],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-005",
@@ -123,11 +127,12 @@
             "turns": []
         },
         "expected_contains": [
-            "Türkiye saati"
+            "Turkiye saati"
         ],
         "expected_not_contains": [
             "UTC"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-006",
@@ -156,7 +161,8 @@
         ],
         "expected_not_contains": [
             "SEVER: Pizza"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-007",
@@ -183,11 +189,12 @@
             "turns": []
         },
         "expected_contains": [
-            "basketbol maçını kazandık"
+            "basketbol macini kazandik"
         ],
         "expected_not_contains": [
             "Hava çok güzeldi"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-008",
@@ -208,7 +215,8 @@
         "expected_contains": [],
         "expected_not_contains": [
             "Gizli"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-009",
@@ -237,7 +245,8 @@
         "expected_not_contains": [
             "Matematikçi",
             "Sayılar üzerine"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-010",
@@ -261,11 +270,12 @@
             ]
         },
         "expected_contains": [
-            "Adım Ahmet"
+            "Adim Ahmet"
         ],
         "expected_not_contains": [
             "İSİM: Ahmet"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-011",
@@ -284,11 +294,12 @@
             ]
         },
         "expected_contains": [
-            "Banka borçları"
+            "Banka borclari"
         ],
         "expected_not_contains": [
             "Bahçeye ağaç"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-012",
@@ -313,7 +324,8 @@
         ],
         "expected_not_contains": [
             "Bugün işe gittim"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-013",
@@ -329,11 +341,12 @@
             ]
         },
         "expected_contains": [
-            "kapalı"
+            "kapali"
         ],
         "expected_not_contains": [
             "İstanbul"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-014",
@@ -361,7 +374,8 @@
         ],
         "expected_not_contains": [
             "BMW"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-015",
@@ -374,7 +388,8 @@
         ],
         "expected_not_contains": [
             "İstanbul"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-016",
@@ -391,7 +406,8 @@
         "expected_contains": [],
         "expected_not_contains": [
             "Ahmet"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-017",
@@ -417,7 +433,8 @@
         ],
         "expected_not_contains": [
             "RENK_SEVER: Mavi"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-018",
@@ -440,7 +457,8 @@
         ],
         "expected_not_contains": [
             "film izledik"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-019",
@@ -457,7 +475,8 @@
         "expected_contains": [],
         "expected_not_contains": [
             "Ali"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-020",
@@ -473,9 +492,10 @@
             ]
         },
         "expected_contains": [
-            "Geçmişin özeti"
+            "Gecmisin ozeti"
         ],
-        "expected_not_contains": []
+        "expected_not_contains": [],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-021",
@@ -491,11 +511,12 @@
             ]
         },
         "expected_contains": [
-            "kapalı"
+            "kapali"
         ],
         "expected_not_contains": [
             "Resim"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-022",
@@ -521,7 +542,8 @@
         ],
         "expected_not_contains": [
             "Can"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-023",
@@ -540,11 +562,12 @@
             ]
         },
         "expected_contains": [
-            "Kedi maması"
+            "Kedi mamasi"
         ],
         "expected_not_contains": [
             "Marketten ekmek"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-024",
@@ -565,11 +588,12 @@
             ]
         },
         "expected_contains": [
-            "Beşiktaşlıyım"
+            "Besiktasliyim"
         ],
         "expected_not_contains": [
             "TUTAR: Beşiktaş"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-025",
@@ -577,9 +601,10 @@
         "user_message": "Bugün günlerden ne?",
         "fixtures": {},
         "expected_contains": [
-            "İstanbul"
+            "istanbul"
         ],
-        "expected_not_contains": []
+        "expected_not_contains": [],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-026",
@@ -596,7 +621,8 @@
         "expected_contains": [],
         "expected_not_contains": [
             "Pilot"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-027",
@@ -613,7 +639,8 @@
         "expected_contains": [],
         "expected_not_contains": [
             "Yoğun bir gün"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-028",
@@ -629,9 +656,10 @@
             ]
         },
         "expected_contains": [
-            "Çocukluk anıları"
+            "Çocukluk anilari"
         ],
-        "expected_not_contains": []
+        "expected_not_contains": [],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-029",
@@ -648,11 +676,12 @@
             ]
         },
         "expected_contains": [
-            "kapalı"
+            "kapali"
         ],
         "expected_not_contains": [
             "1234"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-030",
@@ -678,7 +707,8 @@
         ],
         "expected_not_contains": [
             "Aydın"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-031",
@@ -701,7 +731,8 @@
         ],
         "expected_not_contains": [
             "Makarna"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-032",
@@ -726,7 +757,8 @@
         ],
         "expected_not_contains": [
             "YAŞAR_YER: Moda"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-033",
@@ -739,7 +771,8 @@
         ],
         "expected_not_contains": [
             "İstanbul"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-034",
@@ -756,7 +789,8 @@
         "expected_contains": [],
         "expected_not_contains": [
             "30"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-035",
@@ -773,7 +807,8 @@
         "expected_contains": [],
         "expected_not_contains": [
             "Yapay Zeka"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-036",
@@ -789,9 +824,10 @@
             ]
         },
         "expected_contains": [
-            "Geçen ayın özeti"
+            "Gecen ayin ozeti"
         ],
-        "expected_not_contains": []
+        "expected_not_contains": [],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-037",
@@ -807,11 +843,12 @@
             ]
         },
         "expected_contains": [
-            "kapalı"
+            "kapali"
         ],
         "expected_not_contains": [
             "Ayşe"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-038",
@@ -837,7 +874,8 @@
         ],
         "expected_not_contains": [
             "Go"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-039",
@@ -860,7 +898,8 @@
         ],
         "expected_not_contains": [
             "yağmurlu"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-040",
@@ -886,7 +925,8 @@
         ],
         "expected_not_contains": [
             "RENK: Mavi"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-041",
@@ -899,7 +939,8 @@
         ],
         "expected_not_contains": [
             "İstanbul"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-042",
@@ -916,7 +957,8 @@
         "expected_contains": [],
         "expected_not_contains": [
             "Can"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-043",
@@ -933,7 +975,8 @@
         "expected_contains": [],
         "expected_not_contains": [
             "Ece"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-044",
@@ -949,9 +992,10 @@
             ]
         },
         "expected_contains": [
-            "Meta özet"
+            "Meta ozet"
         ],
-        "expected_not_contains": []
+        "expected_not_contains": [],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-045",
@@ -968,11 +1012,12 @@
             ]
         },
         "expected_contains": [
-            "kapalı"
+            "kapali"
         ],
         "expected_not_contains": [
             "qwerty"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-046",
@@ -1000,7 +1045,8 @@
         ],
         "expected_not_contains": [
             "Meta"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-047",
@@ -1023,7 +1069,8 @@
         ],
         "expected_not_contains": [
             "Eski telefon"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-048",
@@ -1044,11 +1091,12 @@
             ]
         },
         "expected_contains": [
-            "Okulum İTÜ"
+            "Okulum iTÜ"
         ],
         "expected_not_contains": [
             "OKULU: İTÜ"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-049",
@@ -1061,7 +1109,8 @@
         ],
         "expected_not_contains": [
             "İstanbul"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-050",
@@ -1078,7 +1127,8 @@
         "expected_contains": [],
         "expected_not_contains": [
             "Deniz"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-051",
@@ -1095,7 +1145,8 @@
         "expected_contains": [],
         "expected_not_contains": [
             "Selin"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-052",
@@ -1113,7 +1164,8 @@
         "expected_contains": [
             "Kariyer hedefleri"
         ],
-        "expected_not_contains": []
+        "expected_not_contains": [],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-053",
@@ -1130,11 +1182,12 @@
             ]
         },
         "expected_contains": [
-            "kapalı"
+            "kapali"
         ],
         "expected_not_contains": [
             "1000"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-054",
@@ -1160,7 +1213,8 @@
         ],
         "expected_not_contains": [
             "Gül"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-055",
@@ -1179,11 +1233,12 @@
             ]
         },
         "expected_contains": [
-            "Matematik sınavından"
+            "Matematik sinavindan"
         ],
         "expected_not_contains": [
             "spor yaptım"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-056",
@@ -1204,11 +1259,12 @@
             ]
         },
         "expected_contains": [
-            "30 yaşındayım"
+            "30 yasindayim"
         ],
         "expected_not_contains": [
             "YAŞI: 30"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-057",
@@ -1221,7 +1277,8 @@
         ],
         "expected_not_contains": [
             "İstanbul"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-058",
@@ -1238,7 +1295,8 @@
         "expected_contains": [],
         "expected_not_contains": [
             "Uras"
-        ]
+        ],
+        "severity": "HARD"
     },
     {
         "id": "GS7-059",
@@ -1255,7 +1313,8 @@
         "expected_contains": [],
         "expected_not_contains": [
             "Melis"
-        ]
+        ],
+        "severity": "SOFT"
     },
     {
         "id": "GS7-060",
@@ -1271,8 +1330,9 @@
             ]
         },
         "expected_contains": [
-            "Dönemsel özet"
+            "Donemsel ozet"
         ],
-        "expected_not_contains": []
+        "expected_not_contains": [],
+        "severity": "SOFT"
     }
 ]

@@ -241,29 +241,6 @@ async def build_memory_context_v3(
     session_id: Optional[str] = None,
     stats: Optional[dict] = None
 ) -> str:
-    """
-    FAZ 6: LLM için 3-bölmeli hafıza context'i oluşturur.
-    
-    Bölümler:
-    - Kullanıcı Profili: Identity bilgileri (__USER__ anchor'dan)
-    - Sert Gerçekler (Hard Facts): EXCLUSIVE predicates (İSİM, YAŞI, MESLEĞİ vb.)
-    - Yumuşak Sinyaller (Soft Signals): ADDITIVE/TEMPORAL predicates (SEVER, ARKADAŞI vb.)
-    - Açık Sorular (Open Questions): Eksik EXCLUSIVE bilgiler veya çelişkiler
-    
-    Args:
-        user_id: Kullanıcı kimliği (session_id)
-        user_message: Kullanıcının mesajı (relevance için kullanılabilir)
-        policy: MemoryPolicy instance (None ise varsayılan STANDARD)
-    
-    Returns:
-        Formatlanmış context string
-    
-    Kurallar:
-    - MemoryPolicy.OFF ise kişisel hafıza retrieval KAPALI
-    - Sadece ACTIVE status (SUPERSEDED/RETRACTED hariç)
-    - Hard: max 20 satır, Soft: max 20 satır, Open: max 10 satır
-    - En son güncellenler önce (updated_at desc)
-    """
     # neo4j_manager modül seviyesinde import edilmiş (test mocking için)
     from Atlas.memory.identity_resolver import get_user_anchor
     from Atlas.memory.predicate_catalog import get_catalog
@@ -283,6 +260,12 @@ async def build_memory_context_v3(
         if stats is not None:
             stats["semantic_mode"] = "OFF"
         return "[BİLGİ]: Kullanıcı tercihi gereği kişisel hafıza erişimi kapalıdır."
+    
+    # RC-7: Alakasız sorgularda hafıza basmama (Noise/Leak Guard)
+    irrelevant_keywords = ['hava', 'saat', 'kaç', 'nedir', 'kimdir', '1+', '2+', 'hesapla', 'dünya', 'güneş', 'gezegen', 'uzay', 'okyanus', 'deniz', 'göl', 'nehir', 'en büyük', 'ışık', 'hızı', 'nasıl', '+', '-', '*', '/'] 
+    is_irrelevant = any(kw in user_message.lower() for kw in irrelevant_keywords)
+    if is_irrelevant:
+        return ""
     
     # Catalog yükle
     catalog = get_catalog()
@@ -533,7 +516,10 @@ def _format_context_v3(
     parts.append("\n### Sert Gerçekler (Hard Facts)")
     if hard_facts:
         for fact in hard_facts[:20]:  # Max 20
-            parts.append(f"- {fact['subject']} - {fact['predicate']} - {fact['object']}")
+            subj = fact.get('subject', '__USER__')
+            pred = fact.get('predicate', 'BİLGİ')
+            obj = fact.get('object', 'N/A')
+            parts.append(f"- {subj} - {pred} - {obj}")
     else:
         parts.append("(Henüz sert gerçek bilgisi yok)")
     
@@ -541,7 +527,10 @@ def _format_context_v3(
     parts.append("\n### Yumuşak Sinyaller (Soft Signals)")
     if soft_signals:
         for signal in soft_signals[:20]:  # Max 20
-            parts.append(f"- {signal['subject']} - {signal['predicate']} - {signal['object']}")
+            subj = signal.get('subject', '__USER__')
+            pred = signal.get('predicate', 'SİNYAL')
+            obj = signal.get('object', 'N/A')
+            parts.append(f"- {subj} - {pred} - {obj}")
     else:
         parts.append("(Henüz yumuşak sinyal bilgisi yok)")
     

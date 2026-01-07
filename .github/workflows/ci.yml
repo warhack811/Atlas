@@ -33,3 +33,10 @@ jobs:
           python -m unittest Atlas.test_rc6_pruning Atlas.test_rc6_consolidation -v
           python -m unittest Atlas.test_rc4_episode_worker Atlas.test_rc3_episode_trigger -v
           python -m unittest Atlas.test_rc2_identity -v
+
+      - name: Upload Metrics
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: golden-set-metrics
+          path: C:\Users\admin\AppData\Local\Temp\*_rc7_metrics.json

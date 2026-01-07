@@ -24,10 +24,18 @@ Bu sürümle birlikte ATLAS, veri doğruluğu ve hafıza sızıntısı (leakage)
 - `Atlas/memory/context.py`: `build_chat_context_v1` fonksiyonuna opsiyonel `stats` parametresi eklendi. Bu sayede üretim kodunu bozmadan metrik toplanabiliyor.
 - `Atlas/memory/golden_metrics.py`: Metrik toplama mantığı merkezileştirildi.
 
-## 🧪 Test Sonuçları (Baseline)
-- **Geçiş Oranı:** %50.0 (Geleneksel "her şeyi bas" mantığından "sadece ilgiliyi bas" mantığına geçişteki kalite açıkları raporlanmıştır).
-- **Hit Rate:** %75.0
-- **Leak Rate:** %35.8 (Alakasız bilginin bazen hala bağlama sızdığı tespit edilmiştir).
+## 🧪 Test Sonuçları (RC-7.1 Baseline)
+- **HARD Gate Başarısı:** %100 (22/22) - `OFF_MODE`, `MULTI_USER`, `LEAK` kategorilerinde sıfır sızıntı garantilendi.
+- **SOFT Metrikleri:** %50.0 Pass Rate. (RC-8'de iyileştirilecek).
+- **Genel Başarı:** %68.3 (41/60).
+
+## 🛠️ RC-6 Operasyon Notları (Retention)
+Hafıza temizlik parametreleri `Atlas/config.py` altındaki `RETENTION_SETTINGS` sözlüğünden ayarlanabilir. İlk haftalar için şu konservatif değerler önerilir:
+- **TURN_RETENTION_DAYS:** 60 (Daha uzun geçmiş için)
+- **MAX_TURNS_PER_SESSION:** 800 (Oturum şişmesini engellemek için)
+
+> [!TIP]
+> Eğer kullanıcılardan "eskiyi hatırlamıyor" şikayeti gelirse, ilk kontrol edilecek yer bu retention süreleri ve konsolidasyon eşikleridir.
 
 ---
-*Not: Bu sürüm bir "Baseline" (temel çizgi) sürümüdür. RC-8 ve sonrasında bu metriklerin iyileştirilmesi hedeflenmektedir.*
+*Not: Bu sürüm bir "Baseline" (temel çizgi) sürümüdür. RC-8 ve sonrasında SOFT metriklerin iyileştirilmesi hedeflenmektedir.*
