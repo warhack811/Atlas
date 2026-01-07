@@ -8,15 +8,19 @@ class TestRC2Forget(unittest.IsolatedAsyncioTestCase):
 
     @patch('Atlas.memory.neo4j_manager.Neo4jManager.query_graph', new_callable=AsyncMock)
     async def test_forget_all_query_structure(self, mock_query):
-        # We test if the query targets relationships, not nodes
-        query = "MATCH (u:User {id: $uid})-[r:HAS_FACT|KNOWS|HAS_TASK|HAS_NOTIFICATION]->() DELETE r"
-        # Simulate logic from api.py
+        # api.py'daki gerçek sorgu yapısını simüle et
+        query = """
+        MATCH (u:User {id: $uid})-[r:KNOWS|HAS_TASK|HAS_NOTIFICATION|HAS_SESSION|HAS_ANCHOR|HAS_FACT]->() DELETE r
+        WITH 1 as dummy
+        MATCH ()-[r:FACT {user_id: $uid}]->() DELETE r
+        """
         await self.manager.query_graph(query, {"uid": "u1"})
         
         args = mock_query.call_args[0]
         self.assertIn("DELETE r", args[0])
-        self.assertIn(":HAS_FACT|KNOWS|HAS_TASK|HAS_NOTIFICATION", args[0])
-        self.assertNotIn("DETACH DELETE u", args[0]) # Should not delete user node
+        self.assertIn(":KNOWS|HAS_TASK|HAS_NOTIFICATION|HAS_SESSION|HAS_ANCHOR|HAS_FACT", args[0])
+        self.assertIn(":FACT {user_id: $uid}", args[0])
+        self.assertNotIn("DETACH DELETE u", args[0]) # Node silinmemeli
 
 if __name__ == "__main__":
     unittest.main()
