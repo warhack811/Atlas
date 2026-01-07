@@ -53,8 +53,11 @@ class TestRC5GoldenSet(unittest.IsolatedAsyncioTestCase):
                     for s in scene.get("expected_not_contains", []):
                         self.assertNotIn(s.lower(), context.lower(), f"Failed {scene['id']}: Unexpected '{s}' FOUND")
                 except AssertionError as e:
-                    with open("debug_context.txt", "a", encoding="utf-8") as f:
+                    import tempfile
+                    debug_path = os.path.join(tempfile.gettempdir(), f"debug_context_{scene['id']}.txt")
+                    with open(debug_path, "w", encoding="utf-8") as f:
                         f.write(f"\n--- FAILED SCENARIO: {scene['id']} ---\nCONTEXT:\n{context}\n-------------------\n")
+                    print(f"\n[!] Scenario {scene['id']} failed. Debug info saved to: {debug_path}")
                     raise e
 
 if __name__ == "__main__":
