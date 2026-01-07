@@ -13,13 +13,16 @@ logger = logging.getLogger(__name__)
 async def scan_due_tasks(user_id: str):
     """
     Kullanıcının zamanı gelen görevlerini tarar ve bildirim oluşturur.
+    FAZ7-R: String kıyaslaması yerine datetime() kullanımı ve cooldown (60 dk) eklendi.
     """
     now_iso = datetime.now().isoformat()
     
-    # Zamanı gelmiş (due_at_dt <= now) ve hala OPEN olan görevleri bul
+    # Zamanı gelmiş (due_at_dt <= now), hala OPEN olan ve 60 dk içinde uyarılmamış görevleri bul
     query = """
     MATCH (u:User {id: $uid})-[:HAS_TASK]->(t:Task {status: 'OPEN'})
-    WHERE t.due_at_dt IS NOT NULL AND t.due_at_dt <= $now
+    WHERE t.due_at_dt IS NOT NULL 
+      AND datetime(t.due_at_dt) <= datetime($now)
+      AND (t.last_notified_at IS NULL OR duration.between(datetime(t.last_notified_at), datetime()).minutes >= 60)
     RETURN t.id as id, t.raw_text as text, t.due_at_raw as due_raw
     """
     
@@ -38,14 +41,12 @@ async def scan_due_tasks(user_id: str):
             
             notif_id = await neo4j_manager.create_notification(user_id, notif_data)
             if notif_id:
-                # Bildirim oluştuktan sonra task'ı 'NOTIFIED' veya benzeri bir ara statüye çekebiliriz
-                # veya aynı bildirimin tekrar tekrar gitmemesi için işaretlemeliyiz.
-                # Şimdilik basitleştirmek için task status'u 'DUE' yapalım.
+                # FAZ7-R: Task OPEN kalmaya devam eder, sadece last_notified_at güncellenir
                 await neo4j_manager.query_graph(
-                    "MATCH (t:Task {id: $tid}) SET t.status = 'NOTIFIED', t.notified_at = datetime()",
+                    "MATCH (t:Task {id: $tid}) SET t.last_notified_at = datetime()",
                     {"tid": task['id']}
                 )
-                logger.info(f"DueScanner: {user_id} için görev uyarısı oluşturuldu: {task['id']}")
+                logger.info(f"DueScanner: {user_id} için görev uyarısı oluşturuldu (veya güncellendi): {task['id']}")
                 
     except Exception as e:
         logger.error(f"DueScanner hatası: {e}")

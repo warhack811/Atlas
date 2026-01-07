@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+import uuid
 from typing import List, Dict, Any, Optional
 from neo4j import AsyncGraphDatabase
 from neo4j.exceptions import ServiceUnavailable, SessionExpired
@@ -262,7 +263,7 @@ class Neo4jManager:
         """
         Yeni bir bildirim (Notification) oluşturur ve kullanıcıya bağlar. (FAZ7)
         """
-        notification_id = f"notif_{int(time.time())}"
+        notification_id = f"notif_{uuid.uuid4().hex[:12]}"
         query = """
         MATCH (u:User {id: $uid})
         CREATE (n:Notification {
@@ -364,7 +365,7 @@ class Neo4jManager:
                 "mode": res.get("mode", "STANDARD"),
                 "quiet_start": res.get("quiet_start"),
                 "quiet_end": res.get("quiet_end"),
-                "max_daily": res.get("max_daily", 5)
+                "max_daily": res.get("max_daily") if res.get("max_daily") is not None else 5
             }
         except Exception as e:
             logger.error(f"Bildirim ayarları getirme hatası: {e}")
