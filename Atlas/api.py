@@ -557,36 +557,47 @@ async def health():
 # --- FAZ 7: Bildirim ve Görev Yönetimi ---
 
 @app.get("/api/notifications")
-async def get_notifications(session_id: str):
-    """Kullanıcının bekleyen bildirimlerini getirir (FAZ7)."""
+async def get_notifications(session_id: str, user_id: Optional[str] = None):
+    """Kullanıcının bekleyen bildirimlerini getirir (FAZ7/RC-2)."""
+    uid = user_id if user_id else session_id
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    await neo4j_manager.ensure_user_session(uid, session_id)
+    
     from Atlas.observer import observer
-    notifications = await observer.get_notifications(session_id)
+    notifications = await observer.get_notifications(uid)
     # RC-1: JSON serialization safety
     safe_notifications = serialize_neo4j_value(notifications)
-    return {"notifications": safe_notifications}
+    return {"notifications": safe_notifications, "user_id": uid}
 
 @app.post("/api/notifications/ack")
-async def acknowledge_notification(request: NotificationAckRequest):
-    """Bildirimi okundu olarak işaretler (FAZ7)."""
+async def acknowledge_notification(request: NotificationAckRequest, user_id: Optional[str] = None):
+    """Bildirimi okundu olarak işaretler (FAZ7/RC-2)."""
+    uid = user_id if user_id else request.session_id
     from Atlas.memory.neo4j_manager import neo4j_manager
-    success = await neo4j_manager.acknowledge_notification(request.session_id, request.notification_id)
-    return {"status": "success" if success else "error"}
+    success = await neo4j_manager.acknowledge_notification(uid, request.notification_id)
+    return {"status": "success" if success else "error", "user_id": uid}
 
 @app.get("/api/tasks")
-async def get_tasks(session_id: str):
-    """Kullanıcının açık görevlerini listeler (FAZ7)."""
+async def get_tasks(session_id: str, user_id: Optional[str] = None):
+    """Kullanıcının açık görevlerini listeler (FAZ7/RC-2)."""
+    uid = user_id if user_id else session_id
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    await neo4j_manager.ensure_user_session(uid, session_id)
+    
     from Atlas.memory.prospective_store import list_open_tasks
-    tasks = await list_open_tasks(session_id)
+    tasks = await list_open_tasks(uid)
     # RC-1: JSON serialization safety
     safe_tasks = serialize_neo4j_value(tasks)
-    return {"tasks": safe_tasks}
+    return {"tasks": safe_tasks, "user_id": uid}
 
 @app.post("/api/tasks/done")
-async def complete_task(request: TaskDoneRequest):
-    """Görevi tamamlandı olarak işaretler (FAZ7)."""
+async def complete_task(request: TaskDoneRequest, user_id: Optional[str] = None):
+    """Görevi tamamlandı olarak işaretler (FAZ7/RC-2)."""
+    uid = user_id if user_id else request.session_id
+    from Atlas.memory.neo4j_manager import neo4j_manager
     from Atlas.memory.prospective_store import mark_task_done
-    success = await mark_task_done(request.session_id, request.task_id)
-    return {"status": "success" if success else "error"}
+    success = await mark_task_done(uid, request.task_id)
+    return {"status": "success" if success else "error", "user_id": uid}
 
 # --- RC-2: Bellek Kontrol Endpoint'leri ---
 

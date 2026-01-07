@@ -28,6 +28,14 @@ async def scan_due_tasks(user_id: str):
         due_tasks = await neo4j_manager.query_graph(query, {"uid": user_id})
         
         for task in due_tasks:
+            # RC-2 Hardening: Gatekeeping kontrolü
+            from Atlas.notification_gatekeeper import should_emit_notification
+            is_allowed, reason = await should_emit_notification(user_id, neo4j_manager)
+            
+            if not is_allowed:
+                logger.info(f"DueScanner GATEKEEPER: {user_id} için bildirim engellendi. Sebep: {reason}")
+                continue
+
             # Bildirim oluştur
             due_dt_str = str(task['due_dt_obj']) if task.get('due_dt_obj') else task['due_raw']
             notif_data = {
@@ -35,7 +43,7 @@ async def scan_due_tasks(user_id: str):
                 "type": "task_reminder",
                 "source": "due_scanner",
                 "related_task_id": task['id'],
-                "reason": f"Task deadline reached at {due_dt_str}. Status is still OPEN."
+                "reason": f"gate={reason}"
             }
             
             notif_id = await neo4j_manager.create_notification(user_id, notif_data)
