@@ -336,5 +336,55 @@ class Neo4jManager:
             logger.error(f"Bildirim onaylama hatası: {e}")
             return False
 
+    async def get_notification_settings(self, user_id: str) -> Dict[str, Any]:
+        """
+        Kullanıcının bildirim tercihlerini getirir. (FAZ7)
+        """
+        query = """
+        MATCH (u:User {id: $uid})
+        RETURN u.notifications_enabled as enabled,
+               u.notification_mode as mode,
+               u.quiet_hours_start as quiet_start,
+               u.quiet_hours_end as quiet_end,
+               u.max_notifications_per_day as max_daily
+        """
+        try:
+            results = await self.query_graph(query, {"uid": user_id})
+            if not results:
+                return {
+                    "enabled": False,
+                    "mode": "STANDARD",
+                    "quiet_start": None,
+                    "quiet_end": None,
+                    "max_daily": 5
+                }
+            res = results[0]
+            return {
+                "enabled": res.get("enabled", False),
+                "mode": res.get("mode", "STANDARD"),
+                "quiet_start": res.get("quiet_start"),
+                "quiet_end": res.get("quiet_end"),
+                "max_daily": res.get("max_daily", 5)
+            }
+        except Exception as e:
+            logger.error(f"Bildirim ayarları getirme hatası: {e}")
+            return {"enabled": False}
+
+    async def count_daily_notifications(self, user_id: str) -> int:
+        """
+        Kullanıcının bugün aldığı bildirim sayısını döndürür. (FAZ7)
+        """
+        query = """
+        MATCH (u:User {id: $uid})-[:HAS_NOTIFICATION]->(n:Notification)
+        WHERE n.created_at >= datetime({hour: 0, minute: 0, second: 0})
+        RETURN count(n) as daily_count
+        """
+        try:
+            results = await self.query_graph(query, {"uid": user_id})
+            return results[0]["daily_count"] if results else 0
+        except Exception as e:
+            logger.error(f"Günlük bildirim sayma hatası: {e}")
+            return 0
+
 # Tekil örnek
 neo4j_manager = Neo4jManager()
