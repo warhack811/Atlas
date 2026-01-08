@@ -162,7 +162,7 @@ MEMORY_CONFIDENCE_SETTINGS = {
 }
 
 # --- OPS & SAFETY (RC-8 Pilot) ---
-DEBUG = True  # Admin endpointları için (Purge vb.)
+DEBUG = False  # Admin endpointları için (Purge vb.)
 BYPASS_MEMORY_INJECTION = False  # True ise semantic+episodic kapalı
 BYPASS_ADAPTIVE_BUDGET = False   # True ise intent profilleri kapalı (standard profile)
 
