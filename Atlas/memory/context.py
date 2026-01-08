@@ -618,12 +618,27 @@ async def build_chat_context_v1(
         stats["episode_filtered_out_count"] = 0
 
     # 1. Niyet ve Bütçe (RC-8)
+    from Atlas.config import BYPASS_MEMORY_INJECTION, BYPASS_ADAPTIVE_BUDGET
+    
     intent = classify_intent_tr(user_message)
     if stats is not None: stats["intent"] = intent
 
     mode = await neo4j_manager.get_user_memory_mode(user_id)
-    budgeter = ContextBudgeter(mode=mode, intent=intent)
     
+    # Kill-switch: Adaptive budget bypass
+    effective_intent = intent if not BYPASS_ADAPTIVE_BUDGET else "MIXED"
+    budgeter = ContextBudgeter(mode=mode, intent=effective_intent)
+    
+    # Kill-switch: Memory injection bypass
+    if BYPASS_MEMORY_INJECTION:
+        turns = await neo4j_manager.get_recent_turns(user_id, session_id, limit=20)
+        lines = []
+        if turns:
+            for t in turns:
+                role = "Kullanıcı" if t["role"] == "user" else "Atlas"
+                lines.append(f"{role}: {t['content']}")
+        return f"[BİLGİ]: Bellek enjeksiyonu devre dışı bırakıldı.\n\nSON KONUŞMALAR:\n" + ("\n".join(lines) if lines else "(Henüz bu oturumda konuşma yapılmadı)")
+
     all_context_texts = [] # Dedupe havuzu
 
     # 2. Katmanlar (Transcript -> Semantic -> Episodic önceliği)

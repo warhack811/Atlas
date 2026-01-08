@@ -134,6 +134,11 @@ CONTEXT_BUDGET_PROFILES = {
     "MIXED":     {"transcript": 0.40, "episodic": 0.30, "semantic": 0.30},
 }
 
+# --- OPS & SAFETY (RC-8 Pilot) ---
+DEBUG = True  # Admin endpointları için (Purge vb.)
+BYPASS_MEMORY_INJECTION = False  # True ise semantic+episodic kapalı
+BYPASS_ADAPTIVE_BUDGET = False   # True ise intent profilleri kapalı (standard profile)
+
 # --- RETENTION & FORGETFULNESS (RC-6) ---
 RETENTION_SETTINGS = {
     "TURN_RETENTION_DAYS": 30,

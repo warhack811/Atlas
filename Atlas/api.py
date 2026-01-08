@@ -103,6 +103,9 @@ class TaskDoneRequest(BaseModel):
     session_id: str
     task_id: str
 
+class PurgeTestDataRequest(BaseModel):
+    user_id_prefix: str = "test_"
+
 
 async def keep_alive_pulse():
     """
@@ -678,6 +681,31 @@ async def get_arena_leaderboard():
     from Atlas.benchmark.store import arena_store
     results = arena_store.get_results()
     return {"results": results}
+
+@app.post("/api/admin/purge_test_data")
+async def purge_test_data(request: PurgeTestDataRequest):
+    """
+    Test verilerini temizler (SADECE DEBUG modunda).
+    User, Session, Turn, Episode, Task ve Notification node'larını siler.
+    Shared Entity node'larını simez.
+    """
+    from Atlas.config import DEBUG
+    if not DEBUG:
+        raise HTTPException(status_code=403, detail="Bu işlem sadece DEBUG modunda yapılabilir.")
+    
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    query = """
+    MATCH (u:User) WHERE u.id STARTS WITH $prefix
+    OPTIONAL MATCH (u)-[:HAS_SESSION|HAS_TASK|HAS_NOTIFICATION|HAS_ANCHOR]->(n)
+    OPTIONAL MATCH (n)-[:HAS_TURN|HAS_EPISODE]->(m)
+    DETACH DELETE u, n, m
+    """
+    try:
+        await neo4j_manager.query_graph(query, {"prefix": request.user_id_prefix})
+        return {"success": True, "message": f"Users starting with '{request.user_id_prefix}' purged."}
+    except Exception as e:
+        logger.error(f"Purge hatası: {e}")
+        return {"success": False, "error": str(e)}
 
 
 @app.get("/api/arena/questions")
