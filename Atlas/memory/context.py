@@ -321,6 +321,10 @@ async def build_memory_context_v3(
     if not catalog:
         return _build_minimal_context()
     
+    # RC-11: Trace Metrics initialization
+    if trace and not hasattr(trace, "metrics"):
+        trace.metrics = {"selected_facts_count": 0, "selected_signals_count": 0, "conflicts_detected_count": 0}
+
     # Anchor-based identity retrieval
     user_anchor = get_user_anchor(user_id)
     identity_facts = await _retrieve_identity_facts(user_id, user_anchor)
@@ -330,7 +334,11 @@ async def build_memory_context_v3(
     t_start = perf_counter()
     raw_hard_facts = await _retrieve_hard_facts(user_id, user_anchor, catalog)
     raw_soft_signals = await _retrieve_soft_signals(user_id, catalog)
-    if trace: trace.timings_ms["fetch_semantic_ms"] += (perf_counter() - t_start) * 1000
+    conflicts = await _retrieve_conflicts(user_id) # RC-11
+    
+    if trace: 
+        trace.timings_ms["fetch_semantic_ms"] += (perf_counter() - t_start) * 1000
+        trace.metrics["conflicts_detected_count"] = len(conflicts)
     
     # RC-8: Precision Filtering
     hard_facts = []
@@ -342,6 +350,7 @@ async def build_memory_context_v3(
         overlap = get_token_overlap(fact_str, user_message)
         if overlap > 0 or intent in ["PERSONAL", "TASK"]:
             hard_facts.append(fact)
+            if trace: trace.metrics["selected_facts_count"] += 1
         elif stats is not None:
              stats["semantic_filtered_out_count"] = stats.get("semantic_filtered_out_count", 0) + 1
 
@@ -350,15 +359,21 @@ async def build_memory_context_v3(
         overlap = get_token_overlap(sig_str, user_message)
         if overlap > 0 or intent == "PERSONAL":
             soft_signals.append(signal)
-            if trace: trace.selected["fact_ids"].append(str(signal.get('id', 'soft_signal')))
+            if trace: 
+                trace.selected["fact_ids"].append(str(signal.get('id', 'soft_signal')))
+                trace.metrics["selected_signals_count"] += 1
         elif stats is not None:
              stats["semantic_filtered_out_count"] = stats.get("semantic_filtered_out_count", 0) + 1
              if trace: trace.filtered_counts["semantic_filtered"] += 1
 
-    # Open Questions (eksik EXCLUSIVE'ler) - Sadece PERSONAL/TASK'ta göster
+    # Open Questions (eksik EXCLUSIVE'ler + RC-11 CONFLICTS)
     open_questions = []
     if intent in ["PERSONAL", "TASK", "MIXED"]:
         open_questions = _generate_open_questions(identity_facts, hard_facts, catalog)
+        # RC-11: Add conflicts to Open Questions
+        for c in conflicts:
+            # Daha kısa ve net format
+            open_questions.append(f"Hangi bilgi doğru? ({c['predicate']}): '{c['old_value']}' mi yoksa '{c['new_value']}' mi?")
     
     # Format oluştur
     return _format_context_v3(identity_facts, hard_facts, soft_signals, open_questions)
@@ -517,6 +532,40 @@ async def _retrieve_soft_signals(user_id: str, catalog) -> list:
         return []
 
 
+async def _retrieve_conflicts(user_id: str) -> list:
+    """
+    RC-11: Çelişkili bilgileri (CONFLICTED) çek.
+    """
+    query = """
+    MATCH (s:Entity)-[r:FACT {user_id: $uid, status: 'CONFLICTED'}]->(o:Entity)
+    RETURN r.predicate as predicate, o.name as value, r.updated_at as updated_at
+    ORDER BY r.predicate, r.updated_at DESC
+    """
+    try:
+        results = await neo4j_manager.query_graph(query, {"uid": user_id})
+        # Aynı predicate için birden fazla CONFLICTED varsa grupla
+        conflicts = []
+        by_pred = {}
+        for res in results:
+            pred = res["predicate"]
+            if pred not in by_pred: by_pred[pred] = []
+            by_pred[pred].append(res["value"])
+        
+        for pred, values in by_pred.items():
+            if len(values) >= 2:
+                conflicts.append({
+                    "predicate": pred,
+                    "old_value": values[1],
+                    "new_value": values[0]
+                })
+        if conflicts:
+            logger.info(f"RC-11: {len(conflicts)} adet çelişki Open Question'a dönüştürülecek")
+        return conflicts
+    except Exception as e:
+        logger.warning(f"RC-11 conflicts retrieval hatası: {e}")
+        return []
+
+
 def _generate_open_questions(identity_facts: list, hard_facts: list, catalog) -> list:
     """
     Açık soruları belirle.
@@ -582,7 +631,7 @@ def _format_context_v3(
     parts.append("### Kullanıcı Profili")
     if identity_facts:
         for fact in identity_facts[:10]:  # Max 10
-            parts.append(f"- {fact['predicate']}: {fact['object']}")
+            parts.append(f"- {fact.get('predicate', 'BİLGİ')}: {fact.get('object', 'N/A')}")
     else:
         parts.append("(Henüz kullanıcı profili bilgisi yok)")
     
@@ -725,7 +774,7 @@ async def build_chat_context_v1(
     # OFF modunda bütçe 0 olsa bile uyarıyı almak için içeri giriyoruz 
     # veya doğrudan build_memory_context_v3 çağırıyoruz.
     if mode == "OFF" or semantic_budget > 0:
-        memory_v3_raw = await build_memory_context_v3(user_id, user_message, session_id=session_id, stats=stats, intent=intent)
+        memory_v3_raw = await build_memory_context_v3(user_id, user_message, session_id=session_id, stats=stats, intent=intent, trace=trace)
         v3_lines = memory_v3_raw.split("\n")
         final_v3_lines = []
         current_v3_size = 0

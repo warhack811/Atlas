@@ -1,3 +1,4 @@
+import os
 import asyncio
 import logging
 import time
@@ -85,14 +86,15 @@ class Neo4jManager:
         catalog = get_catalog()
         new_triplets, supersede_ops = await resolve_conflicts(triplets, user_id, source_turn_id, catalog)
         
-        # Execute supersede operations first
+        # Execute supersede/conflict operations first
         for op in supersede_ops:
             await supersede_relationship(
                 op["user_id"],
                 op["subject"],
                 op["predicate"],
                 op["old_object"],
-                op["new_turn_id"]
+                op["new_turn_id"],
+                op.get("type", "SUPERSEDE")
             )
         
         # Then write new triplets
@@ -151,7 +153,7 @@ class Neo4jManager:
             r.updated_at = datetime(),
             // FAZ2: Provenance ve schema alanları (yeni relationship'ler için)
             r.schema_version = 2,
-            r.status = 'ACTIVE',
+            r.status = COALESCE(t.status, 'ACTIVE'),
             r.source_turn_id_first = $source_turn_id,
             r.source_turn_id_last = $source_turn_id,
             r.modality = 'ASSERTED',
@@ -161,18 +163,20 @@ class Neo4jManager:
         ON MATCH SET
             r.confidence = COALESCE(t.confidence, r.confidence),
             r.category = COALESCE(t.category, r.category),
+            r.status = COALESCE(t.status, r.status),
             r.updated_at = datetime(),
             // FAZ2: Güncelleme sırasında source_turn_id_last ve schema_version'ı güncelle
             r.source_turn_id_last = $source_turn_id,
-            r.schema_version = COALESCE(r.schema_version, 1)
+            r.schema_version = COALESCE(r.schema_version, 2)
         // User'ın Entity'yi bildiğini işaretle
         MERGE (u)-[:KNOWS]->(s)
         MERGE (u)-[:KNOWS]->(o)
         RETURN count(r)
         """
         
-        # FAZ2: source_turn_id parametresini query'ye ekle (şimdilik kullanılmıyor, FAZ2-2'de schema'ya eklenecek)
-        records = await self.query_graph(query, {"user_id": user_id, "triplets": normalized_triplets, "source_turn_id": source_turn_id})
+        # FAZ2: source_turn_id parametresini query'ye ekle
+        result = await tx.run(query, {"user_id": user_id, "triplets": normalized_triplets, "source_turn_id": source_turn_id})
+        records = await result.data()
         return records[0]['count(r)'] if records else 0
 
     async def delete_all_memory(self, user_id: str) -> bool:
@@ -200,19 +204,14 @@ class Neo4jManager:
             return False
 
     async def forget_fact(self, user_id: str, entity_name: str) -> int:
-        """Belirli bir varlık (Entity) ile ilgili kullanıcıya ait ilişkileri siler.
-        FAZ0.1-4: Entity node'u silinmez, sadece kullanıcıya ait FACT ve KNOWS ilişkileri silinir.
-        """
+        """Belirli bir varlık (Entity) ile ilgili kullanıcıya ait ilişkileri siler."""
         query = """
         MATCH (u:User {id: $uid})-[k:KNOWS]->(e:Entity {name: $ename})
-        // Önce bu entity ile kullanıcıya ait FACT ilişkilerini sil
         OPTIONAL MATCH (e)-[r:FACT {user_id: $uid}]->()
         DELETE r
         OPTIONAL MATCH ()-[r2:FACT {user_id: $uid}]->(e)
         DELETE r2
-        // Sonra KNOWS ilişkisini sil
         DELETE k
-        // Entity node'u SİLME - başka kullanıcılar kullanıyor olabilir
         RETURN count(k) as deleted_count
         """
         try:
@@ -223,6 +222,69 @@ class Neo4jManager:
         except Exception as e:
             logger.error(f"Bilgi unutma hatası: {e}")
             return 0
+
+    async def correct_memory(
+        self, 
+        user_id: str, 
+        target_type: str, 
+        predicate: str, 
+        new_value: Optional[str], 
+        mode: str, 
+        reason: Optional[str] = None,
+        subject_id: Optional[str] = None,
+        fact_id: Optional[str] = None
+    ):
+        """
+        Kullanıcı geri bildirimi ile hafızayı düzeltir (RC-11).
+        mode: 'replace' | 'retract'
+        """
+        # Scoping logic
+        match_clause = "(s:Entity)-[r:FACT {predicate: $pred, user_id: $uid}]->(o:Entity)"
+        if fact_id:
+            # RELATIONSHIP hex id veya custom id ile bulma (Neo4j elementId)
+            match_clause = "(s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity) WHERE elementId(r) = $fid"
+        elif subject_id:
+            match_clause = "(s:Entity {name: $sid})-[r:FACT {predicate: $pred, user_id: $uid}]->(o:Entity)"
+
+        if mode == "retract":
+            # İlişkiyi 'RETRACTED' yap
+            query = f"""
+            MATCH {match_clause}
+            WHERE r.status = 'ACTIVE' OR r.status IS NULL
+            SET r.status = 'RETRACTED',
+                r.retraction_reason = $reason,
+                r.updated_at = datetime()
+            RETURN count(r) as count
+            """
+            params = {"uid": user_id, "pred": predicate, "reason": reason, "sid": subject_id, "fid": fact_id}
+            result = await self.query_graph(query, params)
+            return result[0]["count"] if result else 0
+        
+        elif mode == "replace" and new_value:
+            # Önce aktifleri retract et, sonra yeniyi MERGE et
+            retracted_count = await self.correct_memory(
+                user_id, target_type, predicate, None, "retract", reason, subject_id, fact_id
+            )
+            
+            # Yeni değeri yaz
+            triplet = {
+                "subject": subject_id if subject_id else "__USER__",
+                "predicate": predicate,
+                "object": new_value,
+                "confidence": 1.0, # Manuel düzeltme tam güvendir
+                "category": "personal",
+                "attribution": "USER_CORRECTION"
+            }
+            
+            if not subject_id:
+                # Identity resolver anchor'ını bul
+                from Atlas.memory.identity_resolver import get_user_anchor
+                anchor = get_user_anchor(user_id)
+                triplet["subject"] = anchor
+            
+            await self.store_triplets([triplet], user_id)
+            return retracted_count + 1
+        return 0
 
     async def query_graph(self, cypher_query: str, params: Optional[Dict] = None) -> List[Dict]:
         """
@@ -258,6 +320,28 @@ class Neo4jManager:
         """
         results = await self.query_graph(query, {"uid": user_id, "sub": subject, "pred": predicate, "obj": obj})
         return results[0]["exists"] if results else False
+
+    async def decay_soft_signals(self, decay_rate: float = 0.05):
+        """
+        Soft signal'ların confidence değerlerini düşürür (RC-11).
+        Confidence threshold altına düşenler DEPRECATED olur.
+        """
+        query = """
+        MATCH ()-[r:FACT {category: 'soft_signal', status: 'ACTIVE'}]->()
+        SET r.confidence = r.confidence - $rate,
+            r.updated_at = datetime()
+        WITH r
+        WHERE r.confidence < 0.2
+        SET r.status = 'DEPRECATED'
+        RETURN count(r) as decayed_count
+        """
+        try:
+            results = await self.query_graph(query, {"rate": decay_rate})
+            count = results[0]["decayed_count"] if results else 0
+            if count > 0:
+                logger.info(f"RC-11: {count} soft signal decay edildi.")
+        except Exception as e:
+            logger.error(f"Decay hatası: {e}")
 
     async def create_notification(self, user_id: str, data: Dict[str, Any]) -> str:
         """

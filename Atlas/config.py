@@ -11,6 +11,7 @@ Temel Sorumluluklar:
 4. Davranış Haritalama: Niyet (intent) ve tarza (style) göre model ayarlarını optimize etme.
 """
 import os
+from os import getenv
 from dotenv import load_dotenv
 
 # .env dosyasını yükle
@@ -18,16 +19,18 @@ load_dotenv()
 
 class Config:
     """Merkezi konfigürasyon yönetimi."""
-    SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
-    FLUX_API_URL = os.getenv("FLUX_API_URL", "http://localhost:7860/sdapi/v1/txt2img") # Varsayılan Forge/A1111 URL
+    SERPER_API_KEY = getenv("SERPER_API_KEY", "")
+    FLUX_API_URL = getenv("FLUX_API_URL", "http://localhost:7860/sdapi/v1/txt2img") # Varsayılan Forge/A1111 URL
     
     # Neo4j Ayarları
-    NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-    NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-    NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
+    NEO4J_URI = getenv("NEO4J_URI", "bolt://localhost:7687")
+    NEO4J_USER = getenv("NEO4J_USER", "neo4j")
+    NEO4J_PASSWORD = getenv("NEO4J_PASSWORD", "password")
+
+    # Mevcut anahtarlar (Backward compatibility için)
     
     # Mevcut anahtarlar (Backward compatibility için)
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_API_KEY = getenv("GEMINI_API_KEY", "")
 
     @classmethod
     def get_random_groq_key(cls) -> str:
@@ -41,10 +44,10 @@ def get_groq_api_keys() -> list[str]:
     import os
     # Ortam değişkenlerinden çek
     keys = [
-        os.getenv("GROQ_API_KEY", ""),
-        os.getenv("GROQ_API_KEY_BACKUP", ""),
-        os.getenv("GROQ_API_KEY_3", ""),
-        os.getenv("GROQ_API_KEY_4", ""),
+        getenv("GROQ_API_KEY", ""),
+        getenv("GROQ_API_KEY_BACKUP", ""),
+        getenv("GROQ_API_KEY_3", ""),
+        getenv("GROQ_API_KEY_4", ""),
     ]
     return [k for k in keys if k]
 
@@ -53,9 +56,9 @@ def get_gemini_api_keys() -> list[str]:
     """Ortam değişkenlerinden yüklü olan Gemini (Google) API anahtarlarını getirir."""
     import os
     keys = [
-        os.getenv("GEMINI_API_KEY", ""),
-        os.getenv("GEMINI_API_KEY_2", ""),
-        os.getenv("GEMINI_API_KEY_3", ""),
+        getenv("GEMINI_API_KEY", ""),
+        getenv("GEMINI_API_KEY_2", ""),
+        getenv("GEMINI_API_KEY_3", ""),
     ]
     return [k for k in keys if k]
 
@@ -127,7 +130,7 @@ CONTEXT_BUDGET = {
 
 # RC-10: Anlamsal Benzerlik (Semantic Similarity) Ayarları
 EMBEDDING_SETTINGS = {
-    "PROVIDER": os.getenv("EMBEDDER_PROVIDER", "hash"), # 'hash' veya 'sentence-transformers'
+    "PROVIDER": getenv("EMBEDDER_PROVIDER", "hash"), # 'hash' veya 'sentence-transformers'
     "MODEL_NAME": "all-MiniLM-L6-v2",
     "DIMENSION": 384,
     "SCORING_WEIGHTS": {
@@ -144,6 +147,18 @@ CONTEXT_BUDGET_PROFILES = {
     "PERSONAL":  {"transcript": 0.30, "episodic": 0.20, "semantic": 0.50},
     "TASK":      {"transcript": 0.35, "episodic": 0.25, "semantic": 0.40},
     "MIXED":     {"transcript": 0.40, "episodic": 0.30, "semantic": 0.30},
+}
+
+
+# RC-11: Confidence & Decay Ayarları
+MEMORY_CONFIDENCE_SETTINGS = {
+    "DEFAULT_HARD_FACT_CONFIDENCE": 1.0,
+    "DEFAULT_SOFT_SIGNAL_CONFIDENCE": 0.6,
+    "UNCERTAINTY_THRESHOLD": 0.5, # Bu altındaki veriler SOFT_SIGNAL veya OPEN_QUESTION olur
+    "DECAY_RATE_PER_DAY": 0.05,    # Gün başına düşecek confidence (Soft signallar için)
+    "CONFLICT_THRESHOLD": 0.7,     # İki veri arasındaki çelişkiyi raporlama sınırı
+    "DROP_THRESHOLD": 0.4,         # Bu değerin altındaki tüm çıkarımları çöpe at (Discard)
+    "SOFT_SIGNAL_THRESHOLD": 0.7   # SOFT_SIGNAL'a düşürme sınırı
 }
 
 # --- OPS & SAFETY (RC-8 Pilot) ---
