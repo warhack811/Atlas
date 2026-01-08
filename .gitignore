@@ -44,9 +44,22 @@ tests/__pycache__/
 
 # Temporary Artifacts
 temp_*.py
+temp_*.txt
 *_test_output.txt
 *_audit_results.json
 debug_context*.txt
 test_output*.txt
 RC11_PROOF_PACK.md
 merge_golden.py
+
+# Debug & Logs
+*_log*.txt
+ci_log*.txt
+new_ci_log*.txt
+pr*_failed_log*.txt
+test_err*.txt
+test_error*.txt
+test_results*.txt
+pytest_full*.txt
+debug_*.py
+
