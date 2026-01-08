@@ -21,9 +21,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          # Reals dependencies would be here (e.g., pip install -r requirements.txt)
-          # For this MVP, we assume core library deps are mockable or minimal.
-          pip install apscheduler neo4j # Minimal needed for imports
+          pip install -r requirements.txt
 
       - name: Run RC-7 Golden Set
         run: python -m unittest Atlas.memory.test_rc7_golden_set -v
@@ -39,4 +37,4 @@ jobs:
         if: always()
         with:
           name: golden-set-metrics
-          path: C:\Users\admin\AppData\Local\Temp\*_rc7_metrics.json
+          path: /tmp/*_rc7_metrics.json
