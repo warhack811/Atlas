@@ -73,7 +73,7 @@ def classify_intent_tr(user_message: str) -> str:
         return "FOLLOWUP"
     
     # Soru kalıpları (Genel sorgu sinyali - ASCII)
-    question_patterns = [r"\?$", r"^kim\s", r"^neler\s", r"^kac\s", r"^how\s", r"^what\s"]
+    question_patterns = [r"\?$", r"\bkim\b", r"\bneler\b", r"\bkac\b", r"\bhow\b", r"\bwhat\b"]
     has_q_pattern = any(re.search(pattern, msg) for pattern in question_patterns)
     
     if is_general or has_q_pattern:
