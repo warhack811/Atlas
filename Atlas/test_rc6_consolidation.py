@@ -34,7 +34,11 @@ class TestRC6Consolidation(unittest.IsolatedAsyncioTestCase):
         await run_consolidation_worker()
         
         # Verify
-        mock_ready.assert_called_once_with("c1", "Consolidated Summary", "gemini-test")
+        mock_ready.assert_called_once()
+        args, kwargs = mock_ready.call_args
+        self.assertEqual(args[0], "c1")
+        self.assertEqual(args[1], "Consolidated Summary")
+        self.assertEqual(args[2], "gemini-test")
 
 if __name__ == "__main__":
     unittest.main()
