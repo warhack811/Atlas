@@ -71,6 +71,15 @@ async def start_scheduler():
     if scheduler.running:
         return
 
+    # RC-11: Confidence Decay (Günde 1 kez)
+    scheduler.add_job(
+        run_decay_worker, 
+        'interval', 
+        hours=24, 
+        id='decay_worker',
+        replace_existing=True
+    )
+    
     scheduler.start()
     logger.info(f"Scheduler: {INSTANCE_ID} başlatıldı (Follower modunda).")
 
@@ -221,6 +230,13 @@ async def sync_scheduler_jobs():
         logger.info(f"Scheduler: Senkronizasyon tamamlandı ({len(active_uids)} aktif kullanıcı)")
     except Exception as e:
         logger.error(f"Job senkronizasyon hatası: {e}")
+
+async def run_decay_worker():
+    """Soft signal confidence decay işlemine nezaret eder. (RC-11)"""
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    from Atlas.config import MEMORY_CONFIDENCE_SETTINGS
+    rate = MEMORY_CONFIDENCE_SETTINGS.get("DECAY_RATE_PER_DAY", 0.05)
+    await neo4j_manager.decay_soft_signals(rate)
 
 async def run_episode_worker():
     """PENDING episodeları tarayan ve özetleyen worker job. (RC-4)"""

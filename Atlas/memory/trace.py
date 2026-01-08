@@ -45,7 +45,16 @@ class ContextTrace:
     filtered_counts: Dict[str, int] = field(default_factory=lambda: {
         "episode_filtered": 0,
         "semantic_filtered": 0,
-        "deduped_lines": 0
+        "deduped_lines": 0,
+        "writes_skipped": 0 # RC-11: Negation/Uncertainty nedeniyle yazılmayanlar
+    })
+    
+    # RC-11: İşlem Sayaçları
+    metrics: Dict[str, int] = field(default_factory=lambda: {
+        "corrections_applied_count": 0,
+        "conflicts_detected_count": 0,
+        "selected_facts_count": 0,
+        "selected_signals_count": 0
     })
     
     # Karar Gerekçeleri

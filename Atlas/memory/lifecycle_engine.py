@@ -14,7 +14,8 @@ Bu modül, FACT relationship'leri yazarken temporal conflict resolution sağlar:
 
 import logging
 from typing import List, Dict, Tuple
-from Atlas.memory.neo4j_manager import neo4j_manager  # Modül seviyesi import: test mocking için standardizasyon
+from Atlas.config import Config, MEMORY_CONFIDENCE_SETTINGS
+from Atlas.memory.neo4j_manager import neo4j_manager
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ async def resolve_conflicts(
         predicate = triplet.get("predicate", "")
         subject = triplet.get("subject", "")
         obj = triplet.get("object", "")
+        confidence = triplet.get("confidence", 0.8)
         
         if not catalog:
             # Catalog yoksa fail-safe: add as is
@@ -74,22 +76,44 @@ async def resolve_conflicts(
             
             if existing:
                 existing_object = existing.get("object")
+                existing_confidence = existing.get("confidence", 1.0)
                 
                 if existing_object == obj:
                     # Same value - no conflict, will be updated by MERGE
                     logger.info(f"Lifecycle EXCLUSIVE: Same value '{subject}' {predicate} '{obj}' - update")
                     new_triplets.append(triplet)
                 else:
-                    # Different value - supersede old
-                    logger.info(f"Lifecycle EXCLUSIVE: '{subject}' {predicate} '{existing_object}' → '{obj}' - superseding old")
-                    supersede_operations.append({
-                        "user_id": user_id,
-                        "subject": subject,
-                        "predicate": predicate,
-                        "old_object": existing_object,
-                        "new_turn_id": source_turn_id
-                    })
-                    new_triplets.append(triplet)
+                    # RC-11: Conflict Detection
+                    # Eğer mevcut bilgi çok güçlüyse ve yeni bilgi de güçlüyse ama farklıysa -> CONFLICT
+                    settings = MEMORY_CONFIDENCE_SETTINGS
+                    conflict_thresh = settings.get("CONFLICT_THRESHOLD", 0.7)
+
+                    if existing_confidence >= conflict_thresh and confidence >= conflict_thresh:
+                        logger.warning(f"Lifecycle CONFLICT: '{subject}' {predicate}: '{existing_object}' (conf: {existing_confidence}) VS '{obj}' (conf: {confidence})")
+                        supersede_operations.append({
+                            "type": "CONFLICT",
+                            "user_id": user_id,
+                            "subject": subject,
+                            "predicate": predicate,
+                            "old_object": existing_object,
+                            "new_object": obj,
+                            "new_turn_id": source_turn_id
+                        })
+                        # Her iki bilgiyi de CONFLICTED status'ta tutuyoruz
+                        triplet["status"] = "CONFLICTED"
+                        new_triplets.append(triplet)
+                    else:
+                        # Existing confidence düşükse yeni bilgi supersede eder
+                        logger.info(f"Lifecycle EXCLUSIVE: '{subject}' {predicate} '{existing_object}' → '{obj}' - superseding (low confidence existing)")
+                        supersede_operations.append({
+                            "type": "SUPERSEDE",
+                            "user_id": user_id,
+                            "subject": subject,
+                            "predicate": predicate,
+                            "old_object": existing_object,
+                            "new_turn_id": source_turn_id
+                        })
+                        new_triplets.append(triplet)
             else:
                 # No existing - create new
                 logger.info(f"Lifecycle EXCLUSIVE: New '{subject}' {predicate} '{obj}'")
@@ -154,27 +178,22 @@ async def supersede_relationship(
     subject: str,
     predicate: str,
     old_object: str,
-    new_turn_id: str
+    new_turn_id: str,
+    op_type: str = "SUPERSEDE"
 ) -> None:
     """
-    Eski ilişkiyi SUPERSEDED olarak işaretle.
-    
-    Args:
-        user_id: Kullanıcı ID
-        subject: Subject entity
-        predicate: Predicate
-        old_object: Eski object (supersede edilecek)
-        new_turn_id: Yeni turn ID (superseded_by_turn_id)
+    Eski ilişkiyi SUPERSEDED veya CONFLICTED olarak işaretle.
     """
     # Global neo4j_manager kullanılıyor (test mocking için)
+    status = "SUPERSEDED" if op_type == "SUPERSEDE" else "CONFLICTED"
     
     query = """
     MATCH (s:Entity {name: $subject})-[r:FACT {predicate: $predicate, user_id: $uid}]->(o:Entity {name: $old_obj})
     WHERE r.status IS NULL OR r.status = 'ACTIVE'
-    SET r.status = 'SUPERSEDED',
+    SET r.status = $status,
         r.superseded_by_turn_id = $new_turn_id,
-        r.superseded_at = datetime()
-    RETURN count(r) as superseded_count
+        r.updated_at = datetime()
+    RETURN count(r) as count
     """
     
     try:
@@ -183,9 +202,10 @@ async def supersede_relationship(
             "subject": subject,
             "predicate": predicate,
             "old_obj": old_object,
-            "new_turn_id": new_turn_id
+            "new_turn_id": new_turn_id,
+            "status": status
         })
-        count = result[0]["superseded_count"] if result else 0
-        logger.info(f"Lifecycle: {count} ilişki SUPERSEDED olarak işaretlendi")
+        count = result[0]["count"] if result else 0
+        logger.info(f"Lifecycle: {count} ilişki {status} olarak işaretlendi")
     except Exception as e:
         logger.error(f"Supersede relationship hatası: {e}")

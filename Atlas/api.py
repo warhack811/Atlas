@@ -108,6 +108,17 @@ class TaskDoneRequest(BaseModel):
 class PurgeTestDataRequest(BaseModel):
     user_id_prefix: str = "test_"
 
+class MemoryCorrectionRequest(BaseModel):
+    session_id: str
+    user_id: Optional[str] = None
+    target_type: str # "fact" | "signal"
+    predicate: str
+    subject_id: Optional[str] = None
+    fact_id: Optional[str] = None
+    new_value: Optional[str] = None
+    mode: str # "replace" | "retract"
+    reason: Optional[str] = None
+
 
 async def keep_alive_pulse():
     """
@@ -677,6 +688,52 @@ async def forget_memory(request: MemoryForgetRequest):
         
     await neo4j_manager.query_graph(query, params)
     return {"success": True, "message": f"Memory scope '{request.scope}' forgotten for user."}
+
+@app.post("/api/memory/correct")
+async def correct_memory(request: MemoryCorrectionRequest):
+    """
+    Kullanıcı geri bildirimi ile hafızayı düzeltir. (RC-11)
+    """
+    uid = request.user_id if request.user_id else request.session_id
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    from Atlas.memory.predicate_catalog import get_catalog
+    
+    # 1. Policy Control
+    mode = await neo4j_manager.get_user_memory_mode(uid)
+    if mode == "OFF":
+        raise HTTPException(
+            status_code=403, 
+            detail="Kişisel hafıza kapalıyken düzeltme yapılamaz. Lütfen önce hafıza modunu açın."
+        )
+    
+    # 2. Predicate Validation
+    catalog = get_catalog()
+    if request.predicate.upper() not in catalog.by_key:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Geçersiz bilgi tipi: {request.predicate}. Katalogda bulunamadı."
+        )
+    
+    # 3. Apply Correction
+    count = await neo4j_manager.correct_memory(
+        uid, 
+        request.target_type, 
+        request.predicate, 
+        request.new_value, 
+        request.mode, 
+        reason=request.reason,
+        subject_id=request.subject_id,
+        fact_id=request.fact_id
+    )
+    
+    if count == 0 and request.mode == "retract":
+        raise HTTPException(status_code=404, detail="Düzeltilecek uygun kayıt bulunamadı.")
+    
+    return {
+        "success": True, 
+        "updated_count": count,
+        "message": f"Memory correction applied ({request.mode})."
+    }
 
 @app.post("/api/policy")
 async def update_policy(request: PolicyUpdateRequest):

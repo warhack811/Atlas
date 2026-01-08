@@ -1334,5 +1334,205 @@
         ],
         "expected_not_contains": [],
         "severity": "SOFT"
+    },
+    {
+        "id": "GS7-061",
+        "category": "CORRECTION",
+        "user_message": "İzmir'e taşındım demiyor muydum?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "YAŞAR_YER",
+                    "object": "İzmir"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Izmir"
+        ],
+        "expected_not_contains": [],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-062",
+        "category": "CORRECTION",
+        "user_message": "Yanlış biliyorsun, adım Mert değil Ali.",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Ali"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Ali"
+        ],
+        "expected_not_contains": [
+            "Mert"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-063",
+        "category": "CONFLICT",
+        "user_message": "Nerede yaşıyorum?",
+        "fixtures": {
+            "conflicts": [
+                {
+                    "predicate": "YAŞAR_YER",
+                    "old_value": "Ankara",
+                    "new_value": "İstanbul"
+                }
+            ]
+        },
+        "expected_contains": [
+            "yasar_yer",
+            "ankara",
+            "istanbul"
+        ],
+        "expected_not_contains": [],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-064",
+        "category": "NEGATION",
+        "user_message": "Sushi sevmiyorum demiştim.",
+        "fixtures": {
+            "soft": [
+                {
+                    "predicate": "SEVMIYOR",
+                    "object": "Sushi"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Sushi sevmiyor"
+        ],
+        "expected_not_contains": [
+            "sever"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-065",
+        "category": "UNCERTAINTY",
+        "user_message": "Sanırım bir kedim olacaktı.",
+        "fixtures": {
+            "soft": [
+                {
+                    "predicate": "SAHİP",
+                    "object": "Kedi",
+                    "confidence": 0.5
+                }
+            ]
+        },
+        "expected_contains": [
+            "Kedi"
+        ],
+        "expected_not_contains": [],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-066",
+        "category": "OFF_MODE",
+        "user_message": "Düzeltme: Ankara değil İzmir.",
+        "policy_mode": "OFF",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "YAŞAR_YER",
+                    "object": "İzmir"
+                }
+            ]
+        },
+        "expected_contains": [
+            "kisisel hafiza erisimi kapalidir"
+        ],
+        "expected_not_contains": [
+            "Izmir",
+            "Ankara"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-067",
+        "category": "CONFIDENCE_DECAY",
+        "user_message": "Hala kedi istiyor muyum?",
+        "fixtures": {
+            "soft": [
+                {
+                    "predicate": "İSTİYOR",
+                    "object": "Kedi",
+                    "confidence": 0.1,
+                    "status": "DEPRECATED"
+                }
+            ]
+        },
+        "expected_contains": [
+            "istiyor muyum"
+        ],
+        "expected_not_contains": [
+            "Kedi"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-068",
+        "category": "OPEN_QUESTION",
+        "user_message": "Hangi takımı tutuyorum?",
+        "fixtures": {
+            "conflicts": [
+                {
+                    "predicate": "TUTAR",
+                    "old_value": "Galatasaray",
+                    "new_value": "Fenerbahçe"
+                }
+            ]
+        },
+        "expected_contains": [
+            "tutar",
+            "galatasaray",
+            "fenerbahce"
+        ],
+        "expected_not_contains": [],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-069",
+        "category": "UNCERTAINTY",
+        "user_message": "Belki bir gün Japonya'ya giderim.",
+        "fixtures": {
+            "soft": [
+                {
+                    "predicate": "GİTMEK_İSTİYOR",
+                    "object": "Japonya",
+                    "confidence": 0.45
+                }
+            ]
+        },
+        "expected_contains": [
+            "Japonya"
+        ],
+        "expected_not_contains": [],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-070",
+        "category": "CORRECTION",
+        "user_message": "Geçen gün hata yaptın, memleketimi yanlış hatırladın.",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "GELDİĞİ_YER",
+                    "object": "Sivas"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Sivas"
+        ],
+        "expected_not_contains": [],
+        "severity": "SOFT"
     }
 ]

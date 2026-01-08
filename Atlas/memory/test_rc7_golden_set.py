@@ -69,6 +69,17 @@ class TestRC7GoldenSet(unittest.IsolatedAsyncioTestCase):
                     res = fixtures.get("hard", []) + fixtures.get("soft", [])
                     if f_uid: res = [r for r in res if r.get("uid") == f_uid or "uid" not in r]
                     return res
+                if "status: 'CONFLICTED'" in query:
+                    # RC-11 conflicts mock
+                    raw_conflicts = fixtures.get("conflicts", [])
+                    # Gruplanmış formatta dönmesi lazım? 
+                    # build_memory_context_v3 -> _retrieve_conflicts -> query_graph
+                    # _retrieve_conflicts expect: [{predicate, value, updated_at}]
+                    res = []
+                    for c in raw_conflicts:
+                        res.append({"predicate": c["predicate"], "value": c["new_value"], "updated_at": "2024-01-01"})
+                        res.append({"predicate": c["predicate"], "value": c["old_value"], "updated_at": "2023-01-01"})
+                    return res
                 return []
             mock_query.side_effect = query_side_effect
             

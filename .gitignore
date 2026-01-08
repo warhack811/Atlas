@@ -48,3 +48,5 @@ temp_*.py
 *_audit_results.json
 debug_context*.txt
 test_output*.txt
+RC11_PROOF_PACK.md
+merge_golden.py
