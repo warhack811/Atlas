@@ -1,435 +1,474 @@
-// ATLAS Router Sandbox - Chat UI
-// =============================================================================
-// Cloudflare Deployment Konfigürasyonu
-// =============================================================================
-// LOCAL: API_BASE = '' (same origin - backend aynı sunucuda)
-// PRODUCTION: API_BASE = 'https://atlas-sandbox.YOUR_SUBDOMAIN.workers.dev'
-//
-// Deployment sonrası aşağıdaki URL'i Workers URL'iniz ile değiştirin:
-// =============================================================================
+/**
+ * ATLAS Test Console - Core logic
+ * Unified streaming, state, and UI management.
+ */
 
-const API_BASE = window.location.hostname === 'localhost'
-    ? ''  // Local development - same origin
-    : '';  // Production - Aynı Workers'ta çalışıyorsa boş bırak
-// : 'https://atlas-sandbox.YOUR_SUBDOMAIN.workers.dev'; // Farklı domain ise uncomment et
+// Configuration
+const API_BASE = '';
+const BUILT_AT = '2026-01-09T01:45:00Z'; // Placeholder for build time
 
-// DOM Elements
-const messagesEl = document.getElementById('messages');
-const messageInput = document.getElementById('messageInput');
-const sendBtn = document.getElementById('sendBtn');
-const mockModeCheckbox = document.getElementById('mockMode');
-const rdrContent = document.getElementById('rdrContent');
-const stylePresetSelect = document.getElementById('stylePreset');
-
-// Style Presets
-const STYLE_PRESETS = {
-    'professional': { persona: 'professional', tone: 'formal', length: 'medium', emoji: 'none', detail: 'balanced', preset: 'professional' },
-    'friendly': { persona: 'friendly', tone: 'casual', length: 'medium', emoji: 'minimal', detail: 'balanced', preset: 'friendly', mirror_hitap: true },
-    'kanka': { persona: 'kanka', tone: 'kanka', length: 'medium', emoji: 'high', detail: 'balanced', preset: 'kanka', mirror_hitap: true },
-    'girlfriend': { persona: 'girlfriend', tone: 'kanka', length: 'medium', emoji: 'high', detail: 'balanced', preset: 'girlfriend', mirror_hitap: true },
-    'concise': { persona: 'expert', tone: 'formal', length: 'short', emoji: 'none', detail: 'summary', preset: 'concise' },
-    'detailed': { persona: 'teacher', tone: 'casual', length: 'detailed', emoji: 'minimal', detail: 'comprehensive', preset: 'detailed' },
-    'standard': { persona: 'friendly', tone: 'casual', length: 'medium', emoji: 'minimal', detail: 'balanced', preset: 'standard' },
-    'sincere': { persona: 'sincere', tone: 'casual', length: 'medium', emoji: 'high', detail: 'balanced', preset: 'sincere' },
-    'creative': { persona: 'creative', tone: 'casual', length: 'detailed', emoji: 'minimal', detail: 'comprehensive', preset: 'creative' }
+// DOM References
+const elements = {
+    chatView: document.getElementById('chatView'),
+    messagesContainer: document.getElementById('messagesContainer'),
+    userInput: document.getElementById('userInput'),
+    sendBtn: document.getElementById('sendBtn'),
+    personaSelect: document.getElementById('personaSelect'),
+    statusLabel: document.getElementById('statusLabel'),
+    statusDot: document.getElementById('statusDot'),
+    sessionList: document.getElementById('sessionList'),
+    newChatBtn: document.getElementById('newChatBtn'),
+    inspector: document.getElementById('inspector'),
+    rdrContent: document.getElementById('rdrContent'),
+    authOverlay: document.getElementById('authOverlay'),
+    authSubmit: document.getElementById('authSubmit'),
+    buildTimestamp: document.getElementById('buildTimestamp'),
+    userNameDisplay: document.getElementById('userNameDisplay'),
+    userRoleDisplay: document.getElementById('userRoleDisplay'),
+    notifCount: document.getElementById('notifCount'),
+    notifList: document.getElementById('notifList'),
+    notifPanel: document.getElementById('notifPanel'),
+    sidebarToggle: document.getElementById('sidebarToggle'),
+    sidebar: document.getElementById('sidebar'),
+    chatSearch: document.getElementById('chatSearch'),
+    fileInput: document.getElementById('fileInput'),
+    attachBtn: document.getElementById('attachBtn')
 };
 
-// State
-let isLoading = false;
-let sessionId = localStorage.getItem('atlas_session_id') || null;
+let isProcessing = false;
+let currentRdr = null;
 
-// Initialize
+// Initialization
 document.addEventListener('DOMContentLoaded', () => {
-    messageInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !isLoading) {
-            sendMessage();
-        }
-    });
-
-    // Check health
-    checkHealth();
-
-    // Show session ID if exists
-    if (sessionId) {
-        console.log('Session restored:', sessionId);
-    }
+    initApp();
 });
 
-async function checkHealth() {
-    try {
-        const res = await fetch(`${API_BASE}/api/health`);
-        const data = await res.json();
+function initApp() {
+    // 1. Set build info
+    if (elements.buildTimestamp) elements.buildTimestamp.innerText = BUILT_AT;
 
-        if (data.available_keys === 0) {
-            mockModeCheckbox.checked = true;
-            addSystemMessage('⚠️ API key bulunamadı. Mock mode aktif.');
-        } else {
-            console.log(`✅ ${data.available_keys} API key(s) available`);
-        }
-    } catch (e) {
-        console.error('Health check failed:', e);
+    // 2. Check Auth
+    if (!atlasState.state.user) {
+        showAuth();
+    } else {
+        updateUserInfo();
+    }
+
+    // 3. Load Sessions
+    renderSessions();
+    if (atlasState.state.activeSessionId) {
+        loadSession(atlasState.state.activeSessionId);
+    } else if (atlasState.state.sessions.length === 0) {
+        startNewChat();
+    }
+
+    // 4. Set up Event Listeners
+    setupListeners();
+
+    // 5. Initial Notification check
+    refreshNotifications();
+    setInterval(refreshNotifications, 60000);
+}
+
+// Auth System
+function showAuth() {
+    elements.authOverlay.style.display = 'flex';
+}
+
+elements.authSubmit.addEventListener('click', () => {
+    const name = document.getElementById('authName').value.trim() || 'Observer';
+    const role = document.getElementById('authRole').value;
+    atlasState.setUser(name, role);
+    elements.authOverlay.style.display = 'none';
+    updateUserInfo();
+    location.reload(); // Refresh to ensure roles are active
+});
+
+function updateUserInfo() {
+    const user = atlasState.state.user;
+    if (user) {
+        elements.userNameDisplay.innerText = user.name;
+        elements.userRoleDisplay.innerText = user.role;
+        elements.userRoleDisplay.className = `role-badge role-${user.role.toLowerCase()}`;
     }
 }
 
-async function sendMessage() {
-    const message = messageInput.value.trim();
-    if (!message || isLoading) return;
+// Session Logic
+function renderSessions() {
+    const sessions = atlasState.state.sessions;
+    elements.sessionList.innerHTML = sessions.map(s => `
+        <div class="session-item ${s.id === atlasState.state.activeSessionId ? 'active' : ''}" onclick="loadSession('${s.id}')">
+            <span class="title"><i class="far fa-comments"></i> ${utils.escapeHtml(s.title)}</span>
+            <div class="actions">
+                <button onclick="deleteSession(event, '${s.id}')"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>
+    `).join('');
+}
 
-    // Clear welcome message
-    const welcome = messagesEl.querySelector('.welcome-message');
-    if (welcome) welcome.remove();
+function startNewChat() {
+    const session = atlasState.createSession('New Session');
+    loadSession(session.id);
+    renderSessions();
+}
 
-    // Add user message
-    addMessage(message, 'user');
-    messageInput.value = '';
+function loadSession(id) {
+    atlasState.setActiveSession(id);
+    renderSessions();
 
-    // Set loading state
-    isLoading = true;
-    sendBtn.disabled = true;
-    const loadingEl = addLoadingMessage();
+    elements.messagesContainer.innerHTML = '';
+    const session = atlasState.getActiveSession();
+
+    if (session && session.messages.length > 0) {
+        session.messages.forEach(msg => {
+            renderMessage(msg.role, msg.content, msg.id, msg.rdr, msg.thought, false);
+        });
+    } else {
+        // Show initial greeting
+        appendSystemNotification("Sisteme Hoş Geldin, Observer. ATLAS motoru aktif.");
+    }
+
+    // Close sidebar on mobile
+    if (window.innerWidth <= 1200) {
+        elements.sidebar.classList.remove('open');
+    }
+}
+
+function deleteSession(event, id) {
+    event.stopPropagation();
+    if (confirm('Sohbet silinsin mi?')) {
+        atlasState.deleteSession(id);
+        renderSessions();
+        if (atlasState.state.activeSessionId) {
+            loadSession(atlasState.state.activeSessionId);
+        } else {
+            startNewChat();
+        }
+    }
+}
+
+// Messaging Logic
+async function handleSend() {
+    const msgInput = elements.userInput.value.trim();
+    if (!msgInput || isProcessing) return;
+
+    // 1. Save to state and clear input
+    const userMsg = atlasState.addMessage('user', msgInput);
+    renderMessage('user', msgInput, userMsg.id);
+    elements.userInput.value = '';
+
+    // Update sidebar if it was the first message
+    renderSessions();
+
+    setLoading(true);
+
+    const aiMsgId = Date.now().toString();
+    const wrapper = createMessageWrapper('ai', aiMsgId);
+    elements.messagesContainer.appendChild(wrapper);
+    elements.chatView.scrollTop = elements.chatView.scrollHeight;
+
+    const bubble = wrapper.querySelector('.message-body');
+    let fullText = "";
+    let capturedThoughtSteps = [];
 
     try {
-        // Get selected style preset
-        const selectedPreset = stylePresetSelect ? stylePresetSelect.value : '';
-        const styleProfile = selectedPreset ? STYLE_PRESETS[selectedPreset] : null;
-
-        const res = await fetch(`${API_BASE}/api/chat`, {
+        const response = await fetch(`${API_BASE}/api/chat/stream`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                message: message,
-                session_id: sessionId,
-                use_mock: mockModeCheckbox.checked,
-                style: styleProfile
+                message: msgInput,
+                mode: elements.personaSelect.value,
+                session_id: atlasState.state.activeSessionId,
+                role: atlasState.state.user.role
             })
         });
 
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
+        if (!response.body) throw new Error("Stream not supported");
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        // Prepare bubble structure (preserving thought accordion)
+        bubble.innerHTML = `
+            <div class="thought-container collapsed" id="thought-container-${aiMsgId}">
+                <div class="thought-header" onclick="toggleThought('${aiMsgId}')">
+                    <span><span class="pulse-thinking"></span><span id="header-text-${aiMsgId}">Atlas Düşünüyor...</span></span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="thought-content" id="thought-content-${aiMsgId}"></div>
+            </div>
+            <div class="final-answer" id="answer-${aiMsgId}">...</div>
+        `;
+
+        const thoughtHeader = document.getElementById(`header-text-${aiMsgId}`);
+        const thoughtContent = document.getElementById(`thought-content-${aiMsgId}`);
+        const answerContainer = document.getElementById(`answer-${aiMsgId}`);
+        const thoughtContainer = document.getElementById(`thought-container-${aiMsgId}`);
+        let thoughtResolved = false;
+
+        let buffer = "";
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (trimmedLine.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(trimmedLine.substring(6));
+
+                        if (data.type === 'thought') {
+                            const step = data.step;
+                            capturedThoughtSteps.push(step);
+                            if (!thoughtResolved) {
+                                thoughtHeader.innerText = step.content.substring(0, 60) + (step.content.length > 60 ? "..." : "");
+                            }
+                            thoughtContent.innerHTML += `
+                                <div class="thought-step">
+                                    <div class="thought-step-title">${step.title}</div>
+                                    <div>${step.content}</div>
+                                </div>
+                            `;
+                            elements.chatView.scrollTop = elements.chatView.scrollHeight;
+                        }
+                        else if (data.type === 'chunk') {
+                            if (!thoughtResolved) {
+                                thoughtResolved = true;
+                                thoughtHeader.innerText = "Atlas Düşünce Süreci";
+                                const pulse = thoughtContainer.querySelector('.pulse-thinking');
+                                if (pulse) pulse.style.animation = 'none';
+                            }
+                            fullText += data.content;
+                            answerContainer.innerHTML = marked.parse(fullText);
+                            elements.chatView.scrollTop = elements.chatView.scrollHeight;
+                        }
+                        else if (data.type === 'done') {
+                            if (data.rdr) {
+                                appendRDRTrigger(aiMsgId, data.rdr);
+                                // Save to state
+                                atlasState.addMessage('assistant', fullText, data.rdr, capturedThoughtSteps);
+                            }
+                        }
+                    } catch (e) { console.error("Parse error", e); }
+                }
+            }
         }
-
-        const data = await res.json();
-
-        // Save session ID for future requests
-        if (data.session_id) {
-            sessionId = data.session_id;
-            localStorage.setItem('atlas_session_id', sessionId);
-        }
-
-        // Remove loading
-        loadingEl.remove();
-
-        // Add assistant message
-        addMessage(data.response, 'assistant', data.rdr);
-
-        // Update RDR panel
-        updateRDRPanel(data.rdr);
-
-    } catch (e) {
-        loadingEl.remove();
-        addMessage(`Hata: ${e.message}`, 'assistant');
+    } catch (err) {
+        bubble.innerHTML = `<span style="color:var(--danger)">🚨 Bağlantı Hatası: ${err.message}</span>`;
     } finally {
-        isLoading = false;
-        sendBtn.disabled = false;
-        messageInput.focus();
+        setLoading(false);
     }
 }
 
-function addMessage(text, type, rdr = null) {
-    const div = document.createElement('div');
-    div.className = `message ${type}`;
+// Rendering Helpers
+function createMessageWrapper(role, id) {
+    const wrapper = document.createElement('div');
+    wrapper.className = `message-wrapper ${role} chat-content-limit`;
+    wrapper.id = `msg-${id}`;
 
-    // Message text
-    const textDiv = document.createElement('div');
-    textDiv.className = 'message-content';
+    const avatarIcon = role === 'user' ? 'fa-user-astronaut' : 'fa-brain';
+    const name = role === 'user' ? (atlasState.state.user?.name || 'Observer') : 'ATLAS CORE';
 
-    if (type === 'assistant' && typeof marked !== 'undefined') {
-        // Render markdown for assistant messages
-        textDiv.innerHTML = marked.parse(text);
+    wrapper.innerHTML = `
+        <div class="message-header">
+            <div class="avatar"><i class="fas ${avatarIcon}"></i></div>
+            <div class="sender-info">
+                <span class="sender-name">${name}</span>
+                <span class="message-time">${utils.formatTime(new Date())}</span>
+            </div>
+        </div>
+        <div class="message-body">...</div>
+    `;
+    return wrapper;
+}
+
+function renderMessage(role, content, id, rdr = null, thought = null, animate = true) {
+    const wrapper = createMessageWrapper(role, id);
+    if (!animate) wrapper.style.animation = 'none';
+    elements.messagesContainer.appendChild(wrapper);
+
+    const body = wrapper.querySelector('.message-body');
+
+    if (role === 'ai' || role === 'assistant') {
+        let thoughtHtml = '';
+        if (thought && thought.length > 0) {
+            thoughtHtml = `
+                <div class="thought-container collapsed" id="thought-container-${id}">
+                    <div class="thought-header" onclick="toggleThought('${id}')">
+                        <span><i class="fas fa-lightbulb"></i> Atlas Düşünce Süreci</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="thought-content">
+                        ${thought.map(t => `
+                            <div class="thought-step">
+                                <div class="thought-step-title">${t.title}</div>
+                                <div>${t.content}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        body.innerHTML = thoughtHtml + `<div class="final-answer">${marked.parse(content)}</div>`;
+        if (rdr) appendRDRTrigger(id, rdr);
     } else {
-        textDiv.textContent = text;
-    }
-    div.appendChild(textDiv);
-
-    // Metadata badges (for assistant messages)
-    if (type === 'assistant' && rdr) {
-        const meta = document.createElement('div');
-        meta.className = 'meta';
-
-        // Tier badge
-        const tierBadge = document.createElement('span');
-        tierBadge.className = 'badge tier';
-        tierBadge.textContent = `Tier ${rdr.tier_used}`;
-        meta.appendChild(tierBadge);
-
-        // Model badge
-        const modelBadge = document.createElement('span');
-        modelBadge.className = 'badge model';
-        modelBadge.textContent = rdr.model_category || (rdr.model_id ? rdr.model_id.split('/').pop() : 'AI');
-        meta.appendChild(modelBadge);
-
-        // Latency badge
-        const latencyBadge = document.createElement('span');
-        latencyBadge.className = 'badge latency';
-        latencyBadge.textContent = `${rdr.total_ms}ms`;
-        meta.appendChild(latencyBadge);
-
-        div.appendChild(meta);
+        body.innerText = content;
     }
 
-    messagesEl.appendChild(div);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+    elements.chatView.scrollTop = elements.chatView.scrollHeight;
 }
 
-function addLoadingMessage() {
+function appendSystemNotification(text) {
     const div = document.createElement('div');
-    div.className = 'message assistant';
-    div.innerHTML = '<div class="loading"></div>';
-    messagesEl.appendChild(div);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-    return div;
+    div.className = 'system-notification chat-content-limit';
+    div.innerHTML = `<p>${text}</p>`;
+    elements.messagesContainer.appendChild(div);
 }
 
-function addSystemMessage(text) {
-    const div = document.createElement('div');
-    div.className = 'message assistant';
-    div.style.background = '#2d2d44';
-    div.textContent = text;
-    messagesEl.appendChild(div);
+// RDR / Inspector Logic
+function appendRDRTrigger(msgId, rdr) {
+    const wrapper = document.getElementById(`msg-${msgId}`);
+    if (!wrapper) return;
+
+    // Check role permissions
+    const canSeeRDR = ['Developer', 'Tester'].includes(atlasState.state.user.role);
+
+    const trigger = document.createElement('button');
+    trigger.className = "rdr-trigger";
+
+    if (!canSeeRDR) {
+        trigger.title = "Giriş yetkiniz yok (Developer/Tester Only)";
+        trigger.innerHTML = `<i class="fas fa-lock"></i> RDR Locked`;
+        trigger.style.opacity = '0.5';
+        trigger.style.cursor = 'not-allowed';
+    } else {
+        trigger.innerHTML = `<i class="fas fa-bolt"></i> DIVE INTO RDR`;
+        trigger.onclick = () => showInInspector(rdr);
+    }
+
+    wrapper.appendChild(trigger);
+}
+
+function showInInspector(rdr) {
+    currentRdr = rdr;
+    elements.inspector.classList.remove('collapsed');
+    elements.inspector.classList.add('open');
+    updateRDRPanel(rdr);
 }
 
 function updateRDRPanel(rdr) {
     if (!rdr) return;
-    rdrContent.innerHTML = '';
+    const content = elements.rdrContent;
+    content.innerHTML = '';
 
-    // Add pulsing effect
-    const panel = document.querySelector('.rdr-panel');
-    if (panel) {
-        panel.classList.remove('pulse-update');
-        void panel.offsetWidth; // Trigger reflow
-        panel.classList.add('pulse-update');
-    }
-
-    // --- TEMEL BİLGİLER ---
-    addRDRItem('İstek Kimliği (Request ID)', rdr.request_id);
-    addRDRItem('Niyet (Intent)', `<span style="color: var(--accent); font-weight: bold; font-size: 1.1rem;">${rdr.intent.toUpperCase()}</span>`, true);
-
-    // --- 1. ORKESTRASYON KATMANI ---
-    addRDRSectionHeader('🧠 1. Orkestrasyon (Planlama)');
-    const orchDiv = document.createElement('div');
-    orchDiv.className = 'trace-step';
-
-    let fallbackHtml = '';
-    if (rdr.fallback_used) {
-        fallbackHtml = `<span class="fallback-badge">⚠️ FALLBACK (${rdr.fallback_attempts}. Deneme)</span>`;
-    }
-
-    orchDiv.innerHTML = `
-        <div style="font-weight: 600; color: var(--text-primary);">Orkestratör Kararı ${fallbackHtml}</div>
-        <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
-            Modeller: <span style="color: var(--warning);">${rdr.fallback_models.join(' → ') || 'Gemini-2.0-Flash'}</span>
-        </div>
-        <div class="prompt-label" style="margin-top: 10px;">Girdi (Rewritten)</div>
-        <div style="color: var(--accent); font-style: italic; margin-bottom: 10px;">"${rdr.rewritten_query || rdr.message}"</div>
-        
-        <details>
-            <summary style="cursor: pointer; font-size: 10px; color: var(--text-muted); margin-bottom: 5px;">Orkestratör Promotunu Gör</summary>
-            <div class="prompt-details">${rdr.orchestrator_prompt || 'Sistem Promotu (Gizli)'}</div>
-        </details>
-    `;
-    rdrContent.appendChild(orchDiv);
-
-    // --- 2. UZMAN (EXPERT) KATMANI ---
-    addRDRSectionHeader('🚀 2. Uzman Katmanı (Yürütme)');
-    if (rdr.task_details && rdr.task_details.length > 0) {
-        rdr.task_details.forEach(task => {
-            const taskDiv = document.createElement('div');
-            taskDiv.className = 'trace-step';
-            taskDiv.style.borderLeftColor = task.status === 'success' ? 'var(--success)' : 'var(--error)';
-
-            const statusIcon = task.status === 'success' ? '✅' : '❌';
-            taskDiv.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: bold; color: var(--text-primary);">${task.id.toUpperCase()}</span>
-                    <span>${statusIcon}</span>
-                </div>
-                <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
-                    Uzman: <span style="color: #fbbf24;">${task.model}</span>
-                </div>
-                <details style="margin-top: 8px;">
-                    <summary style="cursor: pointer; font-size: 10px; color: var(--text-muted);">Uzman Promotu & Yanıtı</summary>
-                    <div class="prompt-label" style="margin-top: 10px;">Sistem Talimatı (Prompt)</div>
-                    <div class="prompt-details">${task.prompt || 'Talimat belirtilmedi'}</div>
-                    <div class="prompt-label" style="margin-top: 10px;">Ham Yanıt (Raw Output)</div>
-                    <div class="prompt-details" style="color: #cbd5e1; background: #111827;">${(rdr.raw_expert_responses.find(r => r.model === task.model) || {}).response || 'Yanıt alınamadı'}</div>
-                </details>
-            `;
-            rdrContent.appendChild(taskDiv);
+    // Helper to add sections
+    const addSection = (title, items) => {
+        const sec = document.createElement('div');
+        sec.className = 'rdr-sec';
+        sec.innerHTML = `<h4>${title}</h4>`;
+        items.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'rdr-row';
+            row.innerHTML = `<span class="label">${item.label}</span><span class="value">${item.value}</span>`;
+            sec.appendChild(row);
         });
-    } else {
-        addRDRItem('Görevler', 'Tekil Görev (Orchestrator Doğrudan)');
-    }
+        content.appendChild(sec);
+    };
 
-    // --- 3. SENTEZLEYİCİ KATMANI ---
-    addRDRSectionHeader('✨ 3. Sentezleyici (Üslup)');
-    const synthDiv = document.createElement('div');
-    synthDiv.className = 'trace-step';
-    synthDiv.style.borderLeftColor = '#10b981';
+    addSection('METRICS', [
+        { label: 'Latency', value: `${rdr.total_ms}ms` },
+        { label: 'Intent', value: rdr.intent.toUpperCase() },
+        { label: 'Classification', value: `${rdr.classification_ms}ms` }
+    ]);
 
-    synthDiv.innerHTML = `
-        <div style="font-weight: 600; color: var(--text-primary);">Nihai Üslup ve Birleştirme</div>
-        <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
-            Model: <span style="color: #10b981;">${rdr.synthesizer_model || 'Standard'}</span>
-        </div>
-        <details style="margin-top: 8px;">
-            <summary style="cursor: pointer; font-size: 10px; color: var(--text-muted);">Sentezleyici Promotunu Gör</summary>
-            <div class="prompt-details">${rdr.synthesizer_prompt || 'Sentezleme promotu oluşturulmadı.'}</div>
-        </details>
-    `;
-    rdrContent.appendChild(synthDiv);
-
-    // --- 4. GÜVENLİK VE KALİTE ---
-    addRDRSectionHeader('🛡️ Güvenlik ve Kalite');
-    const safetyStatus = rdr.safety_passed ? '<span style="color: var(--success);">✅ Güvenli</span>' : '<span style="color: var(--error);">❌ Engellendi</span>';
-    addRDRItem('Güvenlik Durumu', safetyStatus);
-
-    const qualityStatus = rdr.quality_passed ? '<span style="color: var(--success);">✅ Yüksek</span>' : '<span style="color: var(--warning);">⚠️ İyileştirilebilir</span>';
-    addRDRItem('Yanıt Kalitesi', qualityStatus);
-
-    if (rdr.quality_issues && rdr.quality_issues.length > 0) {
-        addRDRItem('Kalite Notları', rdr.quality_issues.map(i => `<div style="font-size: 10px;">• ${i.details}</div>`).join(''));
-    }
-
-    // --- 5. PERFORMANS VE BÜTÇE ---
-    addRDRSectionHeader('⏱️ Performans ve Bütçe');
-    addRDRItem('Toplam Süre', `<span style="color: var(--warning); font-weight: bold;">${rdr.total_ms}ms</span>`, true);
-    addRDRItem('Tokens Kullanımı', rdr.tokens_used ? rdr.tokens_used.toLocaleString() : 'N/A');
-
-    const budgetColor = rdr.budget_remaining_pct > 80 ? 'var(--success)' : rdr.budget_remaining_pct > 50 ? 'var(--warning)' : 'var(--error)';
-    addRDRItem('Kalan Günlük Bütçe', `<span style="color:${budgetColor}; font-weight: bold;">%${rdr.budget_remaining_pct || 100}</span>`);
-
-    // --- 6. BAĞLAM (CONTEXT) ---
-    if (rdr.user_facts_dump && rdr.user_facts_dump.length > 0) {
-        addRDRSectionHeader('🧠 Hatırlanan Bilgiler (Memory)');
-        const factsDiv = document.createElement('div');
-        factsDiv.innerHTML = rdr.user_facts_dump.map(f => `<div style="font-size: 10px; background: rgba(99, 102, 241, 0.1); border-left: 2px solid var(--accent); padding: 4px 8px; margin-bottom: 4px; border-radius: 0 4px 4px 0;">${f}</div>`).join('');
-        rdrContent.appendChild(factsDiv);
+    if (rdr.task_details) {
+        const expertHtml = rdr.task_details.map(t => `
+            <div class="expert-card">
+                <b>${t.id}</b> [${t.model}] - ${t.duration_ms}ms
+            </div>
+        `).join('');
+        const expSec = document.createElement('div');
+        expSec.innerHTML = `<h4>EXPERT DAG</h4> ${expertHtml}`;
+        content.appendChild(expSec);
     }
 }
 
-function addRDRSectionHeader(title) {
-    const div = document.createElement('div');
-    div.className = 'rdr-section-header';
-    div.innerHTML = `<strong>${title}</strong>`;
-    div.style.cssText = 'margin-top: 12px; padding: 4px 0; border-bottom: 1px solid #444; color: #888; font-size: 11px;';
-    rdrContent.appendChild(div);
-}
-
-function addRDRItem(label, value, highlight = false) {
-    const div = document.createElement('div');
-    div.className = 'rdr-item';
-    div.innerHTML = `
-        <div class="label">${label}</div>
-        <div class="value ${highlight ? 'highlight' : ''}">${value}</div>
-    `;
-    rdrContent.appendChild(div);
-}
-
-// ========== STATS MODAL ==========
-
-function openStatsModal() {
-    const modal = document.getElementById('statsModal');
-    modal.classList.add('active');
-    loadStats();
-}
-
-function closeStatsModal() {
-    const modal = document.getElementById('statsModal');
-    modal.classList.remove('active');
-}
-
-// Close modal on backdrop click
-document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('modal')) {
-        e.target.classList.remove('active');
-    }
-});
-
-async function loadStats() {
-    const statsContent = document.getElementById('statsContent');
-    statsContent.innerHTML = '<p>Yükleniyor...</p>';
-
+// Notifications
+async function refreshNotifications() {
     try {
-        const res = await fetch(`${API_BASE}/api/keys`);
+        const res = await fetch(`${API_BASE}/api/notifications/test_user`);
         const data = await res.json();
+        const list = data.notifications || [];
 
-        if (!data.keys || data.keys.length === 0) {
-            statsContent.innerHTML = '<p>Henüz key istatistiği yok.</p>';
+        elements.notifCount.innerText = list.length;
+        elements.notifCount.style.display = list.length > 0 ? 'block' : 'none';
+
+        if (list.length > 0) {
+            elements.notifList.innerHTML = list.map(n => `
+                <div class="notif-item">
+                    <div class="time">${utils.formatTime(n.timestamp)}</div>
+                    <div class="msg">⚠️ ${n.message}</div>
+                </div>
+            `).join('');
+        }
+    } catch (e) { }
+}
+
+// Global Helpers (exposed to HTML)
+window.toggleThought = (id) => {
+    const container = document.getElementById(`thought-container-${id}`);
+    if (container) container.classList.toggle('collapsed');
+};
+
+// UI Triggers
+function setupListeners() {
+    elements.sendBtn.onclick = handleSend;
+    elements.userInput.onkeypress = (e) => { if (e.key === 'Enter') handleSend(); };
+    elements.newChatBtn.onclick = startNewChat;
+
+    elements.sidebarToggle.onclick = () => elements.sidebar.classList.toggle('open');
+    document.getElementById('closeInspector').onclick = () => elements.inspector.classList.add('collapsed');
+
+    document.getElementById('bellBtn').onclick = () => {
+        elements.notifPanel.style.display = elements.notifPanel.style.display === 'block' ? 'none' : 'block';
+    };
+    document.getElementById('closeNotif').onclick = () => elements.notifPanel.style.display = 'none';
+
+    // Inspector Tabs
+    document.getElementById('inspectorTabs').onclick = (e) => {
+        if (e.target.classList.contains('tab')) {
+            document.querySelectorAll('#inspectorTabs .tab').forEach(t => t.classList.remove('active'));
+            e.target.classList.add('active');
+            renderInspectorTab(e.target.dataset.tab);
+        }
+    };
+}
+
+function renderInspectorTab(tab) {
+    const rdr = currentRdr;
+    if (!rdr) return;
+
+    if (tab === 'raw') {
+        const isDev = atlasState.state.user.role === 'Developer';
+        if (!isDev) {
+            elements.rdrContent.innerHTML = `<p class="p-4 text-warning">Bu alanı sadece Geliştiriciler görebilir.</p>`;
             return;
         }
-
-        statsContent.innerHTML = data.keys.map(key => renderKeyCard(key)).join('');
-    } catch (e) {
-        statsContent.innerHTML = `<p>Hata: ${e.message}</p>`;
+        elements.rdrContent.innerHTML = `<pre class="raw-json">${JSON.stringify(rdr, null, 2)}</pre>`;
+    } else {
+        updateRDRPanel(rdr); // Basic render for others for now
     }
 }
 
-function renderKeyCard(key) {
-    const statusClass = key.status.toLowerCase();
-    const successRate = (key.success_rate * 100).toFixed(0);
-
-    // Model usage rendering
-    let modelUsageHtml = '';
-    if (key.model_usage && Object.keys(key.model_usage).length > 0) {
-        const models = Object.entries(key.model_usage)
-            .sort((a, b) => b[1] - a[1])  // Sort by count desc
-            .map(([model, count]) => {
-                // Shorten model name
-                const shortName = model.split('/').pop().substring(0, 20);
-                return `<div class="model-usage-item">
-                    <span class="model-name" title="${model}">${shortName}</span>
-                    <span class="model-count">${count}</span>
-                </div>`;
-            }).join('');
-
-        modelUsageHtml = `
-            <div class="model-usage-title">📦 Model Kullanımı</div>
-            <div class="model-usage-list">${models}</div>
-        `;
-    } else {
-        modelUsageHtml = '<div class="model-usage-title">📦 Henüz model kullanılmadı</div>';
-    }
-
-    return `
-        <div class="key-card">
-            <div class="key-card-header">
-                <div class="key-card-title">
-                    🔑 ${key.key_id} 
-                    <span style="color: var(--text-muted); font-weight: normal;">${key.key_masked}</span>
-                </div>
-                <span class="key-status ${statusClass}">${key.status.toUpperCase()}</span>
-            </div>
-            
-            <div class="key-stats-grid">
-                <div class="key-stat">
-                    <div class="key-stat-value">${key.total_requests}</div>
-                    <div class="key-stat-label">Toplam</div>
-                </div>
-                <div class="key-stat">
-                    <div class="key-stat-value">${key.daily_requests}</div>
-                    <div class="key-stat-label">Bugün</div>
-                </div>
-                <div class="key-stat">
-                    <div class="key-stat-value">${successRate}%</div>
-                    <div class="key-stat-label">Başarı</div>
-                </div>
-                <div class="key-stat">
-                    <div class="key-stat-value">${key.rate_limit_hits}</div>
-                    <div class="key-stat-label">429 Hit</div>
-                </div>
-            </div>
-            
-            ${modelUsageHtml}
-        </div>
-    `;
+function setLoading(loading) {
+    isProcessing = loading;
+    elements.sendBtn.disabled = loading;
+    elements.statusLabel.innerText = loading ? "REASONING..." : "ENGINE STANDBY";
+    elements.statusDot.style.background = loading ? "var(--cyan)" : "var(--matrix-green)";
 }
