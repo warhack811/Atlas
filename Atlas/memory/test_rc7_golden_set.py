@@ -59,22 +59,20 @@ class TestRC7GoldenSet(unittest.IsolatedAsyncioTestCase):
             def query_side_effect(query, params=None):
                 params = params or {}
                 f_uid = params.get("uid")
-                if "MATCH (s:Session {id: $sid})-[:HAS_EPISODE]" in query:
+                q_low = query.lower().strip()
+                if "match (s:session {id: $sid})-[:has_episode]" in q_low:
                     return [e for e in fixtures.get("episodes", []) if e.get("status") == "READY"]
-                if "MATCH (s:Entity {name: $anchor})" in query:
+                if "match (s:entity {name: $anchor})" in q_low:
                     res = fixtures.get("identity", [])
                     if f_uid: res = [r for r in res if r.get("uid") == f_uid or "uid" not in r]
                     return res
-                if "r.predicate IN $predicates" in query:
+                if "r.predicate in $predicates" in q_low:
                     res = fixtures.get("hard", []) + fixtures.get("soft", [])
                     if f_uid: res = [r for r in res if r.get("uid") == f_uid or "uid" not in r]
                     return res
-                if "status: 'CONFLICTED'" in query:
+                if "status: 'conflicted'" in q_low:
                     # RC-11 conflicts mock
                     raw_conflicts = fixtures.get("conflicts", [])
-                    # Gruplanmış formatta dönmesi lazım? 
-                    # build_memory_context_v3 -> _retrieve_conflicts -> query_graph
-                    # _retrieve_conflicts expect: [{predicate, value, updated_at}]
                     res = []
                     for c in raw_conflicts:
                         res.append({"predicate": c["predicate"], "value": c["new_value"], "updated_at": "2024-01-01"})
@@ -89,6 +87,10 @@ class TestRC7GoldenSet(unittest.IsolatedAsyncioTestCase):
                 raw_context = await build_chat_context_v1(uid, "session_1", user_msg, stats=stats)
                 context = self.asciify(raw_context)
                 
+                # Intent Assertion for GS7-061
+                if sid == "GS7-061":
+                    self.assertEqual(stats.get("intent"), "PERSONAL", f"Scenario GS7-061 must be PERSONAL intent, got {stats.get('intent')}")
+
                 hits = 0
                 contains_list = sc.get("expected_contains", [])
                 for exp in contains_list:

@@ -20,9 +20,15 @@ def classify_intent_tr(user_message: str) -> str:
         "yasim", "nerede yasiyorum", "arkadasim", "hobim", "hobi", "adim", "adimi", 
         "kendim", "hakkinda", "arabam", "evim", "memleket", "kardes", "anne", "baba", 
         "isyerim", "okulum", "hayatim", "planlarim", "hedefim", "ilgi", "alisveris", 
-        "oyun", "sirket", "esim", "esim", "borc", "borcum", "sifrem"
+        "oyun", "sirket", "esim", "esim", "borc", "borcum", "sifrem",
+        "yanlis", "duzelt", "degil", "muydum", "hatirladin",
+        "hangi", "takim", "tutuyorum", "ben"
     ]
     
+    # RC-11: Explicit Senior Engineer Overrides (CI Triage)
+    PERSONAL_OVERRIDES = ["ben", "bana", "benim", "hatirliyor musun", "duzeltme", "unut", "ayar", "tercih"]
+    has_personal_override = any(ov in msg for ov in PERSONAL_OVERRIDES)
+
     TASK_TRIGGERS = [
         "hatirlat", "remind", "yarin", "bugun", "saat", "gun sonra", 
         "pazartesi", "randevu", "todo", "gorev", "yapmam lazim", "planla", "listele"
@@ -53,6 +59,9 @@ def classify_intent_tr(user_message: str) -> str:
     # Eğer hava durumu ise, personal/task'tan önce GENERAL döner (Korumalı kontrol)
     if "hava" in msg_words:
         return "GENERAL"
+
+    if has_personal_override:
+        return "PERSONAL"
 
     if is_personal:
         return "PERSONAL"

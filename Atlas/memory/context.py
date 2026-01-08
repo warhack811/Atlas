@@ -307,8 +307,9 @@ async def build_memory_context_v3(
     irrelevant_keywords = ['hava', 'saat', 'kaç', 'nedir', 'kimdir', '1+', '2+', 'hesapla', 'dünya', 'güneş', 'gezegen', 'uzay', 'okyanus', 'deniz', 'göl', 'nehir', 'en büyük', 'ışık', 'hızı', 'nasıl', '+', '-', '*', '/'] 
     is_irrelevant = any(kw in user_message.lower() for kw in irrelevant_keywords)
     
-    # RC-8: GENERAL intent ise Noise Guard daha agresif
-    if intent == "GENERAL" or (is_irrelevant and len(user_message.split()) < 5):
+    # RC-8: SADECE GENERAL intent ise Noise Guard ("memory mute") tetiklenebilir.
+    # PERSONAL/TASK/FOLLOWUP her durumda context üretmeli.
+    if intent == "GENERAL" and (is_irrelevant and len(user_message.split()) < 5):
         if trace: trace.add_reason(f"Noise Guard → filtered (intent={intent}, irrelevant={is_irrelevant})")
         return ""
     
@@ -690,6 +691,7 @@ async def build_chat_context_v1(
         stats["dedupe_count"] = 0
         stats["semantic_filtered_out_count"] = 0
         stats["episode_filtered_out_count"] = 0
+        stats["intent"] = None  # Sınıflandırma sonrası dolacak
 
     # 1. Niyet ve Bütçe (RC-8)
     from Atlas.config import BYPASS_MEMORY_INJECTION, BYPASS_ADAPTIVE_BUDGET
@@ -701,8 +703,9 @@ async def build_chat_context_v1(
         trace = ContextTrace(request_id=f"trace_{int(perf_counter())}", user_id=user_id, session_id=session_id)
     
     intent = classify_intent_tr(user_message)
+    if stats is not None:
+        stats["intent"] = intent
     trace.intent = intent
-    if stats is not None: stats["intent"] = intent
 
     mode = await neo4j_manager.get_user_memory_mode(user_id)
     trace.memory_mode = mode
