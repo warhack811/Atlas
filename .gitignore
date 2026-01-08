@@ -51,9 +51,11 @@ debug_context*.txt
 test_output*.txt
 RC11_PROOF_PACK.md
 merge_golden.py
+check_sig.py
 
 # Debug & Logs
 *_log*.txt
+*.log
 ci_log*.txt
 new_ci_log*.txt
 pr*_failed_log*.txt
@@ -62,4 +64,12 @@ test_error*.txt
 test_results*.txt
 pytest_full*.txt
 debug_*.py
+test_debug.txt
+
+# Environments (Hardened)
+.venv*
+test_venv/
+venv*/
+.*venv*/
+
 
