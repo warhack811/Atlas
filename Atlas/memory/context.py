@@ -308,11 +308,11 @@ async def build_memory_context_v3(
     identity_facts = await _retrieve_identity_facts(user_id, user_anchor)
     
     # Hard & Soft Facts (RC-3/RC-8)
-    from time import time
-    t_start = time()
+    from time import perf_counter
+    t_start = perf_counter()
     raw_hard_facts = await _retrieve_hard_facts(user_id, user_anchor, catalog)
     raw_soft_signals = await _retrieve_soft_signals(user_id, catalog)
-    if trace: trace.timings_ms["fetch_semantic_ms"] += (time() - t_start) * 1000
+    if trace: trace.timings_ms["fetch_semantic_ms"] += (perf_counter() - t_start) * 1000
     
     # RC-8: Precision Filtering
     hard_facts = []
@@ -332,7 +332,7 @@ async def build_memory_context_v3(
         overlap = get_token_overlap(sig_str, user_message)
         if overlap > 0 or intent == "PERSONAL":
             soft_signals.append(signal)
-            if trace: trace.selected["fact_ids"].append(signal.get('id', 'soft_signal'))
+            if trace: trace.selected["fact_ids"].append(str(signal.get('id', 'soft_signal')))
         elif stats is not None:
              stats["semantic_filtered_out_count"] = stats.get("semantic_filtered_out_count", 0) + 1
              if trace: trace.filtered_counts["semantic_filtered"] += 1
@@ -626,12 +626,12 @@ async def build_chat_context_v1(
 
     # 1. Niyet ve Bütçe (RC-8)
     from Atlas.config import BYPASS_MEMORY_INJECTION, BYPASS_ADAPTIVE_BUDGET
-    from time import time
+    from time import perf_counter
     from Atlas.memory.trace import ContextTrace
     
-    b_start = time()
+    b_start = perf_counter()
     if trace is None:
-        trace = ContextTrace(request_id=f"trace_{int(time())}", user_id=user_id, session_id=session_id)
+        trace = ContextTrace(request_id=f"trace_{int(perf_counter())}", user_id=user_id, session_id=session_id)
     
     intent = classify_intent_tr(user_message)
     trace.intent = intent
@@ -666,8 +666,9 @@ async def build_chat_context_v1(
         msg = f"[BİLGİ]: Bellek enjeksiyonu devre dışı bırakıldı.\n\nSON KONUŞMALAR:\n" + ("\n".join(lines) if lines else "(Henüz bu oturumda konuşma yapılmadı)")
         if trace:
             trace.add_reason("BYPASS_MEMORY_INJECTION=true")
-            trace.timings_ms["build_total_ms"] = (time() - b_start) * 1000
-            if stats is not None: stats["context_build_ms"] = trace.timings_ms["build_total_ms"]
+            trace.timings_ms["build_total_ms"] = (perf_counter() - b_start) * 1000
+            if stats is not None: 
+                stats["context_build_ms"] = trace.timings_ms["build_total_ms"]
         return msg
 
     all_context_texts = [] # Dedupe havuzu
@@ -688,7 +689,7 @@ async def build_chat_context_v1(
                 transcript_lines.append(line)
                 current_transcript_size += len(line) + 1
                 all_context_texts.append(line)
-                if trace: trace.selected["turn_ids"].append(t.get('id', 'turn'))
+                if trace: trace.selected["turn_ids"].append(str(t.get('id', 'turn')))
             else:
                 break
         
@@ -776,18 +777,12 @@ async def build_chat_context_v1(
                 selected_ep_lines.append(line)
                 curr_ep_size += len(line) + 1
                 all_context_texts.append(line)
+                if trace: trace.selected["episode_ids"].append(str(ep.get('id', 'episode')))
                 if ep['kind'] == 'REGULAR': reg_count += 1
                 else: cons_count += 1
         
         if stats is not None:
             stats["layer_usage"]["episodic"] = curr_ep_size
-        if trace:
-            trace.usage["episode_chars"] = curr_ep_size
-            trace.usage["total_chars"] = trace.usage["transcript_chars"] + trace.usage["episode_chars"] + trace.usage["semantic_chars"]
-            trace.timings_ms["build_total_ms"] = (time() - b_start) * 1000
-            if stats is not None:
-                stats["context_build_ms"] = trace.timings_ms["build_total_ms"]
-                stats["trace"] = trace.to_dict()
         
         episodic_text = "\n".join(selected_ep_lines)
 
@@ -801,7 +796,12 @@ async def build_chat_context_v1(
         final_parts.append(memory_v3)
         
     final_output = "\n\n".join(final_parts).strip()
-    if stats is not None:
-        stats["total_chars"] = len(final_output)
-        
+    
+    if trace:
+        trace.usage["total_chars"] = trace.usage["transcript_chars"] + trace.usage["episode_chars"] + trace.usage["semantic_chars"]
+        trace.timings_ms["build_total_ms"] = (perf_counter() - b_start) * 1000
+        if stats is not None:
+            stats["context_build_ms"] = trace.timings_ms["build_total_ms"]
+            stats["total_chars"] = len(final_output)
+            
     return final_output

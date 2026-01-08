@@ -193,12 +193,17 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         
         MessageBuffer.add_user_message(session_id, user_message)
         
-        # GRAF VERİTABANI BAĞLAMI: FAZ6 - v3 context packaging
-        from Atlas.memory.context import ContextBuilder, build_memory_context_v3
-        cb = ContextBuilder(session_id)
+        # RC-1/RC-2/RC-9: Full hybrid context with tracing
+        from Atlas.memory.context import ContextBuilder, build_chat_context_v1
+        from Atlas.memory.trace import ContextTrace
+        from Atlas.config import DEBUG
         
-        # FAZ6: Yeni v3 context packaging kullan (RC-1/RC-2)
-        neo4j_context = await build_memory_context_v3(user_id, user_message, session_id=session_id)
+        cb = ContextBuilder(session_id)
+        trace = None
+        if DEBUG and request.debug_trace:
+            trace = ContextTrace(request_id=f"trace_{int(time.time())}", user_id=user_id, session_id=session_id)
+            
+        neo4j_context = await build_chat_context_v1(user_id, session_id, user_message, trace=trace)
         cb.with_neo4j_context(neo4j_context)
         
         record = rdr.RDR.create(user_message)
@@ -293,7 +298,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
             response=response_text,
             session_id=session_id,
             rdr=record.to_dict(),
-            debug_trace=trace.to_dict() if trace else None
+            debug_trace=serialize_neo4j_value(trace.to_dict()) if trace else None
         )
     except Exception as e:
         logger.error(f"Sohbet hatası: {e}")
@@ -355,8 +360,9 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             if DEBUG and request.debug_trace:
                 trace = ContextTrace(request_id=f"trace_{int(time.time())}", user_id=user_id, session_id=session_id)
             
-            # RC-1/RC-2/RC-9: v3 context packaging
-            graph_context = await build_memory_context_v3(user_id, request.message, session_id=session_id, trace=trace)
+            # RC-1/RC-2/RC-9: Full hybrid context with tracing
+            from Atlas.memory.context import build_chat_context_v1
+            graph_context = await build_chat_context_v1(user_id, session_id, request.message, trace=trace)
             cb.with_neo4j_context(graph_context)
             
             # 2. Orkestrasyon: Niyet analizi ve DAG planı oluşturma
@@ -458,7 +464,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             background_tasks.add_task(extract_and_save_task, request.message, session_id, record.request_id)
 
             rdr.save_rdr(record)
-            yield f"data: {json.dumps({'type': 'done', 'rdr': record.to_dict(), 'debug_trace': trace.to_dict() if trace else None}, default=str)}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'rdr': record.to_dict(), 'debug_trace': serialize_neo4j_value(trace.to_dict()) if trace else None}, default=str)}\n\n"
 
         except Exception as e:
             import traceback
