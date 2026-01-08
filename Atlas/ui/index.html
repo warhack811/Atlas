@@ -1,152 +1,165 @@
 <!DOCTYPE html>
 <html lang="tr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ATLAS | AI Test Console</title>
-    
+
     <!-- External Libs -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&family=Inter:wght@300;400;600;800&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
+
     <!-- Internal Styles -->
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
+
 <body>
 
     <div id="app-layout">
-        <!-- Top Bar -->
-        <header class="header">
-            <div class="brand">
-                <span>⚡ ATLAS</span>
-                <div style="width: 1px; height: 20px; background: var(--border);"></div>
-                <span style="font-size: 0.7rem; opacity: 0.8; letter-spacing: 1px;">TEST CONSOLE v8.0</span>
-            </div>
-            
-            <div class="engine-status">
-                <div class="status-dot" id="statusDot"></div>
-                <span id="statusLabel">ENGINE STANDBY</span>
-            </div>
-            
-            <div class="header-actions">
-                <div class="build-info">
-                    Build: <span id="buildTimestamp">REFRESH_TO_LOAD</span>
-                </div>
-                <button id="sidebarToggle" class="icon-btn mobile-only"><i class="fas fa-bars"></i></button>
-                <a href="/arena" class="arena-link">🏟️ Arena</a>
-                <div class="notification-bell" id="bellBtn">
-                    🔔<span class="notification-count" id="notifCount">0</span>
-                </div>
-                <div class="user-pill" id="userPill">
-                    <span id="userNameDisplay">...</span>
-                    <span id="userRoleDisplay" class="role-badge">...</span>
-                </div>
-            </div>
-        </header>
+        ... (rest of body) ...
+        <!-- Scripts -->
+        <script src="/static/state.js"></script>
+        <script src="/static/utils.js"></script>
+        <script src="/static/app.js"></script>
+</body>
 
-        <!-- Sidebar: Sessions -->
-        <aside id="sidebar">
-            <div class="sidebar-header">
-                <button id="newChatBtn" class="new-chat-btn">
-                    <i class="fas fa-plus"></i> New Session
-                </button>
-            </div>
-            <div class="search-box p-3">
-                <input type="text" id="chatSearch" placeholder="Search sessions..." class="search-input">
-            </div>
-            <div id="sessionList" class="session-list">
-                <!-- Sessions go here -->
-            </div>
-            <div class="sidebar-footer">
-                <button id="clearDataBtn" class="danger-btn-text">Clear Local Data</button>
-            </div>
-        </aside>
+</html>
+<!-- Top Bar -->
+<header class="header">
+    <div class="brand">
+        <span>⚡ ATLAS</span>
+        <div style="width: 1px; height: 20px; background: var(--border);"></div>
+        <span style="font-size: 0.7rem; opacity: 0.8; letter-spacing: 1px;">TEST CONSOLE v8.0</span>
+    </div>
 
-        <!-- Main Chat -->
-        <main id="chat-main">
-            <div id="chatView">
-                <div class="chat-content-limit" id="messagesContainer">
-                    <!-- Welcome message or chat history -->
-                </div>
-            </div>
-            
-            <div class="footer">
-                <div class="input-container">
-                    <div class="input-row">
-                        <select id="personaSelect" class="persona-select">
-                            <option value="standard">Standart</option>
-                            <option value="professional">Kurumsal</option>
-                            <option value="creative">Sanatçı</option>
-                            <option value="concise">Uzman (Öz)</option>
-                        </select>
-                        <button class="action-btn" id="attachBtn"><i class="fas fa-paperclip"></i></button>
-                        <input type="text" id="userInput" placeholder="Sisteme bir komut ver..." autocomplete="off">
-                        <button class="send-btn" id="sendBtn"><i class="fas fa-play"></i></button>
-                    </div>
-                </div>
-            </div>
-        </main>
+    <div class="engine-status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusLabel">ENGINE STANDBY</span>
+    </div>
 
-        <!-- Inspector: RDR -->
-        <aside id="inspector" class="collapsed">
-            <div class="inspector-header">
-                <div class="title">DEEP INSPECTOR</div>
-                <button id="closeInspector" class="close-btn">&times;</button>
-            </div>
-            <div class="inspector-tabs" id="inspectorTabs">
-                <button class="tab active" data-tab="summary">Özet</button>
-                <button class="tab" data-tab="trace">Trace</button>
-                <button class="tab" data-tab="memory">Memory</button>
-                <button class="tab" data-tab="raw">Raw JSON</button>
-            </div>
-            <div class="inspector-body" id="rdrContent">
-                <div class="empty-state">Mesaj seçilmedi</div>
-            </div>
-            <div class="inspector-footer">
-                <button id="copyJsonBtn" class="ghost-btn">Copy JSON</button>
-            </div>
-        </aside>
-
-        <!-- Notification Panel (Hidden) -->
-        <div id="notifPanel" class="notif-panel">
-            <div class="notif-header">
-                PROAKTİF UYARILAR
-                <span class="close-notif" id="closeNotif">&times;</span>
-            </div>
-            <div id="notifList">
-                <p class="empty-notif">Yeni bildirim bulunmuyor.</p>
-            </div>
+    <div class="header-actions">
+        <div class="build-info">
+            Build: <span id="buildTimestamp">REFRESH_TO_LOAD</span>
         </div>
+        <button id="sidebarToggle" class="icon-btn mobile-only"><i class="fas fa-bars"></i></button>
+        <a href="/arena" class="arena-link">🏟️ Arena</a>
+        <div class="notification-bell" id="bellBtn">
+            🔔<span class="notification-count" id="notifCount">0</span>
+        </div>
+        <div class="user-pill" id="userPill">
+            <span id="userNameDisplay">...</span>
+            <span id="userRoleDisplay" class="role-badge">...</span>
+        </div>
+    </div>
+</header>
 
-        <!-- Auth Overlay -->
-        <div id="authOverlay" class="overlay" style="display:none;">
-            <div class="modal-content">
-                <h2>Cihaz Tanımlama</h2>
-                <p>ATLAS Ekosistemine giriş yapın.</p>
-                <div class="form-group mt-4">
-                    <label>Görünen İsim</label>
-                    <input type="text" id="authName" placeholder="Observer Name" class="form-input">
-                </div>
-                <div class="form-group mt-3">
-                    <label>Görev Rolü</label>
-                    <select id="authRole" class="form-input">
-                        <option value="Developer">Developer (Full Access)</option>
-                        <option value="Tester">Tester (Observability)</option>
-                        <option value="Guest">Guest (Chat Only)</option>
-                    </select>
-                </div>
-                <button id="authSubmit" class="submit-btn mt-4">Sistemi Başlat</button>
-            </div>
+<!-- Sidebar: Sessions -->
+<aside id="sidebar">
+    <div class="sidebar-header">
+        <button id="newChatBtn" class="new-chat-btn">
+            <i class="fas fa-plus"></i> New Session
+        </button>
+    </div>
+    <div class="search-box p-3">
+        <input type="text" id="chatSearch" placeholder="Search sessions..." class="search-input">
+    </div>
+    <div id="sessionList" class="session-list">
+        <!-- Sessions go here -->
+    </div>
+    <div class="sidebar-footer">
+        <button id="clearDataBtn" class="danger-btn-text">Clear Local Data</button>
+    </div>
+</aside>
+
+<!-- Main Chat -->
+<main id="chat-main">
+    <div id="chatView">
+        <div class="chat-content-limit" id="messagesContainer">
+            <!-- Welcome message or chat history -->
         </div>
     </div>
 
-    <!-- Hidden File Input -->
-    <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+    <div class="footer">
+        <div class="input-container">
+            <div class="input-row">
+                <select id="personaSelect" class="persona-select">
+                    <option value="standard">Standart</option>
+                    <option value="professional">Kurumsal</option>
+                    <option value="creative">Sanatçı</option>
+                    <option value="concise">Uzman (Öz)</option>
+                </select>
+                <button class="action-btn" id="attachBtn"><i class="fas fa-paperclip"></i></button>
+                <input type="text" id="userInput" placeholder="Sisteme bir komut ver..." autocomplete="off">
+                <button class="send-btn" id="sendBtn"><i class="fas fa-play"></i></button>
+            </div>
+        </div>
+    </div>
+</main>
 
-    <!-- Scripts -->
-    <script src="state.js"></script>
-    <script src="utils.js"></script>
-    <script src="app.js"></script>
+<!-- Inspector: RDR -->
+<aside id="inspector" class="collapsed">
+    <div class="inspector-header">
+        <div class="title">DEEP INSPECTOR</div>
+        <button id="closeInspector" class="close-btn">&times;</button>
+    </div>
+    <div class="inspector-tabs" id="inspectorTabs">
+        <button class="tab active" data-tab="summary">Özet</button>
+        <button class="tab" data-tab="trace">Trace</button>
+        <button class="tab" data-tab="memory">Memory</button>
+        <button class="tab" data-tab="raw">Raw JSON</button>
+    </div>
+    <div class="inspector-body" id="rdrContent">
+        <div class="empty-state">Mesaj seçilmedi</div>
+    </div>
+    <div class="inspector-footer">
+        <button id="copyJsonBtn" class="ghost-btn">Copy JSON</button>
+    </div>
+</aside>
+
+<!-- Notification Panel (Hidden) -->
+<div id="notifPanel" class="notif-panel">
+    <div class="notif-header">
+        PROAKTİF UYARILAR
+        <span class="close-notif" id="closeNotif">&times;</span>
+    </div>
+    <div id="notifList">
+        <p class="empty-notif">Yeni bildirim bulunmuyor.</p>
+    </div>
+</div>
+
+<!-- Auth Overlay -->
+<div id="authOverlay" class="overlay" style="display:none;">
+    <div class="modal-content">
+        <h2>Cihaz Tanımlama</h2>
+        <p>ATLAS Ekosistemine giriş yapın.</p>
+        <div class="form-group mt-4">
+            <label>Görünen İsim</label>
+            <input type="text" id="authName" placeholder="Observer Name" class="form-input">
+        </div>
+        <div class="form-group mt-3">
+            <label>Görev Rolü</label>
+            <select id="authRole" class="form-input">
+                <option value="Developer">Developer (Full Access)</option>
+                <option value="Tester">Tester (Observability)</option>
+                <option value="Guest">Guest (Chat Only)</option>
+            </select>
+        </div>
+        <button id="authSubmit" class="submit-btn mt-4">Sistemi Başlat</button>
+    </div>
+</div>
+</div>
+
+<!-- Hidden File Input -->
+<input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+
+<!-- Scripts -->
+<script src="/static/state.js"></script>
+<script src="/static/utils.js"></script>
+<script src="/static/app.js"></script>
 </body>
+
 </html>
