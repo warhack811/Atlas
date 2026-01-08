@@ -61,7 +61,7 @@ class TestRC7GoldenSet(unittest.IsolatedAsyncioTestCase):
                 f_uid = params.get("uid")
                 if "MATCH (s:Session {id: $sid})-[:HAS_EPISODE]" in query:
                     return [e for e in fixtures.get("episodes", []) if e.get("status") == "READY"]
-                if "r.predicate IN ['İSİM'" in query:
+                if "MATCH (s:Entity {name: $anchor})" in query:
                     res = fixtures.get("identity", [])
                     if f_uid: res = [r for r in res if r.get("uid") == f_uid or "uid" not in r]
                     return res
