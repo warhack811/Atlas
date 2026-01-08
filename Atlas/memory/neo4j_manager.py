@@ -607,16 +607,48 @@ class Neo4jManager:
         results = await self.query_graph(query)
         return results[0] if results else None
 
-    async def mark_episode_ready(self, episode_id: str, summary: str, model: str):
-        """Episode'u READY yapar."""
+    async def mark_episode_ready(self, episode_id: str, summary: str, model: str, embedding: Optional[List[float]] = None, embedding_model: Optional[str] = None):
+        """Episode'u READY yapar ve varsa embedding'i kaydeder."""
         query = """
         MATCH (e:Episode {id: $id})
         SET e.status = "READY",
             e.summary = $summary,
             e.model = $model,
+            e.embedding = $embedding,
+            e.embedding_model = $embedding_model,
             e.updated_at = datetime()
         """
-        await self.query_graph(query, {"id": episode_id, "summary": summary, "model": model})
+        await self.query_graph(query, {
+            "id": episode_id, 
+            "summary": summary, 
+            "model": model,
+            "embedding": embedding,
+            "embedding_model": embedding_model
+        })
+
+    async def create_vector_index(self, dimension: int = 384):
+        """
+        Neo4j üzerinde vektör indeksi oluşturur (idempotent).
+        Her Neo4j sürümü desteklemeyebilir, bu yüzden try/except ile sarılmıştır.
+        """
+        query = f"""
+        CREATE VECTOR INDEX episode_embeddings IF NOT EXISTS
+        FOR (e:Episode)
+        ON (e.embedding)
+        OPTIONS {{
+          indexConfig: {{
+            `vector.dimensions`: {dimension},
+            `vector.similarity_function`: 'cosine'
+          }}
+        }}
+        """
+        try:
+            await self.query_graph(query)
+            logger.info(f"Neo4j Vektör İndeksi oluşturuldu/doğrulandı (Boyut: {dimension})")
+            return True
+        except Exception as e:
+            logger.warning(f"Neo4j Vektör İndeksi oluşturulamadı (Gelişmiş arama devre dışı kalabilir): {e}")
+            return False
 
     async def mark_episode_failed(self, episode_id: str, error: str):
         """Episode'u FAILED yapar."""

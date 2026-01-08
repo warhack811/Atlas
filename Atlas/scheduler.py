@@ -263,8 +263,19 @@ async def run_episode_worker():
         result = await generate_response(message, model_id, "analysis", style_profile={"persona": "standard"})
         
         if result.ok:
-            await neo4j_manager.mark_episode_ready(ep_id, result.text, result.model)
-            logger.info(f"Episode Worker: Tamamlandı -> {ep_id}")
+            # RC-10: Embedding üretimi
+            from Atlas.memory.embeddings import get_embedder
+            embedder = get_embedder()
+            vector = embedder.embed(result.text)
+            
+            await neo4j_manager.mark_episode_ready(
+                ep_id, 
+                result.text, 
+                result.model, 
+                embedding=vector, 
+                embedding_model=getattr(embedder, 'model_name', 'hash')
+            )
+            logger.info(f"Episode Worker: Tamamlandı (Anlamsal Hafıza Aktif) -> {ep_id}")
         else:
             await neo4j_manager.mark_episode_failed(ep_id, result.text)
             logger.error(f"Episode Worker: LLM hatası -> {ep_id}: {result.text}")
@@ -330,8 +341,19 @@ async def run_consolidation_worker():
         result = await generate_response(prompt, model_id, "analysis", style_profile={"persona": "standard"})
         
         if result.ok:
-            await neo4j_manager.mark_episode_ready(cons_id, result.text, result.model)
-            logger.info(f"Consolidation Worker: Tamamlandı -> {cons_id}")
+            # RC-10: Konsolide embedding üretimi
+            from Atlas.memory.embeddings import get_embedder
+            embedder = get_embedder()
+            vector = embedder.embed(result.text)
+            
+            await neo4j_manager.mark_episode_ready(
+                cons_id, 
+                result.text, 
+                result.model, 
+                embedding=vector, 
+                embedding_model=getattr(embedder, 'model_name', 'hash')
+            )
+            logger.info(f"Consolidation Worker: Tamamlandı (Anlamsal Hafıza Aktif) -> {cons_id}")
         else:
             await neo4j_manager.mark_episode_failed(cons_id, result.text)
             logger.error(f"Consolidation Worker: LLM hatası -> {cons_id}: {result.text}")

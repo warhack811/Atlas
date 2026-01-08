@@ -86,6 +86,24 @@ def get_token_overlap(text1: str, text2: str) -> float:
     # user_message'a (tokens2) göre ne kadar kapsıyor?
     return len(intersection) / len(tokens1) if tokens1 else 0.0
 
+def calculate_cosine_similarity(v1: List[float], v2: List[float]) -> float:
+    """İki vektör arasındaki kosinüs benzerliğini hesaplar."""
+    if not v1 or not v2 or len(v1) != len(v2):
+        return 0.0
+    
+    import numpy as np
+    a = np.array(v1)
+    b = np.array(v2)
+    
+    dot_product = np.dot(a, b)
+    norm_a = np.linalg.norm(a)
+    norm_b = np.linalg.norm(b)
+    
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+        
+    return float(dot_product / (norm_a * norm_b))
+
 # Yaklaşık token limitleri ve tahminleri
 MAX_CONTEXT_TOKENS = 4000
 TOKENS_PER_MESSAGE = 100  # Ortalama mesaj başına tahmin edilen token
@@ -731,29 +749,54 @@ async def build_chat_context_v1(
             stats["layer_usage"]["semantic"] = current_v3_size
         memory_v3 = "\n".join(final_v3_lines)
 
-    # C. Episodic (RC-8 Scoring V2: Overlap + Recency)
+    # C. Episodic (RC-8/RC-10 Scoring V3: Overlap + Semantic + Recency)
     episodic_budget = budgeter.get_layer_budget("episodic")
     episodic_text = ""
     if episodic_budget > 0:
         query = """
         MATCH (s:Session {id: $sid})-[:HAS_EPISODE]->(e:Episode {status: 'READY'})
         RETURN e.summary as summary, e.start_turn_index as start, e.end_turn_index as end, 
-               e.updated_at as updated_at, COALESCE(e.kind, 'REGULAR') as kind
+               e.updated_at as updated_at, COALESCE(e.kind, 'REGULAR') as kind,
+               e.embedding as embedding, e.id as id
         ORDER BY e.updated_at DESC
         LIMIT 15
         """
         ep_results = await neo4j_manager.query_graph(query, {"sid": session_id})
         
+        # RC-10: Query embedding üretimi
+        query_vector = None
+        from Atlas.config import EMBEDDING_SETTINGS
+        if ep_results and any(ep.get('embedding') for ep in ep_results):
+            from Atlas.memory.embeddings import get_embedder
+            query_vector = get_embedder().embed(user_message)
+            
         scored_episodes = []
         for i, ep in enumerate(ep_results):
-            # RC-8 Scoring: Overlap + Recency Bonus
+            # RC-8 Overlap
             overlap = get_token_overlap(ep['summary'], user_message)
-            # Recency: En yeni 3'e 0.2, sonrakilere 0.1 bonus
-            recency_bonus = 0.2 if i < 3 else 0.1
-            score = overlap + recency_bonus
+            
+            # RC-10 Semantic Similarity
+            semantic_sim = 0.0
+            if query_vector and ep.get('embedding'):
+                semantic_sim = calculate_cosine_similarity(query_vector, ep['embedding'])
+            
+            # RC-8 Recency: En yeni 3'e 1.0, sonrakilere 0.5 gibi bir bonus (ağırlıklandırılacak)
+            recency_bonus = 1.0 if i < 3 else 0.5
+            
+            # RC-10 Weighted Score
+            w = EMBEDDING_SETTINGS["SCORING_WEIGHTS"]
+            score = (w["overlap"] * overlap) + (w["semantic"] * semantic_sim) + (w["recency"] * recency_bonus)
             
             if score >= 0.15: # Min threshold
-                scored_episodes.append((score, ep))
+                # Trace için ek verileri sakla (ham metin değil sadece skorlar)
+                ep_meta = ep.copy()
+                ep_meta["_scores"] = {
+                    "overlap": round(overlap, 3),
+                    "semantic_sim": round(semantic_sim, 3),
+                    "recency": round(recency_bonus, 3),
+                    "total": round(score, 3)
+                }
+                scored_episodes.append((score, ep_meta))
             elif stats is not None:
                 stats["episode_filtered_out_count"] += 1
         
@@ -777,7 +820,12 @@ async def build_chat_context_v1(
                 selected_ep_lines.append(line)
                 curr_ep_size += len(line) + 1
                 all_context_texts.append(line)
-                if trace: trace.selected["episode_ids"].append(str(ep.get('id', 'episode')))
+                ep_id = str(ep.get('id', 'episode'))
+                if trace: 
+                    trace.selected["episode_ids"].append(ep_id)
+                    if "_scores" in ep:
+                        trace.scoring_details["episodes"][ep_id] = ep["_scores"]
+                
                 if ep['kind'] == 'REGULAR': reg_count += 1
                 else: cons_count += 1
         

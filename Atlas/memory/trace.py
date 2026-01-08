@@ -36,6 +36,11 @@ class ContextTrace:
         "fact_ids": []
     })
     
+    # RC-10: Skorlama Detayları (Explainability)
+    scoring_details: Dict[str, Any] = field(default_factory=lambda: {
+        "episodes": {} # ep_id -> scores
+    })
+    
     # Elenen Öğeler (Sayılar)
     filtered_counts: Dict[str, int] = field(default_factory=lambda: {
         "episode_filtered": 0,

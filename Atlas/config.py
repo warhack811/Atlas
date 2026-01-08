@@ -125,6 +125,18 @@ CONTEXT_BUDGET = {
     }
 }
 
+# RC-10: Anlamsal Benzerlik (Semantic Similarity) Ayarları
+EMBEDDING_SETTINGS = {
+    "PROVIDER": os.getenv("EMBEDDER_PROVIDER", "hash"), # 'hash' veya 'sentence-transformers'
+    "MODEL_NAME": "all-MiniLM-L6-v2",
+    "DIMENSION": 384,
+    "SCORING_WEIGHTS": {
+        "overlap": 0.45,
+        "semantic": 0.35,
+        "recency": 0.20
+    }
+}
+
 # RC-8: Niyete göre dinamik bütçe profilleri
 CONTEXT_BUDGET_PROFILES = {
     "GENERAL":   {"transcript": 0.80, "episodic": 0.20, "semantic": 0.00},
