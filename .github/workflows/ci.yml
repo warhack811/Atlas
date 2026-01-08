@@ -35,7 +35,7 @@ jobs:
           python -m unittest Atlas.test_rc2_identity -v
 
       - name: Upload Metrics
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: golden-set-metrics
