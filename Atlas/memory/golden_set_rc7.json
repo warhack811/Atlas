@@ -1,0 +1,1538 @@
+[
+    {
+        "id": "GS7-001",
+        "category": "OFF_MODE",
+        "user_message": "Ankara'da hava nasıl?",
+        "policy_mode": "OFF",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "YAŞAR_YER",
+                    "object": "Ankara"
+                }
+            ],
+            "hard": [],
+            "soft": [],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "kapali"
+        ],
+        "expected_not_contains": [
+            "Ankara"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-002",
+        "category": "OFF_MODE",
+        "user_message": "İsmim ne?",
+        "policy_mode": "OFF",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Ahmet"
+                }
+            ],
+            "hard": [],
+            "soft": [],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "Kullanici tercihi gereği kisisel hafiza erisimi kapalidir"
+        ],
+        "expected_not_contains": [
+            "Ahmet"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-003",
+        "category": "MULTI_USER",
+        "user_message": "Benim memleketim neresi?",
+        "user_id": "user_B",
+        "fixtures": {
+            "identity": [
+                {
+                    "uid": "user_A",
+                    "predicate": "GELDİĞİ_YER",
+                    "object": "Sivas"
+                },
+                {
+                    "uid": "user_B",
+                    "predicate": "GELDİĞİ_YER",
+                    "object": "İzmir"
+                }
+            ],
+            "hard": [],
+            "soft": [],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "izmir"
+        ],
+        "expected_not_contains": [
+            "Sivas"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-004",
+        "category": "CONSOLIDATION",
+        "user_message": "Eski projelerimde ne yapmıştık?",
+        "fixtures": {
+            "identity": [],
+            "hard": [],
+            "soft": [],
+            "episodes": [
+                {
+                    "summary": "Geçen yılki e-ticaret projesinde sepet mantığı kuruldu.",
+                    "kind": "CONSOLIDATED",
+                    "status": "READY",
+                    "start": 1,
+                    "end": 100
+                },
+                {
+                    "summary": "Son toplantıda ödeme entegrasyonu konuşuldu.",
+                    "kind": "REGULAR",
+                    "status": "READY",
+                    "start": 101,
+                    "end": 110
+                }
+            ],
+            "turns": []
+        },
+        "expected_contains": [
+            "e-ticaret projesi",
+            "sepet mantiği",
+            "odeme entegrasyonu"
+        ],
+        "expected_not_contains": [],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-005",
+        "category": "TIMEZONE",
+        "user_message": "Şu an saat kaç?",
+        "tz": "Europe/Istanbul",
+        "fixtures": {
+            "identity": [],
+            "hard": [],
+            "soft": [],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "Turkiye saati"
+        ],
+        "expected_not_contains": [
+            "UTC"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-006",
+        "category": "DEDUPE",
+        "user_message": "Pizza severim demiştin.",
+        "fixtures": {
+            "identity": [],
+            "hard": [],
+            "soft": [
+                {
+                    "subject": "__USER__",
+                    "predicate": "SEVER",
+                    "object": "Pizza"
+                }
+            ],
+            "episodes": [],
+            "turns": [
+                {
+                    "role": "user",
+                    "content": "Pizza severim."
+                }
+            ]
+        },
+        "expected_contains": [
+            "Pizza severim"
+        ],
+        "expected_not_contains": [
+            "SEVER: Pizza"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-007",
+        "category": "SCORING",
+        "user_message": "Basketbol maçı ne oldu?",
+        "fixtures": {
+            "identity": [],
+            "hard": [],
+            "soft": [],
+            "episodes": [
+                {
+                    "summary": "Dünkü basketbol maçını kazandık.",
+                    "status": "READY",
+                    "start": 10,
+                    "end": 20
+                },
+                {
+                    "summary": "Hava çok güzeldi.",
+                    "status": "READY",
+                    "start": 1,
+                    "end": 5
+                }
+            ],
+            "turns": []
+        },
+        "expected_contains": [
+            "basketbol macini kazandik"
+        ],
+        "expected_not_contains": [
+            "Hava çok güzeldi"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-008",
+        "category": "LEAK",
+        "user_message": "Hava bugün nasıl?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Gizli"
+                }
+            ],
+            "hard": [],
+            "soft": [],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [],
+        "expected_not_contains": [
+            "Gizli"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-009",
+        "category": "NOISE",
+        "user_message": "1+1 kaç eder?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "MESLEĞİ",
+                    "object": "Matematikçi"
+                }
+            ],
+            "hard": [],
+            "soft": [],
+            "episodes": [
+                {
+                    "summary": "Sayılar üzerine derin bir sohbet ettik.",
+                    "status": "READY",
+                    "start": 1,
+                    "end": 10
+                }
+            ],
+            "turns": []
+        },
+        "expected_contains": [],
+        "expected_not_contains": [
+            "Matematikçi",
+            "Sayılar üzerine"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-010",
+        "category": "DEDUPE",
+        "user_message": "Adım Ahmet.",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Ahmet"
+                }
+            ],
+            "hard": [],
+            "soft": [],
+            "episodes": [],
+            "turns": [
+                {
+                    "role": "user",
+                    "content": "Adım Ahmet."
+                }
+            ]
+        },
+        "expected_contains": [
+            "Adim Ahmet"
+        ],
+        "expected_not_contains": [
+            "İSİM: Ahmet"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-011",
+        "category": "SCORING",
+        "user_message": "Finansal durum nedir?",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Banka borçları ödendi.",
+                    "status": "READY"
+                },
+                {
+                    "summary": "Bahçeye ağaç diktik.",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Banka borclari"
+        ],
+        "expected_not_contains": [
+            "Bahçeye ağaç"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-012",
+        "category": "CONSOLIDATION",
+        "user_message": "Tatil planı?",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Antalya tatili planlandı.",
+                    "kind": "CONSOLIDATED",
+                    "status": "READY"
+                },
+                {
+                    "summary": "Bugün işe gittim.",
+                    "kind": "REGULAR",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Antalya tatili"
+        ],
+        "expected_not_contains": [
+            "Bugün işe gittim"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-013",
+        "category": "OFF_MODE",
+        "user_message": "Neredeyim?",
+        "policy_mode": "OFF",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "YAŞAR_YER",
+                    "object": "İstanbul"
+                }
+            ]
+        },
+        "expected_contains": [
+            "kapali"
+        ],
+        "expected_not_contains": [
+            "İstanbul"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-014",
+        "category": "MULTI_USER",
+        "user_message": "Arabam ne?",
+        "user_id": "user1",
+        "fixtures": {
+            "hard": [
+                {
+                    "uid": "user1",
+                    "subject": "Araba",
+                    "predicate": "MODEL",
+                    "object": "Tesla"
+                },
+                {
+                    "uid": "user2",
+                    "subject": "Araba",
+                    "predicate": "MODEL",
+                    "object": "BMW"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Tesla"
+        ],
+        "expected_not_contains": [
+            "BMW"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-015",
+        "category": "TIMEZONE",
+        "user_message": "Yarın sabah?",
+        "tz": "America/New_York",
+        "fixtures": {},
+        "expected_contains": [
+            "New_York"
+        ],
+        "expected_not_contains": [
+            "İstanbul"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-016",
+        "category": "LEAK",
+        "user_message": "Güneş ne zaman doğar?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Ahmet"
+                }
+            ]
+        },
+        "expected_contains": [],
+        "expected_not_contains": [
+            "Ahmet"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-017",
+        "category": "DEDUPE",
+        "user_message": "Mavi severim.",
+        "fixtures": {
+            "soft": [
+                {
+                    "subject": "__USER__",
+                    "predicate": "RENK_SEVER",
+                    "object": "Mavi"
+                }
+            ],
+            "turns": [
+                {
+                    "role": "user",
+                    "content": "Mavi severim."
+                }
+            ]
+        },
+        "expected_contains": [
+            "Mavi severim"
+        ],
+        "expected_not_contains": [
+            "RENK_SEVER: Mavi"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-018",
+        "category": "SCORING",
+        "user_message": "Doktor randevusu?",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Salı günü doktor randevusu var.",
+                    "status": "READY"
+                },
+                {
+                    "summary": "Dün akşam film izledik.",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [
+            "doktor randevusu"
+        ],
+        "expected_not_contains": [
+            "film izledik"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-019",
+        "category": "NOISE",
+        "user_message": "Merhaba",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Ali"
+                }
+            ]
+        },
+        "expected_contains": [],
+        "expected_not_contains": [
+            "Ali"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-020",
+        "category": "CONSOLIDATION",
+        "user_message": "Geçmiş özet?",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Geçmişin özeti burada.",
+                    "kind": "CONSOLIDATED",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Gecmisin ozeti"
+        ],
+        "expected_not_contains": [],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-021",
+        "category": "OFF_MODE",
+        "user_message": "Hobim ne?",
+        "policy_mode": "OFF",
+        "fixtures": {
+            "soft": [
+                {
+                    "predicate": "HOBİ",
+                    "object": "Resim"
+                }
+            ]
+        },
+        "expected_contains": [
+            "kapali"
+        ],
+        "expected_not_contains": [
+            "Resim"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-022",
+        "category": "MULTI_USER",
+        "user_message": "Kardeşim kim?",
+        "user_id": "u1",
+        "fixtures": {
+            "soft": [
+                {
+                    "uid": "u1",
+                    "predicate": "KARDEŞİ",
+                    "object": "Ece"
+                },
+                {
+                    "uid": "u2",
+                    "predicate": "KARDEŞİ",
+                    "object": "Can"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Ece"
+        ],
+        "expected_not_contains": [
+            "Can"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-023",
+        "category": "SCORING",
+        "user_message": "Kedi maması?",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Kedi maması bitti, alınacak.",
+                    "status": "READY"
+                },
+                {
+                    "summary": "Marketten ekmek aldım.",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Kedi mamasi"
+        ],
+        "expected_not_contains": [
+            "Marketten ekmek"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-024",
+        "category": "DEDUPE",
+        "user_message": "Beşiktaşlıyım.",
+        "fixtures": {
+            "soft": [
+                {
+                    "predicate": "TUTAR",
+                    "object": "Beşiktaş"
+                }
+            ],
+            "turns": [
+                {
+                    "role": "user",
+                    "content": "Beşiktaşlıyım."
+                }
+            ]
+        },
+        "expected_contains": [
+            "Besiktasliyim"
+        ],
+        "expected_not_contains": [
+            "TUTAR: Beşiktaş"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-025",
+        "category": "TIMEZONE",
+        "user_message": "Bugün günlerden ne?",
+        "fixtures": {},
+        "expected_contains": [
+            "istanbul"
+        ],
+        "expected_not_contains": [],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-026",
+        "category": "LEAK",
+        "user_message": "Dünya yuvarlak mı?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "MESLEĞİ",
+                    "object": "Pilot"
+                }
+            ]
+        },
+        "expected_contains": [],
+        "expected_not_contains": [
+            "Pilot"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-027",
+        "category": "NOISE",
+        "user_message": "Nasılsın?",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Yoğun bir gün geçirdik.",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [],
+        "expected_not_contains": [
+            "Yoğun bir gün"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-028",
+        "category": "CONSOLIDATION",
+        "user_message": "Eski anılar?",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Çocukluk anıları konsolide edildi.",
+                    "kind": "CONSOLIDATED",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Çocukluk anilari"
+        ],
+        "expected_not_contains": [],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-029",
+        "category": "OFF_MODE",
+        "user_message": "Gizli bilgim?",
+        "policy_mode": "OFF",
+        "fixtures": {
+            "hard": [
+                {
+                    "subject": "Kasa",
+                    "predicate": "ŞİFRE",
+                    "object": "1234"
+                }
+            ]
+        },
+        "expected_contains": [
+            "kapali"
+        ],
+        "expected_not_contains": [
+            "1234"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-030",
+        "category": "MULTI_USER",
+        "user_message": "Evim nerede?",
+        "user_id": "u1",
+        "fixtures": {
+            "identity": [
+                {
+                    "uid": "u1",
+                    "predicate": "YAŞAR_YER",
+                    "object": "Bursa"
+                },
+                {
+                    "uid": "u2",
+                    "predicate": "YAŞAR_YER",
+                    "object": "Aydın"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Bursa"
+        ],
+        "expected_not_contains": [
+            "Aydın"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-031",
+        "category": "SCORING",
+        "user_message": "Python kursu?",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Python kursuna kayıt oldum.",
+                    "status": "READY"
+                },
+                {
+                    "summary": "Yemekte makarna vardı.",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Python kursu"
+        ],
+        "expected_not_contains": [
+            "Makarna"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-032",
+        "category": "DEDUPE",
+        "user_message": "Adresim Moda.",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "YAŞAR_YER",
+                    "object": "Moda"
+                }
+            ],
+            "turns": [
+                {
+                    "role": "user",
+                    "content": "Adresim Moda."
+                }
+            ]
+        },
+        "expected_contains": [
+            "Adresim Moda"
+        ],
+        "expected_not_contains": [
+            "YAŞAR_YER: Moda"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-033",
+        "category": "TIMEZONE",
+        "user_message": "Saat farkı?",
+        "tz": "Pacific/Auckland",
+        "fixtures": {},
+        "expected_contains": [
+            "Auckland"
+        ],
+        "expected_not_contains": [
+            "İstanbul"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-034",
+        "category": "LEAK",
+        "user_message": "Su kaç derecede kaynar?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "YAŞI",
+                    "object": "30"
+                }
+            ]
+        },
+        "expected_contains": [],
+        "expected_not_contains": [
+            "30"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-035",
+        "category": "NOISE",
+        "user_message": "Test mesajı",
+        "fixtures": {
+            "soft": [
+                {
+                    "predicate": "İLGİ",
+                    "object": "Yapay Zeka"
+                }
+            ]
+        },
+        "expected_contains": [],
+        "expected_not_contains": [
+            "Yapay Zeka"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-036",
+        "category": "CONSOLIDATION",
+        "user_message": "Geçen ay?",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Geçen ayın özeti: Çok çalıştık.",
+                    "kind": "CONSOLIDATED",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Gecen ayin ozeti"
+        ],
+        "expected_not_contains": [],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-037",
+        "category": "OFF_MODE",
+        "user_message": "Annemin adı?",
+        "policy_mode": "OFF",
+        "fixtures": {
+            "soft": [
+                {
+                    "predicate": "ANNESİ",
+                    "object": "Ayşe"
+                }
+            ]
+        },
+        "expected_contains": [
+            "kapali"
+        ],
+        "expected_not_contains": [
+            "Ayşe"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-038",
+        "category": "MULTI_USER",
+        "user_message": "En sevdiğim oyun?",
+        "user_id": "uA",
+        "fixtures": {
+            "soft": [
+                {
+                    "uid": "uA",
+                    "predicate": "OYUN_SEVER",
+                    "object": "Chess"
+                },
+                {
+                    "uid": "uB",
+                    "predicate": "OYUN_SEVER",
+                    "object": "Go"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Chess"
+        ],
+        "expected_not_contains": [
+            "Go"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-039",
+        "category": "SCORING",
+        "user_message": "Gitar dersi?",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Gitar dersine başladım.",
+                    "status": "READY"
+                },
+                {
+                    "summary": "Hava yağmurluydu.",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Gitar dersi"
+        ],
+        "expected_not_contains": [
+            "yağmurlu"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-040",
+        "category": "DEDUPE",
+        "user_message": "Mavi araba.",
+        "fixtures": {
+            "hard": [
+                {
+                    "subject": "Araba",
+                    "predicate": "RENK",
+                    "object": "Mavi"
+                }
+            ],
+            "turns": [
+                {
+                    "role": "user",
+                    "content": "Mavi araba."
+                }
+            ]
+        },
+        "expected_contains": [
+            "Mavi araba"
+        ],
+        "expected_not_contains": [
+            "RENK: Mavi"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-041",
+        "category": "TIMEZONE",
+        "user_message": "Zaman?",
+        "tz": "Asia/Tokyo",
+        "fixtures": {},
+        "expected_contains": [
+            "Tokyo"
+        ],
+        "expected_not_contains": [
+            "İstanbul"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-042",
+        "category": "LEAK",
+        "user_message": "Ay kaç yaşında?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Can"
+                }
+            ]
+        },
+        "expected_contains": [],
+        "expected_not_contains": [
+            "Can"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-043",
+        "category": "NOISE",
+        "user_message": "Nokta",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Ece"
+                }
+            ]
+        },
+        "expected_contains": [],
+        "expected_not_contains": [
+            "Ece"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-044",
+        "category": "CONSOLIDATION",
+        "user_message": "Üst özet getir.",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Meta özet başarıyla oluşturuldu.",
+                    "kind": "CONSOLIDATED",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Meta ozet"
+        ],
+        "expected_not_contains": [],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-045",
+        "category": "OFF_MODE",
+        "user_message": "Şifrem?",
+        "policy_mode": "OFF",
+        "fixtures": {
+            "hard": [
+                {
+                    "subject": "Sistem",
+                    "predicate": "PASS",
+                    "object": "qwerty"
+                }
+            ]
+        },
+        "expected_contains": [
+            "kapali"
+        ],
+        "expected_not_contains": [
+            "qwerty"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-046",
+        "category": "MULTI_USER",
+        "user_message": "Şirketim?",
+        "user_id": "u1",
+        "fixtures": {
+            "hard": [
+                {
+                    "uid": "u1",
+                    "subject": "__USER__",
+                    "predicate": "ÇALIŞIR",
+                    "object": "Apple"
+                },
+                {
+                    "uid": "u2",
+                    "subject": "__USER__",
+                    "predicate": "ÇALIŞIR",
+                    "object": "Meta"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Apple"
+        ],
+        "expected_not_contains": [
+            "Meta"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-047",
+        "category": "SCORING",
+        "user_message": "Yeni ev?",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Yeni bir eve taşındım.",
+                    "status": "READY"
+                },
+                {
+                    "summary": "Eski telefonumu sattım.",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Yeni bir eve"
+        ],
+        "expected_not_contains": [
+            "Eski telefon"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-048",
+        "category": "DEDUPE",
+        "user_message": "Okulum İTÜ.",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "OKULU",
+                    "object": "İTÜ"
+                }
+            ],
+            "turns": [
+                {
+                    "role": "user",
+                    "content": "Okulum İTÜ."
+                }
+            ]
+        },
+        "expected_contains": [
+            "Okulum iTÜ"
+        ],
+        "expected_not_contains": [
+            "OKULU: İTÜ"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-049",
+        "category": "TIMEZONE",
+        "user_message": "Gece?",
+        "tz": "Europe/London",
+        "fixtures": {},
+        "expected_contains": [
+            "London"
+        ],
+        "expected_not_contains": [
+            "İstanbul"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-050",
+        "category": "LEAK",
+        "user_message": "En büyük okyanus?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Deniz"
+                }
+            ]
+        },
+        "expected_contains": [],
+        "expected_not_contains": [
+            "Deniz"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-051",
+        "category": "NOISE",
+        "user_message": "Tamam",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Selin"
+                }
+            ]
+        },
+        "expected_contains": [],
+        "expected_not_contains": [
+            "Selin"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-052",
+        "category": "CONSOLIDATION",
+        "user_message": "Büyük resim?",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Büyük resim: Kariyer hedefleri netleşti.",
+                    "kind": "CONSOLIDATED",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Kariyer hedefleri"
+        ],
+        "expected_not_contains": [],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-053",
+        "category": "OFF_MODE",
+        "user_message": "Borcum?",
+        "policy_mode": "OFF",
+        "fixtures": {
+            "hard": [
+                {
+                    "subject": "Borç",
+                    "predicate": "MIKTAR",
+                    "object": "1000"
+                }
+            ]
+        },
+        "expected_contains": [
+            "kapali"
+        ],
+        "expected_not_contains": [
+            "1000"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-054",
+        "category": "MULTI_USER",
+        "user_message": "Eşim kim?",
+        "user_id": "uX",
+        "fixtures": {
+            "soft": [
+                {
+                    "uid": "uX",
+                    "predicate": "EŞİ",
+                    "object": "Lale"
+                },
+                {
+                    "uid": "uY",
+                    "predicate": "EŞİ",
+                    "object": "Gül"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Lale"
+        ],
+        "expected_not_contains": [
+            "Gül"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-055",
+        "category": "SCORING",
+        "user_message": "Sınav sonucu?",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Matematik sınavından 90 aldım.",
+                    "status": "READY"
+                },
+                {
+                    "summary": "Bugün spor yaptım.",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Matematik sinavindan"
+        ],
+        "expected_not_contains": [
+            "spor yaptım"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-056",
+        "category": "DEDUPE",
+        "user_message": "30 yaşındayım.",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "YAŞI",
+                    "object": "30"
+                }
+            ],
+            "turns": [
+                {
+                    "role": "user",
+                    "content": "30 yaşındayım."
+                }
+            ]
+        },
+        "expected_contains": [
+            "30 yasindayim"
+        ],
+        "expected_not_contains": [
+            "YAŞI: 30"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-057",
+        "category": "TIMEZONE",
+        "user_message": "Giriş?",
+        "tz": "America/Los_Angeles",
+        "fixtures": {},
+        "expected_contains": [
+            "Los_Angeles"
+        ],
+        "expected_not_contains": [
+            "İstanbul"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-058",
+        "category": "LEAK",
+        "user_message": "Işık hızı?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Uras"
+                }
+            ]
+        },
+        "expected_contains": [],
+        "expected_not_contains": [
+            "Uras"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-059",
+        "category": "NOISE",
+        "user_message": "Hehe",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Melis"
+                }
+            ]
+        },
+        "expected_contains": [],
+        "expected_not_contains": [
+            "Melis"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-060",
+        "category": "CONSOLIDATION",
+        "user_message": "Dönen özet?",
+        "fixtures": {
+            "episodes": [
+                {
+                    "summary": "Dönemsel özet aktif edildi.",
+                    "kind": "CONSOLIDATED",
+                    "status": "READY"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Donemsel ozet"
+        ],
+        "expected_not_contains": [],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-061",
+        "category": "CORRECTION",
+        "user_message": "İzmir'e taşındım demiyor muydum?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "YAŞAR_YER",
+                    "object": "İzmir"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Izmir"
+        ],
+        "expected_not_contains": [],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-062",
+        "category": "CORRECTION",
+        "user_message": "Yanlış biliyorsun, adım Mert değil Ali.",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Ali"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Ali"
+        ],
+        "expected_not_contains": [
+            "Mert"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-063",
+        "category": "CONFLICT",
+        "user_message": "Nerede yaşıyorum?",
+        "fixtures": {
+            "conflicts": [
+                {
+                    "predicate": "YAŞAR_YER",
+                    "old_value": "Ankara",
+                    "new_value": "İstanbul"
+                }
+            ]
+        },
+        "expected_contains": [
+            "yasar_yer",
+            "ankara",
+            "istanbul"
+        ],
+        "expected_not_contains": [],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-064",
+        "category": "NEGATION",
+        "user_message": "Sushi sevmiyorum demiştim.",
+        "fixtures": {
+            "soft": [
+                {
+                    "predicate": "SEVMIYOR",
+                    "object": "Sushi"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Sushi sevmiyor"
+        ],
+        "expected_not_contains": [
+            "sever"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-065",
+        "category": "UNCERTAINTY",
+        "user_message": "Sanırım bir kedim olacaktı.",
+        "fixtures": {
+            "soft": [
+                {
+                    "predicate": "SAHİP",
+                    "object": "Kedi",
+                    "confidence": 0.5
+                }
+            ]
+        },
+        "expected_contains": [
+            "Kedi"
+        ],
+        "expected_not_contains": [],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-066",
+        "category": "OFF_MODE",
+        "user_message": "Düzeltme: Ankara değil İzmir.",
+        "policy_mode": "OFF",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "YAŞAR_YER",
+                    "object": "İzmir"
+                }
+            ]
+        },
+        "expected_contains": [
+            "kisisel hafiza erisimi kapalidir"
+        ],
+        "expected_not_contains": [
+            "Izmir",
+            "Ankara"
+        ],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-067",
+        "category": "CONFIDENCE_DECAY",
+        "user_message": "Hala kedi istiyor muyum?",
+        "fixtures": {
+            "soft": [
+                {
+                    "predicate": "İSTİYOR",
+                    "object": "Kedi",
+                    "confidence": 0.1,
+                    "status": "DEPRECATED"
+                }
+            ]
+        },
+        "expected_contains": [
+            "istiyor muyum"
+        ],
+        "expected_not_contains": [
+            "Kedi"
+        ],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-068",
+        "category": "OPEN_QUESTION",
+        "user_message": "Hangi takımı tutuyorum?",
+        "fixtures": {
+            "conflicts": [
+                {
+                    "predicate": "TUTAR",
+                    "old_value": "Galatasaray",
+                    "new_value": "Fenerbahçe"
+                }
+            ]
+        },
+        "expected_contains": [
+            "tutar",
+            "galatasaray",
+            "fenerbahce"
+        ],
+        "expected_not_contains": [],
+        "severity": "HARD"
+    },
+    {
+        "id": "GS7-069",
+        "category": "UNCERTAINTY",
+        "user_message": "Belki bir gün Japonya'ya giderim.",
+        "fixtures": {
+            "soft": [
+                {
+                    "predicate": "GİTMEK_İSTİYOR",
+                    "object": "Japonya",
+                    "confidence": 0.45
+                }
+            ]
+        },
+        "expected_contains": [
+            "Japonya"
+        ],
+        "expected_not_contains": [],
+        "severity": "SOFT"
+    },
+    {
+        "id": "GS7-070",
+        "category": "CORRECTION",
+        "user_message": "Geçen gün hata yaptın, memleketimi yanlış hatırladın.",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "GELDİĞİ_YER",
+                    "object": "Sivas"
+                }
+            ]
+        },
+        "expected_contains": [
+            "Sivas"
+        ],
+        "expected_not_contains": [],
+        "severity": "SOFT"
+    }
+]

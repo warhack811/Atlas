@@ -1,0 +1,439 @@
+[
+    {
+        "id": "GS1",
+        "input": "Ankara'da hava nasıl?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "YAŞAR_YER",
+                    "object": "Ankara"
+                }
+            ],
+            "hard": [],
+            "soft": [],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "Ankara"
+        ],
+        "expected_not_contains": [
+            "İstanbul"
+        ]
+    },
+    {
+        "id": "GS2",
+        "input": "En sevdiğim yemek neydi?",
+        "fixtures": {
+            "identity": [],
+            "hard": [],
+            "soft": [
+                {
+                    "subject": "__USER__",
+                    "predicate": "SEVER",
+                    "object": "İskender Kebap"
+                }
+            ],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "İskender Kebap"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS3",
+        "input": "Dünkü toplantıyı özetle.",
+        "fixtures": {
+            "identity": [],
+            "hard": [],
+            "soft": [],
+            "episodes": [
+                {
+                    "summary": "Dünkü toplantıda bütçe konuşuldu.",
+                    "start": 1,
+                    "end": 10
+                }
+            ],
+            "turns": []
+        },
+        "expected_contains": [
+            "bütçe konuşuldu"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS4",
+        "input": "Adım ne?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Ahmet"
+                }
+            ],
+            "hard": [],
+            "soft": [],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "Ahmet"
+        ],
+        "expected_not_contains": [
+            "Mehmet"
+        ]
+    },
+    {
+        "id": "GS5",
+        "input": "Bütçe aşımı dedik ama...",
+        "fixtures": {
+            "identity": [],
+            "hard": [],
+            "soft": [],
+            "episodes": [
+                {
+                    "summary": "Toplantıda bütçe aşımı tartışıldı.",
+                    "start": 1,
+                    "end": 5
+                },
+                {
+                    "summary": "Hava durumu raporu.",
+                    "start": 6,
+                    "end": 10
+                }
+            ],
+            "turns": []
+        },
+        "expected_contains": [
+            "bütçe aşımı"
+        ],
+        "expected_not_contains": [
+            "Hava durumu"
+        ]
+    },
+    {
+        "id": "GS6",
+        "input": "Dedupe Test: Ankara'da yaşıyorum demiştin.",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "YAŞAR_YER",
+                    "object": "Ankara"
+                }
+            ],
+            "hard": [],
+            "soft": [],
+            "episodes": [],
+            "turns": [
+                {
+                    "role": "user",
+                    "content": "Ankara'da yaşıyorum."
+                }
+            ]
+        },
+        "expected_contains": [
+            "Ankara"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS7",
+        "input": "OFF Mode Test",
+        "mode": "OFF",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "İSİM",
+                    "object": "Gizli"
+                }
+            ],
+            "hard": [],
+            "soft": [],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "kapalı"
+        ],
+        "expected_not_contains": [
+            "Gizli"
+        ]
+    },
+    {
+        "id": "GS8",
+        "input": "Mesleğim ne?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "MESLEĞİ",
+                    "object": "Mühendis"
+                }
+            ],
+            "hard": [],
+            "soft": [],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "Mühendis"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS9",
+        "input": "Nerede çalışıyorum?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "MESLEĞİ",
+                    "object": "Yazılımcı"
+                }
+            ],
+            "hard": [
+                {
+                    "subject": "Yazılımcı",
+                    "predicate": "ÇALIŞIR",
+                    "object": "Google"
+                }
+            ],
+            "soft": [],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "Google"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS10",
+        "input": "Arkadaşım kim?",
+        "fixtures": {
+            "identity": [],
+            "hard": [],
+            "soft": [
+                {
+                    "subject": "__USER__",
+                    "predicate": "ARKADAŞI",
+                    "object": "Can"
+                }
+            ],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "Can"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS11",
+        "input": "Hangi takımı tutuyorum?",
+        "fixtures": {
+            "identity": [],
+            "hard": [],
+            "soft": [
+                {
+                    "subject": "__USER__",
+                    "predicate": "TUTAR",
+                    "object": "Beşiktaş"
+                }
+            ],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "Beşiktaş"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS12",
+        "input": "Dün ne konuştuk?",
+        "fixtures": {
+            "identity": [],
+            "hard": [],
+            "soft": [],
+            "episodes": [
+                {
+                    "summary": "Kodlama üzerine konuştuk.",
+                    "start": 1,
+                    "end": 20
+                }
+            ],
+            "turns": []
+        },
+        "expected_contains": [
+            "Kodlama"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS13",
+        "input": "Kedimin adı ne?",
+        "fixtures": {
+            "identity": [],
+            "hard": [
+                {
+                    "subject": "Kedi",
+                    "predicate": "ADI",
+                    "object": "Pamuk"
+                }
+            ],
+            "soft": [],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "Pamuk"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS14",
+        "input": "Hangi dili öğreniyorum?",
+        "fixtures": {
+            "identity": [],
+            "hard": [],
+            "soft": [
+                {
+                    "subject": "__USER__",
+                    "predicate": "ÖĞRENİR",
+                    "object": "Almanca"
+                }
+            ],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "Almanca"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS15",
+        "input": "En son ne dedin?",
+        "fixtures": {
+            "identity": [],
+            "hard": [],
+            "soft": [],
+            "episodes": [],
+            "turns": [
+                {
+                    "role": "assistant",
+                    "content": "Tamam anlaşıldı."
+                }
+            ]
+        },
+        "expected_contains": [
+            "anlaşıldı"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS16",
+        "input": "Araba markam ne?",
+        "fixtures": {
+            "identity": [],
+            "hard": [
+                {
+                    "subject": "Araba",
+                    "predicate": "MARKA",
+                    "object": "Tesla"
+                }
+            ],
+            "soft": [],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "Tesla"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS17",
+        "input": "Yaşım kaç?",
+        "fixtures": {
+            "identity": [
+                {
+                    "predicate": "YAŞI",
+                    "object": "25"
+                }
+            ],
+            "hard": [],
+            "soft": [],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "25"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS18",
+        "input": "Şirketimin adı ne?",
+        "fixtures": {
+            "identity": [],
+            "hard": [
+                {
+                    "subject": "__USER__",
+                    "predicate": "SAHİBİ",
+                    "object": "Atlas Tech"
+                }
+            ],
+            "soft": [],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "Atlas Tech"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS19",
+        "input": "Hangi şehirde tatil yaptım?",
+        "fixtures": {
+            "identity": [],
+            "hard": [],
+            "soft": [
+                {
+                    "subject": "__USER__",
+                    "predicate": "TATİL_YAPAR",
+                    "object": "Antalya"
+                }
+            ],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "Antalya"
+        ],
+        "expected_not_contains": []
+    },
+    {
+        "id": "GS20",
+        "input": "En sevdiğim renk?",
+        "fixtures": {
+            "identity": [],
+            "hard": [],
+            "soft": [
+                {
+                    "subject": "__USER__",
+                    "predicate": "RENK_SEVER",
+                    "object": "Mavi"
+                }
+            ],
+            "episodes": [],
+            "turns": []
+        },
+        "expected_contains": [
+            "Mavi"
+        ],
+        "expected_not_contains": []
+    }
+]

@@ -1,6 +1,8 @@
+import os
 import asyncio
 import logging
 import time
+import uuid
 from typing import List, Dict, Any, Optional
 from neo4j import AsyncGraphDatabase
 from neo4j.exceptions import ServiceUnavailable, SessionExpired
@@ -84,14 +86,15 @@ class Neo4jManager:
         catalog = get_catalog()
         new_triplets, supersede_ops = await resolve_conflicts(triplets, user_id, source_turn_id, catalog)
         
-        # Execute supersede operations first
+        # Execute supersede/conflict operations first
         for op in supersede_ops:
             await supersede_relationship(
                 op["user_id"],
                 op["subject"],
                 op["predicate"],
                 op["old_object"],
-                op["new_turn_id"]
+                op["new_turn_id"],
+                op.get("type", "SUPERSEDE")
             )
         
         # Then write new triplets
@@ -150,7 +153,7 @@ class Neo4jManager:
             r.updated_at = datetime(),
             // FAZ2: Provenance ve schema alanları (yeni relationship'ler için)
             r.schema_version = 2,
-            r.status = 'ACTIVE',
+            r.status = COALESCE(t.status, 'ACTIVE'),
             r.source_turn_id_first = $source_turn_id,
             r.source_turn_id_last = $source_turn_id,
             r.modality = 'ASSERTED',
@@ -160,18 +163,20 @@ class Neo4jManager:
         ON MATCH SET
             r.confidence = COALESCE(t.confidence, r.confidence),
             r.category = COALESCE(t.category, r.category),
+            r.status = COALESCE(t.status, r.status),
             r.updated_at = datetime(),
             // FAZ2: Güncelleme sırasında source_turn_id_last ve schema_version'ı güncelle
             r.source_turn_id_last = $source_turn_id,
-            r.schema_version = COALESCE(r.schema_version, 1)
+            r.schema_version = COALESCE(r.schema_version, 2)
         // User'ın Entity'yi bildiğini işaretle
         MERGE (u)-[:KNOWS]->(s)
         MERGE (u)-[:KNOWS]->(o)
         RETURN count(r)
         """
         
-        # FAZ2: source_turn_id parametresini query'ye ekle (şimdilik kullanılmıyor, FAZ2-2'de schema'ya eklenecek)
-        records = await self.query_graph(query, {"user_id": user_id, "triplets": normalized_triplets, "source_turn_id": source_turn_id})
+        # FAZ2: source_turn_id parametresini query'ye ekle
+        result = await tx.run(query, {"user_id": user_id, "triplets": normalized_triplets, "source_turn_id": source_turn_id})
+        records = await result.data()
         return records[0]['count(r)'] if records else 0
 
     async def delete_all_memory(self, user_id: str) -> bool:
@@ -199,19 +204,14 @@ class Neo4jManager:
             return False
 
     async def forget_fact(self, user_id: str, entity_name: str) -> int:
-        """Belirli bir varlık (Entity) ile ilgili kullanıcıya ait ilişkileri siler.
-        FAZ0.1-4: Entity node'u silinmez, sadece kullanıcıya ait FACT ve KNOWS ilişkileri silinir.
-        """
+        """Belirli bir varlık (Entity) ile ilgili kullanıcıya ait ilişkileri siler."""
         query = """
         MATCH (u:User {id: $uid})-[k:KNOWS]->(e:Entity {name: $ename})
-        // Önce bu entity ile kullanıcıya ait FACT ilişkilerini sil
         OPTIONAL MATCH (e)-[r:FACT {user_id: $uid}]->()
         DELETE r
         OPTIONAL MATCH ()-[r2:FACT {user_id: $uid}]->(e)
         DELETE r2
-        // Sonra KNOWS ilişkisini sil
         DELETE k
-        // Entity node'u SİLME - başka kullanıcılar kullanıyor olabilir
         RETURN count(k) as deleted_count
         """
         try:
@@ -222,6 +222,69 @@ class Neo4jManager:
         except Exception as e:
             logger.error(f"Bilgi unutma hatası: {e}")
             return 0
+
+    async def correct_memory(
+        self, 
+        user_id: str, 
+        target_type: str, 
+        predicate: str, 
+        new_value: Optional[str], 
+        mode: str, 
+        reason: Optional[str] = None,
+        subject_id: Optional[str] = None,
+        fact_id: Optional[str] = None
+    ):
+        """
+        Kullanıcı geri bildirimi ile hafızayı düzeltir (RC-11).
+        mode: 'replace' | 'retract'
+        """
+        # Scoping logic
+        match_clause = "(s:Entity)-[r:FACT {predicate: $pred, user_id: $uid}]->(o:Entity)"
+        if fact_id:
+            # RELATIONSHIP hex id veya custom id ile bulma (Neo4j elementId)
+            match_clause = "(s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity) WHERE elementId(r) = $fid"
+        elif subject_id:
+            match_clause = "(s:Entity {name: $sid})-[r:FACT {predicate: $pred, user_id: $uid}]->(o:Entity)"
+
+        if mode == "retract":
+            # İlişkiyi 'RETRACTED' yap
+            query = f"""
+            MATCH {match_clause}
+            WHERE r.status = 'ACTIVE' OR r.status IS NULL
+            SET r.status = 'RETRACTED',
+                r.retraction_reason = $reason,
+                r.updated_at = datetime()
+            RETURN count(r) as count
+            """
+            params = {"uid": user_id, "pred": predicate, "reason": reason, "sid": subject_id, "fid": fact_id}
+            result = await self.query_graph(query, params)
+            return result[0]["count"] if result else 0
+        
+        elif mode == "replace" and new_value:
+            # Önce aktifleri retract et, sonra yeniyi MERGE et
+            retracted_count = await self.correct_memory(
+                user_id, target_type, predicate, None, "retract", reason, subject_id, fact_id
+            )
+            
+            # Yeni değeri yaz
+            triplet = {
+                "subject": subject_id if subject_id else "__USER__",
+                "predicate": predicate,
+                "object": new_value,
+                "confidence": 1.0, # Manuel düzeltme tam güvendir
+                "category": "personal",
+                "attribution": "USER_CORRECTION"
+            }
+            
+            if not subject_id:
+                # Identity resolver anchor'ını bul
+                from Atlas.memory.identity_resolver import get_user_anchor
+                anchor = get_user_anchor(user_id)
+                triplet["subject"] = anchor
+            
+            await self.store_triplets([triplet], user_id)
+            return retracted_count + 1
+        return 0
 
     async def query_graph(self, cypher_query: str, params: Optional[Dict] = None) -> List[Dict]:
         """
@@ -245,6 +308,591 @@ class Neo4jManager:
                 logger.error(f"Neo4j sorgu hatası: {str(e)}")
                 break
         return []
+
+    async def fact_exists(self, user_id: str, subject: str, predicate: str, obj: str) -> bool:
+        """
+        Belirli bir triplet'in ACTIVE olup olmadığını kontrol eder. (FAZ5)
+        """
+        query = """
+        MATCH (s:Entity {name: $sub})-[r:FACT {predicate: $pred, user_id: $uid}]->(o:Entity {name: $obj})
+        WHERE r.status = 'ACTIVE' OR r.status IS NULL
+        RETURN count(r) > 0 as exists
+        """
+        results = await self.query_graph(query, {"uid": user_id, "sub": subject, "pred": predicate, "obj": obj})
+        return results[0]["exists"] if results else False
+
+    async def decay_soft_signals(self, decay_rate: float = 0.05):
+        """
+        Soft signal'ların confidence değerlerini düşürür (RC-11).
+        Confidence threshold altına düşenler DEPRECATED olur.
+        """
+        query = """
+        MATCH ()-[r:FACT {category: 'soft_signal', status: 'ACTIVE'}]->()
+        SET r.confidence = r.confidence - $rate,
+            r.updated_at = datetime()
+        WITH r
+        WHERE r.confidence < 0.2
+        SET r.status = 'DEPRECATED'
+        RETURN count(r) as decayed_count
+        """
+        try:
+            results = await self.query_graph(query, {"rate": decay_rate})
+            count = results[0]["decayed_count"] if results else 0
+            if count > 0:
+                logger.info(f"RC-11: {count} soft signal decay edildi.")
+        except Exception as e:
+            logger.error(f"Decay hatası: {e}")
+
+    async def create_notification(self, user_id: str, data: Dict[str, Any]) -> str:
+        """
+        Yeni bir bildirim (Notification) oluşturur ve kullanıcıya bağlar. (FAZ7)
+        """
+        notification_id = uuid.uuid4().hex
+        query = """
+        MATCH (u:User {id: $uid})
+        CREATE (n:Notification {
+            id: $nid,
+            user_id: $uid,
+            created_at: datetime(),
+            message: $message,
+            type: $type,
+            read: false,
+            source: $source,
+            score_relevance: $relevance,
+            score_urgency: $urgency,
+            score_fatigue: $fatigue,
+            reason: $reason,
+            related_task_id: $task_id
+        })
+        MERGE (u)-[:HAS_NOTIFICATION]->(n)
+        RETURN n.id as id
+        """
+        try:
+            await self.query_graph(query, {
+                "uid": user_id,
+                "nid": notification_id,
+                "message": data.get("message"),
+                "type": data.get("type", "proactive_warning"),
+                "source": data.get("source", "observer"),
+                "relevance": data.get("score_relevance", 1.0),
+                "urgency": data.get("score_urgency", 1.0),
+                "fatigue": data.get("score_fatigue", 1.0),
+                "reason": data.get("reason", ""),
+                "task_id": data.get("related_task_id")
+            })
+            return notification_id
+        except Exception as e:
+            logger.error(f"Bildirim oluşturma hatası: {e}")
+            return None
+
+    async def list_notifications(self, user_id: str, limit: int = 10, unread_only: bool = False) -> List[Dict]:
+        """
+        Kullanıcının bildirimlerini listeler. (FAZ7)
+        """
+        where_clause = "WHERE n.read = false" if unread_only else ""
+        query = f"""
+        MATCH (u:User {{id: $uid}})-[:HAS_NOTIFICATION]->(n:Notification)
+        {where_clause}
+        RETURN n.id as id, n.message as message, n.type as type, n.created_at as created_at, 
+               n.read as read, n.reason as reason
+        ORDER BY n.created_at DESC
+        LIMIT $limit
+        """
+        try:
+            results = await self.query_graph(query, {"uid": user_id, "limit": limit})
+            return results if results else []
+        except Exception as e:
+            logger.error(f"Bildirim listeleme hatası: {e}")
+            return []
+
+    async def acknowledge_notification(self, user_id: str, notification_id: str) -> bool:
+        """
+        Bildirimi okundu (read=true) olarak işaretler. (FAZ7)
+        """
+        query = """
+        MATCH (u:User {id: $uid})-[:HAS_NOTIFICATION]->(n:Notification {id: $nid})
+        SET n.read = true
+        RETURN count(n) as updated
+        """
+        try:
+            results = await self.query_graph(query, {"uid": user_id, "nid": notification_id})
+            return results[0]["updated"] > 0 if results else False
+        except Exception as e:
+            logger.error(f"Bildirim onaylama hatası: {e}")
+            return False
+
+    async def get_notification_settings(self, user_id: str) -> Dict[str, Any]:
+        """
+        Kullanıcının bildirim tercihlerini getirir. (FAZ7)
+        """
+        query = """
+        MATCH (u:User {id: $uid})
+        RETURN u.notifications_enabled as enabled,
+               u.notification_mode as mode,
+               u.quiet_hours_start as quiet_start,
+               u.quiet_hours_end as quiet_end,
+               u.max_notifications_per_day as max_daily
+        """
+        try:
+            results = await self.query_graph(query, {"uid": user_id})
+            if not results:
+                return {
+                    "enabled": False,
+                    "mode": "STANDARD",
+                    "quiet_start": None,
+                    "quiet_end": None,
+                    "max_daily": 5
+                }
+            res = results[0]
+            return {
+                "enabled": res.get("enabled", False),
+                "mode": res.get("mode", "STANDARD"),
+                "quiet_start": res.get("quiet_start"),
+                "quiet_end": res.get("quiet_end"),
+                "max_daily": res.get("max_daily") if res.get("max_daily") is not None else 5
+            }
+        except Exception as e:
+            logger.error(f"Bildirim ayarları getirme hatası: {e}")
+            return {"enabled": False}
+
+    async def count_daily_notifications(self, user_id: str) -> int:
+        """
+        Kullanıcının bugün aldığı bildirim sayısını döndürür. (FAZ7)
+        """
+        query = """
+        MATCH (u:User {id: $uid})-[:HAS_NOTIFICATION]->(n:Notification)
+        WHERE n.created_at >= datetime({hour: 0, minute: 0, second: 0})
+        RETURN count(n) as daily_count
+        """
+        try:
+            results = await self.query_graph(query, {"uid": user_id})
+            return results[0]["daily_count"] if results else 0
+        except Exception as e:
+            logger.error(f"Günlük bildirim sayma hatası: {e}")
+            return 0
+
+    async def get_user_memory_mode(self, user_id: str) -> str:
+        """Kullanıcının hafıza modunu getirir (OFF/STANDARD/FULL)."""
+        settings = await self.get_user_settings(user_id)
+        return settings.get("memory_mode", "STANDARD")
+
+    async def ensure_user_session(self, user_id: str, session_id: str):
+        """
+        Kullanıcı ve oturum arasındaki ilişkiyi kurar/günceller. (RC-2.1)
+        Varsayılanlar: notifications_enabled=false (opt-in), memory_mode='STANDARD'.
+        Oturumlar user_id kapsamındadır.
+        """
+        query = """
+        MERGE (u:User {id: $uid})
+        ON CREATE SET 
+            u.created_at = datetime(), 
+            u.notifications_enabled = false,
+            u.memory_mode = COALESCE($default_mode, 'STANDARD')
+        MERGE (s:Session {id: $sid, user_id: $uid})
+        ON CREATE SET s.created_at = datetime()
+        SET s.last_seen_at = datetime()
+        MERGE (u)-[:HAS_SESSION]->(s)
+        """
+        await self.query_graph(query, {
+            "uid": user_id, 
+            "sid": session_id,
+            "default_mode": os.getenv("ATLAS_DEFAULT_MEMORY_MODE", "STANDARD")
+        })
+
+    async def get_user_timezone(self, user_id: str) -> str:
+        """
+        Kullanıcının zaman dilimini (timezone) getirir. Varsayılan: Europe/Istanbul
+        """
+        query = "MATCH (u:User {id: $uid}) RETURN u.timezone as tz"
+        results = await self.query_graph(query, {"uid": user_id})
+        if results and results[0].get("tz"):
+            return results[0]["tz"]
+        return "Europe/Istanbul"
+
+    async def get_user_settings(self, user_id: str) -> dict:
+        """
+        Kullanıcının politikalarını ve bildirim ayarlarını getirir. (RC-2)
+        """
+        query = "MATCH (u:User {id: $uid}) RETURN u"
+        results = await self.query_graph(query, {"uid": user_id})
+        
+        default_settings = {
+            "memory_mode": os.getenv("ATLAS_DEFAULT_MEMORY_MODE", "STANDARD"),
+            "notifications_enabled": True,
+            "quiet_hours_start": "22:00",
+            "quiet_hours_end": "08:00",
+            "max_notifications_per_day": 5,
+            "notification_mode": "STANDARD"
+        }
+        
+        if results and results[0].get("u"):
+            # Neo4j node objesinden verileri çek
+            u = dict(results[0]["u"])
+            return {
+                "memory_mode": u.get("memory_mode", default_settings["memory_mode"]),
+                "notifications_enabled": u.get("notifications_enabled", default_settings["notifications_enabled"]),
+                "quiet_hours_start": u.get("quiet_hours_start", default_settings["quiet_hours_start"]),
+                "quiet_hours_end": u.get("quiet_hours_end", default_settings["quiet_hours_end"]),
+                "max_notifications_per_day": u.get("max_notifications_per_day", default_settings["max_notifications_per_day"]),
+                "notification_mode": u.get("notification_mode", default_settings["notification_mode"])
+            }
+        return default_settings
+
+    async def set_user_settings(self, user_id: str, patch: dict) -> dict:
+        """
+        Kullanıcının ayarlarını günceller. (RC-2)
+        """
+        keys = []
+        valid_keys = ["memory_mode", "notifications_enabled", "quiet_hours_start", "quiet_hours_end", "max_notifications_per_day", "notification_mode"]
+        for k in patch.keys():
+            if k in valid_keys:
+                keys.append(f"u.{k} = ${k}")
+        
+        if not keys:
+            return await self.get_user_settings(user_id)
+            
+        set_clause = ", ".join(keys)
+        query = f"MERGE (u:User {{id: $uid}}) SET {set_clause} RETURN u"
+        params = {"uid": user_id, **patch}
+        await self.query_graph(query, params)
+        return await self.get_user_settings(user_id)
+
+    # --- RC-3: Transcript & Episodic Memory ---
+
+    async def append_turn(self, user_id: str, session_id: str, role: str, content: str) -> int:
+        """
+        Oturuma yeni bir konuşma turu (turn) ekler. (RC-3)
+        Geriye dönük uyumluluk: user_id yoksa session_id kullanılır.
+        """
+        query = """
+        MATCH (s:Session {id: $sid})
+        WHERE s.user_id = $uid OR $uid IS NULL
+        OPTIONAL MATCH (s)-[:HAS_TURN]->(t:Turn)
+        WITH s, count(t) as turn_count
+        CREATE (nt:Turn {
+            id: $sid + "::" + toString(turn_count),
+            turn_index: turn_count,
+            role: $role,
+            content: $content,
+            created_at: datetime()
+        })
+        MERGE (s)-[:HAS_TURN]->(nt)
+        RETURN nt.turn_index as index
+        """
+        results = await self.query_graph(query, {
+            "uid": user_id,
+            "sid": session_id,
+            "role": role,
+            "content": content
+        })
+        return results[0]["index"] if results else 0
+
+    async def get_recent_turns(self, user_id: str, session_id: str, limit: int = 12) -> list:
+        """
+        Son N konuşma turunu getirir. (RC-3)
+        Returns: List of {role, content, turn_index}
+        """
+        query = """
+        MATCH (s:Session {id: $sid})-[:HAS_TURN]->(t:Turn)
+        WHERE s.user_id = $uid OR $uid IS NULL
+        RETURN t.role as role, t.content as content, t.turn_index as turn_index
+        ORDER BY t.turn_index DESC
+        LIMIT $limit
+        """
+        results = await self.query_graph(query, {
+            "uid": user_id,
+            "sid": session_id,
+            "limit": limit
+        })
+        # UI/LLM beklediği sıra için reverse et (Chronological order)
+        return sorted(results, key=lambda x: x["turn_index"])
+
+    async def count_turns(self, user_id: str, session_id: str) -> int:
+        """Oturumdaki toplam tur (mesaj) sayısını döner. (RC-3)"""
+        query = """
+        MATCH (s:Session {id: $sid})-[:HAS_TURN]->(t:Turn)
+        WHERE s.user_id = $uid OR $uid IS NULL
+        RETURN count(t) as total
+        """
+        results = await self.query_graph(query, {"uid": user_id, "sid": session_id})
+        return results[0]["total"] if results else 0
+
+    async def create_episode(self, user_id: str, session_id: str, summary: str, start_turn: int, end_turn: int):
+        """
+        Konuşma grubundan bir episod özeti oluşturur. (RC-3)
+        """
+        query = """
+        MATCH (s:Session {id: $sid})
+        WHERE s.user_id = $uid OR $uid IS NULL
+        CREATE (e:Episode {
+            id: $sid + "::ep_" + toString(start_turn) + "_" + toString(end_turn),
+            user_id: $uid,
+            session_id: $sid,
+            summary: $summary,
+            start_turn: $start_turn,
+            end_turn: $end_turn,
+            created_at: datetime()
+        })
+        MERGE (s)-[:HAS_EPISODE]->(e)
+        RETURN e.id as episode_id
+        """
+        await self.query_graph(query, {
+            "uid": user_id,
+            "sid": session_id,
+            "summary": summary,
+            "start_turn": start_turn,
+            "end_turn": end_turn
+        })
+
+    async def create_episode_pending(self, user_id: str, session_id: str, start_turn: int, end_turn: int, kind: str = "REGULAR"):
+        """
+        Idempotent olarak PENDING durumunda bir episode oluşturur.
+        Aynı aralık için zaten varsa oluşturmaz.
+        RC-6: 'kind' alanı eklendi (REGULAR/CONSOLIDATED).
+        """
+        query = """
+        MATCH (s:Session {id: $sid})
+        WHERE s.user_id = $uid OR $uid IS NULL
+        MERGE (e:Episode {
+            id: $sid + "::ep_" + toString(start_turn) + "_" + toString(end_turn) + "_" + $kind
+        })
+        ON CREATE SET 
+            e.user_id = $uid,
+            e.session_id = $sid,
+            e.status = "PENDING",
+            e.kind = $kind,
+            e.start_turn_index = $start_turn,
+            e.end_turn_index = $end_turn,
+            e.created_at = datetime(),
+            e.updated_at = datetime()
+        MERGE (s)-[:HAS_EPISODE]->(e)
+        RETURN e.id as episode_id
+        """
+        await self.query_graph(query, {
+            "uid": user_id,
+            "sid": session_id,
+            "start_turn": start_turn,
+            "end_turn": end_turn,
+            "kind": kind
+        })
+
+    async def claim_pending_episode(self) -> Optional[dict]:
+        """
+        PENDING durumundaki bir REGULAR episode'u atomik olarak IN_PROGRESS yapar ve döner.
+        """
+        query = """
+        MATCH (e:Episode {status: "PENDING"})
+        WHERE e.kind IS NULL OR e.kind = "REGULAR"
+        WITH e ORDER BY e.created_at ASC LIMIT 1
+        SET e.status = "IN_PROGRESS", e.updated_at = datetime()
+        RETURN e.id as id, e.user_id as user_id, e.session_id as session_id, 
+               e.start_turn_index as start_turn, e.end_turn_index as end_turn
+        """
+        results = await self.query_graph(query)
+        return results[0] if results else None
+
+    async def mark_episode_ready(self, episode_id: str, summary: str, model: str, embedding: Optional[List[float]] = None, embedding_model: Optional[str] = None):
+        """Episode'u READY yapar ve varsa embedding'i kaydeder."""
+        query = """
+        MATCH (e:Episode {id: $id})
+        SET e.status = "READY",
+            e.summary = $summary,
+            e.model = $model,
+            e.embedding = $embedding,
+            e.embedding_model = $embedding_model,
+            e.updated_at = datetime()
+        """
+        await self.query_graph(query, {
+            "id": episode_id, 
+            "summary": summary, 
+            "model": model,
+            "embedding": embedding,
+            "embedding_model": embedding_model
+        })
+
+    async def create_vector_index(self, dimension: int = 384):
+        """
+        Neo4j üzerinde vektör indeksi oluşturur (idempotent).
+        Her Neo4j sürümü desteklemeyebilir, bu yüzden try/except ile sarılmıştır.
+        """
+        query = f"""
+        CREATE VECTOR INDEX episode_embeddings IF NOT EXISTS
+        FOR (e:Episode)
+        ON (e.embedding)
+        OPTIONS {{
+          indexConfig: {{
+            `vector.dimensions`: {dimension},
+            `vector.similarity_function`: 'cosine'
+          }}
+        }}
+        """
+        try:
+            await self.query_graph(query)
+            logger.info(f"Neo4j Vektör İndeksi oluşturuldu/doğrulandı (Boyut: {dimension})")
+            return True
+        except Exception as e:
+            logger.warning(f"Neo4j Vektör İndeksi oluşturulamadı (Gelişmiş arama devre dışı kalabilir): {e}")
+            return False
+
+    async def mark_episode_failed(self, episode_id: str, error: str):
+        """Episode'u FAILED yapar."""
+        query = """
+        MATCH (e:Episode {id: $id})
+        SET e.status = "FAILED",
+            e.error = $error,
+            e.updated_at = datetime()
+        """
+        await self.query_graph(query, {"id": episode_id, "error": error})
+
+    async def get_recent_episodes(self, user_id: str, session_id: str, limit: int = 3) -> list:
+        """Son N episod özetini döner. (RC-3)"""
+        query = """
+        MATCH (s:Session {id: $sid})-[:HAS_EPISODE]->(e:Episode)
+        WHERE s.user_id = $uid OR $uid IS NULL
+        RETURN e.summary as summary, e.start_turn as start_turn, e.end_turn as end_turn
+        ORDER BY e.created_at DESC
+        LIMIT $limit
+        """
+        results = await self.query_graph(query, {"uid": user_id, "sid": session_id, "limit": limit})
+        return results
+
+    async def try_acquire_lock(self, lock_name: str, holder_id: str, ttl_seconds: int) -> bool:
+        """
+        Neo4j üzerinde dağıtık kilit (Distributed Lock) almaya çalışır. (FAZ7-R)
+        """
+        query = """
+        MERGE (l:SchedulerLock {name: $name})
+        WITH l
+        WHERE l.holder IS NULL 
+           OR datetime() >= l.expires_at 
+           OR l.holder = $holder
+        SET l.holder = $holder, 
+            l.expires_at = datetime() + duration({seconds: $ttl}),
+            l.updated_at = datetime()
+        RETURN count(l) > 0 as success
+        """
+        try:
+            results = await self.query_graph(query, {
+                "name": lock_name,
+                "holder": holder_id,
+                "ttl": ttl_seconds
+            })
+            return results[0]["success"] if results else False
+        except Exception as e:
+            logger.error(f"Kilit alma hatası ({lock_name}): {e}")
+            return False
+
+    async def release_lock(self, lock_name: str, holder_id: str) -> bool:
+        """
+        Kilidi serbest bırakır.
+        """
+        query = """
+        MATCH (l:SchedulerLock {name: $name, holder: $holder})
+        SET l.holder = null, l.expires_at = null
+        RETURN count(l) > 0 as success
+        """
+        try:
+            results = await self.query_graph(query, {"name": lock_name, "holder": holder_id})
+            return results[0]["success"] if results else False
+        except Exception as e:
+            logger.error(f"Kilit bırakma hatası ({lock_name}): {e}")
+            return False
+
+    # --- RC-6: Retention & Consolidation ---
+
+    async def prune_turns(self, retention_days: int, max_per_session: int):
+        """Eski ve limit aşan konuşma turlarını siler."""
+        # 1. Zamana göre silme
+        query_time = """
+        MATCH (t:Turn)
+        WHERE t.created_at < datetime() - duration('P' + toString($days) + 'D')
+        DELETE t
+        """
+        await self.query_graph(query_time, {"days": retention_days})
+
+        # 2. Session başına limit aşımına göre silme
+        query_limit = """
+        MATCH (s:Session)-[:HAS_TURN]->(t:Turn)
+        WITH s, t ORDER BY t.turn_index DESC
+        WITH s, collect(t)[$max..] AS extra_turns
+        UNWIND extra_turns AS et
+        DELETE et
+        """
+        await self.query_graph(query_limit, {"max": max_per_session})
+
+    async def prune_episodes(self, retention_days: int):
+        """Eski episodları siler."""
+        query = """
+        MATCH (e:Episode)
+        WHERE e.created_at < datetime() - duration('P' + toString($days) + 'D')
+        DELETE e
+        """
+        await self.query_graph(query, {"days": retention_days})
+
+    async def prune_notifications(self, retention_days: int):
+        """Okunmuş ve eski bildirimleri siler."""
+        query = """
+        MATCH (n:Notification)
+        WHERE n.read = true AND n.created_at < datetime() - duration('P' + toString($days) + 'D')
+        DELETE n
+        """
+        await self.query_graph(query, {"days": retention_days})
+
+    async def prune_tasks(self, retention_days: int):
+        """Tamamlanmış ve eski görevleri siler."""
+        query = """
+        MATCH (task:Task)
+        WHERE task.status IN ['DONE', 'CLOSED'] 
+          AND task.updated_at < datetime() - duration('P' + toString($days) + 'D')
+        DELETE task
+        """
+        await self.query_graph(query, {"days": retention_days})
+
+    async def create_consolidation_pending(self, session_id: str, window: int, min_age_days: int):
+        """Çok sayıdaki REGULAR episoddan konsolide bir episod tetikler."""
+        query = """
+        MATCH (s:Session {id: $sid})-[:HAS_EPISODE]->(e:Episode {status: 'READY'})
+        WHERE (e.kind IS NULL OR e.kind = 'REGULAR')
+          AND e.created_at < datetime() - duration('P' + toString($min_age) + 'D')
+          AND NOT (s)-[:HAS_EPISODE]->(:Episode {kind: 'CONSOLIDATED', start_turn_index: e.start_turn_index})
+        WITH s, e ORDER BY e.start_turn_index ASC
+        WITH s, collect(e) as episodes
+        WHERE size(episodes) >= $window
+        WITH s, episodes[0..$window] as batch
+        WITH s, batch, batch[0] as first, batch[-1] as last
+        MERGE (ce:Episode {
+            id: $sid + "::consolidated_" + toString(first.start_turn_index) + "_" + toString(last.end_turn_index)
+        })
+        ON CREATE SET
+            ce.user_id = s.user_id,
+            ce.session_id = $sid,
+            ce.status = "PENDING",
+            ce.kind = "CONSOLIDATED",
+            ce.start_turn_index = first.start_turn_index,
+            ce.end_turn_index = last.end_turn_index,
+            ce.source_episode_ids = [ep in batch | ep.id],
+            ce.created_at = datetime(),
+            ce.updated_at = datetime()
+        MERGE (s)-[:HAS_EPISODE]->(ce)
+        """
+        await self.query_graph(query, {"sid": session_id, "window": window, "min_age": min_age_days})
+
+    async def claim_pending_consolidation(self) -> Optional[dict]:
+        """PENDING durumundaki bir CONSOLIDATED episod'u atomik olarak devralır."""
+        query = """
+        MATCH (e:Episode {status: "PENDING", kind: "CONSOLIDATED"})
+        WITH e ORDER BY e.created_at ASC LIMIT 1
+        SET e.status = "IN_PROGRESS", e.updated_at = datetime()
+        RETURN e.id as id, e.user_id as user_id, e.session_id as session_id, 
+               e.source_episode_ids as source_ids
+        """
+        results = await self.query_graph(query)
+        return results[0] if results else None
+
+    async def get_episodes_by_ids(self, episode_ids: List[str]) -> List[Dict]:
+        """ID listesine göre episodları getirir."""
+        query = "MATCH (e:Episode) WHERE e.id IN $ids RETURN e.summary as summary, e.id as id"
+        return await self.query_graph(query, {"ids": episode_ids})
 
 # Tekil örnek
 neo4j_manager = Neo4jManager()

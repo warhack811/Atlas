@@ -14,7 +14,7 @@ import json
 import httpx
 import logging
 from typing import List, Dict, Any
-from Atlas.config import Config, API_CONFIG
+from Atlas.config import Config, API_CONFIG, MEMORY_CONFIDENCE_SETTINGS
 from Atlas.prompts import EXTRACTOR_SYSTEM_PROMPT
 from Atlas.memory.neo4j_manager import neo4j_manager
 from Atlas.memory.predicate_catalog import get_catalog
@@ -60,39 +60,36 @@ def sanitize_triplets(triplets: List[Dict], user_id: str, raw_text: str) -> List
     
     cleaned = []
     
+    # RC-11: Thresholds from central config
+    settings = MEMORY_CONFIDENCE_SETTINGS
+    threshold = settings.get("UNCERTAINTY_THRESHOLD", 0.5)
+    
     for triplet in triplets:
         # 1. Required fields
         subject = triplet.get("subject", "").strip()
         predicate = triplet.get("predicate", "").strip()
         obj = triplet.get("object", "").strip()
+        confidence = triplet.get("confidence", 0.8)
         
         if not subject or not predicate or not obj:
             logger.debug(f"DROP: Missing required field - {triplet}")
             continue
         
-        # Drop single-character entities
-        if len(subject) < 2 or len(obj) < 2:
-            logger.debug(f"DROP: Too short - subject='{subject}', object='{obj}'")
+        # RC-11: Confidence Filter
+        if confidence < 0.4: # Çok düşük güven, muhtemelen çok muallak
+            logger.info(f"DROP: Low confidence ({confidence}) - {subject} {predicate} {obj}")
             continue
-        
+
         # 2. FAZ3: Subject pronoun handling
         original_subject = subject
         if is_first_person(subject):
-            # FAZ3: 1. şahıs zamirlerini user anchor'a map et (drop ETME!)
             subject = get_user_anchor(user_id)
             logger.info(f"FIRST_PERSON_MAPPED: '{original_subject}' → '{subject}' (predicate: {predicate})")
         elif is_second_person(subject):
-            # 2. şahıs zamirleri hala drop edilir (asistan kimliği tutulmaz)
             logger.info(f"SECOND_PERSON_DROPPED: '{subject}' - '{predicate}' - '{obj}'")
             continue
         elif is_other_pronoun(subject):
-            # Diğer zamirler (O/ONLAR/HOCA vb.) hala drop edilir
             logger.info(f"PRONOUN_DROPPED: '{subject}' - '{predicate}' - '{obj}'")
-            continue
-        
-        # 3. Object pronoun handling (hala tüm zamirleri drop et)
-        if is_first_person(obj) or is_second_person(obj) or is_other_pronoun(obj):
-            logger.info(f"OBJECT_PRONOUN_DROPPED: '{subject}' - '{predicate}' - '{obj}'")
             continue
         
         # 3. Predicate canonicalization
@@ -111,21 +108,34 @@ def sanitize_triplets(triplets: List[Dict], user_id: str, raw_text: str) -> List
         # 5. Get canonical form
         canonical = catalog.get_canonical(predicate_key)
         
-        # 6. Durability filter (Faz 1 minimal MWG)
+        # 6. Durability filter
         durability = catalog.get_durability(predicate_key)
         if durability in {"EPHEMERAL", "SESSION"}:
             logger.info(f"EPHEMERAL_DROPPED: '{canonical}' (durability={durability})")
             continue
         
-        # 7. Category bridge
+        # 7. Category and Confidence mapping
         graph_category = catalog.get_graph_category(predicate_key)
         
+        # RC-11: Uncertainty mapping
+        drop_thresh = settings.get("DROP_THRESHOLD", 0.4)
+        soft_thresh = settings.get("SOFT_SIGNAL_THRESHOLD", 0.7)
+
+        if confidence < drop_thresh:
+            logger.info(f"RC-11: Discarding low confidence triplet ({confidence}) for '{predicate_key}'")
+            continue
+
+        if confidence < soft_thresh and graph_category == "personal":
+             graph_category = "soft_signal"
+             logger.info(f"RC-11: Uncertainty detected ({confidence}), forcing to soft_signal")
+
         # Build cleaned triplet
         cleaned.append({
             "subject": subject,
-            "predicate": canonical,  # Use canonical form
+            "predicate": canonical,
             "object": obj,
-            "category": graph_category  # Override with catalog category
+            "category": graph_category,
+            "confidence": confidence
         })
     
     if len(cleaned) < len(triplets):

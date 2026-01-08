@@ -39,17 +39,23 @@ class Observer:
         now = datetime.now()
         last_check = self._last_check.get(user_id)
         
-        # LLM Maliyet kontrolü: Çok sık kontrol etme (Minimal 10 dk - Scheduler 15 dk zaten)
+        # LLM Maliyet kontrolü: Çok sık kontrol etme
         if last_check and (now - last_check).total_seconds() < 600:
             logger.info(f"Gözlemci: {user_id} için kontrol atlanıyor, yakın zamanda kontrol edildi.")
+            return
+
+        # 0. GATEKEEPING (RC-2 Hardening)
+        from Atlas.notification_gatekeeper import should_emit_notification
+        is_allowed, reason = await should_emit_notification(user_id, neo4j_manager, now)
+        
+        if not is_allowed:
+            logger.info(f"Gözlemci GATEKEEPER: {user_id} engellendi. Sebep: {reason}")
             return
 
         logger.info(f"Gözlemci: {user_id} kullanıcısı için tetikleyiciler kontrol ediliyor...")
         self._last_check[user_id] = now
 
-        # 1. Hafıza Taraması (Neo4j): Kullanıcının gelecek planlarını veya kritik bilgilerini getir
-        # FAZ0.1-3: FACT ilişkisini user_id ile filtrele (multi-user isolation)
-        # FAZ2: status filtresi ekle (ACTIVE olmayan relationship'leri gösterme)
+        # 1. Hafıza Taraması (Neo4j)
         cypher = """
         MATCH (u:User {id: $uid})-[:KNOWS]->(s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity)
         WHERE r.status IS NULL OR r.status = 'ACTIVE'
@@ -63,26 +69,48 @@ class Observer:
 
         fact_str = "\n".join([f"- {f['subject']} ({f['predicate']}) {f['object']}" for f in facts])
 
-        # 2. Dış Veri (Dış dünyadaki olayları simüle et)
-        # İleride Serper veya Hava Durumu API çağrıları buraya eklenebilir.
+        # 2. Dış Veri (Simülasyon)
         external_data = "Ankara'da yarın şiddetli fırtına ve kar yağışı bekleniyor. Ulaşımda aksamalar olabilir."
 
-        # 3. Akıl Yürütme (Reasoning): Hafıza ve dış veri arasındaki ilişkiyi modele sor
+        # 3. Akıl Yürütme (Reasoning)
         warning = await self._reason_with_llm(user_id, fact_str, external_data)
 
-        # 4. Bildirim Kuyruğu: Eğer bir uyarı varsa kullanıcıya sunmak üzere kaydet
+        # 4. Bildirim Kaydı (DB Persistence - FAZ7)
         if warning:
-            if user_id not in self._notifications:
-                self._notifications[user_id] = []
-            
-            notification = {
-                "id": f"obs-{int(now.timestamp())}",
-                "timestamp": now.isoformat(),
+            notif_data = {
                 "message": warning,
-                "type": "proactive_warning"
+                "type": "proactive_warning",
+                "source": "observer",
+                "reason": f"gate={reason}"
             }
-            self._notifications[user_id].append(notification)
-            logger.info(f"Gözlemci: {user_id} için yeni bildirim: {warning}")
+            notif_id = await neo4j_manager.create_notification(user_id, notif_data)
+            if notif_id:
+                logger.info(f"Gözlemci: {user_id} için yeni bildirim DB'ye kaydedildi: {notif_id}")
+            else:
+                # Fallback to RAM if DB fails
+                if user_id not in self._notifications:
+                    self._notifications[user_id] = []
+                self._notifications[user_id].append({
+                    "id": f"obs-{int(now.timestamp())}",
+                    "timestamp": now.isoformat(),
+                    "message": warning,
+                    "type": "proactive_warning_ram_fallback"
+                })
+                logger.warning(f"Gözlemci: DB hatası, bildirim RAM'e kaydedildi ({user_id})")
+
+    def _is_quiet_hours(self, start: Optional[str], end: Optional[str]) -> bool:
+        """Sessiz saatler içinde olup olmadığımızı kontrol eder."""
+        if not start or not end:
+            return False
+        
+        try:
+            now_time = datetime.now().strftime("%H:%M")
+            if start < end:
+                return start <= now_time <= end
+            else: # Geceyi aşan saatler (örn: 22:00 - 08:00)
+                return now_time >= start or now_time <= end
+        except:
+            return False
 
     async def _reason_with_llm(self, user_id: str, memory: str, external_data: str) -> Optional[str]:
         """LLM kullanarak iki veri seti arasındaki çelişkiyi veya riski analiz eder."""
@@ -100,7 +128,7 @@ class Observer:
                     f"{API_CONFIG['groq_api_base']}/chat/completions",
                     headers={"Authorization": f"Bearer {api_key}"},
                     json={
-                        "model": "llama-3.3-70b-versatile",  # Yüksek akıl yürütme için 70B
+                        "model": "llama-3.3-70b-versatile",
                         "messages": [{"role": "user", "content": prompt}],
                         "temperature": 0.0
                     }
@@ -115,21 +143,25 @@ class Observer:
         
         return None
 
-    def get_notifications(self, user_id: str) -> List[Dict[str, Any]]:
-        """Kullanıcının bildirimlerini döndürür."""
-        return self._notifications.get(user_id, [])
-
-    def add_notification(self, user_id: str, message: str):
-        """Manuel bildirim ekler (Testler için)."""
-        if user_id not in self._notifications:
-            self._notifications[user_id] = []
+    async def get_notifications(self, user_id: str) -> List[Dict[str, Any]]:
+        """Kullanıcının bildirimlerini önce DB'den, sonra RAM (fallback)'den döndürür. (FAZ7)"""
+        # 1. DB'den oku
+        db_notifications = await neo4j_manager.list_notifications(user_id, unread_only=True)
         
-        self._notifications[user_id].append({
-            "id": f"man-{int(datetime.now().timestamp())}",
-            "timestamp": datetime.now().isoformat(),
+        # 2. RAM fallback ile birleştir
+        ram_notifications = self._notifications.get(user_id, [])
+        
+        return db_notifications + ram_notifications
+
+    async def add_notification(self, user_id: str, message: str):
+        """Manuel bildirim ekler (DB'ye). (FAZ7)"""
+        notif_data = {
             "message": message,
-            "type": "manual_warning"
-        })
+            "type": "manual_warning",
+            "source": "manual"
+        }
+        await neo4j_manager.create_notification(user_id, notif_data)
+
 
 # Tekil örnek
 observer = Observer()

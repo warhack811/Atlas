@@ -5,7 +5,7 @@ Test catalog resolution, alias mapping, filtering, and sanitize_triplets logic.
 
 import unittest
 from Atlas.memory.predicate_catalog import PredicateCatalog, get_catalog
-from Atlas.memory.extractor import sanitize_triplets, PRONOUN_FILTER
+from Atlas.memory.extractor import sanitize_triplets
 
 
 class TestPredicateCatalog(unittest.TestCase):
@@ -104,7 +104,9 @@ class TestSanitizeTriplets(unittest.TestCase):
         ]
         cleaned = sanitize_triplets(triplets, "test_user", "test")
         
-        self.assertEqual(len(cleaned), 0, "Triplets with pronouns (BEN/SEN) should be dropped")
+        # FAZ3: BEN mapping sayesinde 1. triplet geçer (mapped), 2. triplet (SEN) drop edilir.
+        self.assertEqual(len(cleaned), 1, "BEN mapped triplets should pass in FAZ3, SEN should be dropped")
+        self.assertEqual(cleaned[0]["subject"], "__USER__::test_user")
     
     def test_valid_triplet_passes(self):
         """Test valid triplet passes all filters."""

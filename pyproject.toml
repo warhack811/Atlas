@@ -18,6 +18,7 @@ dependencies = [
     "marked",
     "apscheduler",
     "pyyaml",
+    "dateparser",
 ]
 
 [build-system]
