@@ -42,7 +42,8 @@ def classify_intent_tr(user_message: str) -> str:
     GENERAL_TRIGGERS = [
         "nedir", "nasil", "kim", "nerede", "hava", "iklim", "tarih", 
         "bilim", "fizik", "ulke", "sehir", "cografya", "teknoloji", 
-        "programlama", "python", "java", "javascript", "okyanus", "deniz"
+        "programlama", "python", "java", "javascript", "okyanus", "deniz",
+        "kac", "neler"
     ]
 
     # Sosyal selamlaşma koruması
@@ -52,9 +53,13 @@ def classify_intent_tr(user_message: str) -> str:
     msg_words = msg.translate(str.maketrans("!?.()", "     ")).split()
     is_general = any(kw in msg_words for kw in GENERAL_TRIGGERS)
     
+    # Soru kalıpları (Genel sorgu sinyali - ASCII)
+    question_patterns = [r"\?$", r"\bkim\b", r"\bneler\b", r"\bkac\b", r"\bhow\b", r"\bwhat\b"]
+    has_q_pattern = any(re.search(pattern, msg) for pattern in question_patterns)
+    
     # Kişisel veya Görev tespiti (Öncelikli)
-    is_personal = any(re.search(rf"\b{kw}\b", msg) for kw in PERSONAL_TRIGGERS)
-    is_task = any(re.search(rf"\b{kw}\b", msg) for kw in TASK_TRIGGERS)
+    is_personal = any(kw in msg for kw in PERSONAL_TRIGGERS)
+    is_task = any(kw in msg for kw in TASK_TRIGGERS)
     
     # Eğer hava durumu ise, personal/task'tan önce GENERAL döner (Korumalı kontrol)
     if "hava" in msg_words:
@@ -63,18 +68,27 @@ def classify_intent_tr(user_message: str) -> str:
     if has_personal_override:
         return "PERSONAL"
 
+    # RC-11: Genel soru kalıpları (kaç, neler gibi) kişisel anahtar kelimelerden (override değilse) baskın gelir
+    if has_q_pattern and not has_personal_override:
+        # İstisna: "Kardeşim kim?" gibi durumlar için is_personal kontrolü
+        # Eğer mesajda "kim" varsa ama "ben", "benim" yoksa ve "kardes", "anne" gibi bir aile üyesi varsa PERSONAL kalsın?
+        # Şimdilik basit tutalım: has_q_pattern ise GENERAL olsun, ama override varsa PERSONAL.
+        # Ancak "Kardeşim kim?" sorusu PERSONAL_TRIGGERS (kardes) içeriyor.
+        # Eğer is_personal baskın gelirse GS7-042 bozulur.
+        # Eğer has_q_pattern baskın gelirse GS7-022 bozulur.
+        
+        # Karar: Factual soru kelimeleri (kac, neler) %100 GENERAL olmalı (override yoksa).
+        if any(kw in msg for kw in ["kac", "neler", "how", "what"]):
+            return "GENERAL"
+
     if is_personal:
         return "PERSONAL"
     if is_task:
         return "TASK"
         
     # Takip (Follow-up) tespiti
-    if any(re.search(rf"\b{kw}\b", msg) for kw in FOLLOWUP_TRIGGERS):
+    if any(kw in msg for kw in FOLLOWUP_TRIGGERS):
         return "FOLLOWUP"
-    
-    # Soru kalıpları (Genel sorgu sinyali - ASCII)
-    question_patterns = [r"\?$", r"\bkim\b", r"\bneler\b", r"\bkac\b", r"\bhow\b", r"\bwhat\b"]
-    has_q_pattern = any(re.search(pattern, msg) for pattern in question_patterns)
     
     if is_general or has_q_pattern:
         return "GENERAL"
