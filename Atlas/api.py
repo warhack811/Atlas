@@ -58,12 +58,14 @@ class ChatRequest(BaseModel):
     use_mock: bool = False
     style: Optional[dict] = None
     mode: Optional[str] = "standard"
+    debug_trace: bool = False
 
 
 class ChatResponse(BaseModel):
     response: str
     session_id: str
     rdr: dict
+    debug_trace: Optional[dict] = None
 
 def serialize_neo4j_value(v):
     """Neo4j'den gelen datetime ve diğer karmaşık nesneleri JSON uyumlu hale getirir."""
@@ -290,7 +292,8 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         return ChatResponse(
             response=response_text,
             session_id=session_id,
-            rdr=record.to_dict()
+            rdr=record.to_dict(),
+            debug_trace=trace.to_dict() if trace else None
         )
     except Exception as e:
         logger.error(f"Sohbet hatası: {e}")
@@ -344,10 +347,16 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             classify_start = time.time()
             # 1. Bellek ve Bağlam Hazırlığı - RC-1: v3 context packaging
             from Atlas.memory.context import ContextBuilder, build_memory_context_v3
+            from Atlas.memory.trace import ContextTrace
             cb = ContextBuilder(session_id)
             
-            # RC-1/RC-2: v3 context packaging
-            graph_context = await build_memory_context_v3(user_id, request.message, session_id=session_id)
+            trace = None
+            from Atlas.config import DEBUG
+            if DEBUG and request.debug_trace:
+                trace = ContextTrace(request_id=f"trace_{int(time.time())}", user_id=user_id, session_id=session_id)
+            
+            # RC-1/RC-2/RC-9: v3 context packaging
+            graph_context = await build_memory_context_v3(user_id, request.message, session_id=session_id, trace=trace)
             cb.with_neo4j_context(graph_context)
             
             # 2. Orkestrasyon: Niyet analizi ve DAG planı oluşturma
@@ -449,7 +458,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             background_tasks.add_task(extract_and_save_task, request.message, session_id, record.request_id)
 
             rdr.save_rdr(record)
-            yield f"data: {json.dumps({'type': 'done', 'rdr': record.to_dict()}, default=str)}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'rdr': record.to_dict(), 'debug_trace': trace.to_dict() if trace else None}, default=str)}\n\n"
 
         except Exception as e:
             import traceback

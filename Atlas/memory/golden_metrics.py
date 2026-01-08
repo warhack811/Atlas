@@ -28,7 +28,9 @@ class GoldenMetrics:
             "hit_success": 0,
             "hit_total": 0,
             "leak_success": 0,
-            "leak_total": 0
+            "leak_total": 0,
+            "context_build_ms_total": 0.0,
+            "intent_counts": {}
         }
         self.worst_fails = []
 
@@ -53,6 +55,10 @@ class GoldenMetrics:
             for layer, val in stats.get("layer_usage", {}).items():
                 self.total_stats["layer_usage"][layer] += val
             self.total_stats["dedupe_removed_total"] += stats.get("dedupe_count", 0)
+            self.total_stats["context_build_ms_total"] += stats.get("context_build_ms", 0.0)
+            
+            intent = stats.get("intent", "UNKNOWN")
+            self.total_stats["intent_counts"][intent] = self.total_stats["intent_counts"].get(intent, 0) + 1
 
         # Global Hit/Leak Metrikleri
         self.total_stats["hit_total"] += len(expected_contains)
@@ -87,7 +93,9 @@ class GoldenMetrics:
                 "hit_rate": f"{(self.total_stats['hit_success'] / self.total_stats['hit_total'] * 100):.1f}%" if self.total_stats['hit_total'] else "0%",
                 "leak_rate": f"{( (self.total_stats['leak_total'] - self.total_stats['leak_success']) / self.total_stats['leak_total'] * 100):.1f}%" if self.total_stats['leak_total'] else "0%",
                 "avg_chars": int(self.total_stats['total_chars'] / len(self.results)) if self.results else 0,
-                "total_dedupe": self.total_stats['dedupe_removed_total']
+                "total_dedupe": self.total_stats['dedupe_removed_total'],
+                "avg_context_build_ms": f"{(self.total_stats['context_build_ms_total'] / len(self.results)):.2f}ms" if self.results else "0ms",
+                "intent_distribution": self.total_stats["intent_counts"]
             },
             "total_stats": self.total_stats,
             "worst_fails": self.worst_fails

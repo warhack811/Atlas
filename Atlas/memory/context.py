@@ -15,7 +15,7 @@ Temel Sorumluluklar:
 
 import logging
 import re
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from Atlas.memory.buffer import MessageBuffer
 from Atlas.memory.neo4j_manager import neo4j_manager
 
@@ -269,7 +269,8 @@ async def build_memory_context_v3(
     policy = None,
     session_id: Optional[str] = None,
     stats: Optional[dict] = None,
-    intent: str = "MIXED"
+    intent: str = "MIXED",
+    trace: Optional[Any] = None
 ) -> str:
     # Policy kontrolü
     if policy is None:
@@ -281,6 +282,7 @@ async def build_memory_context_v3(
     # RC-1/RC-7/RC-8: MemoryPolicy.OFF ise kişisel hafıza kapalı uyarısı her zaman dönmeli
     if policy.mode == "OFF":
         if stats is not None: stats["semantic_mode"] = "OFF"
+        if trace: trace.add_reason("OFF mode → semantic access disabled")
         return "[BİLGİ]: Kullanıcı tercihi gereği kişisel hafıza erişimi kapalıdır."
     
     # RC-7: Alakasız sorgularda hafıza basmama (Noise/Leak Guard)
@@ -289,6 +291,7 @@ async def build_memory_context_v3(
     
     # RC-8: GENERAL intent ise Noise Guard daha agresif
     if intent == "GENERAL" or (is_irrelevant and len(user_message.split()) < 5):
+        if trace: trace.add_reason(f"Noise Guard → filtered (intent={intent}, irrelevant={is_irrelevant})")
         return ""
     
     # neo4j_manager modül seviyesinde import edilmiş (test mocking için)
@@ -304,11 +307,12 @@ async def build_memory_context_v3(
     user_anchor = get_user_anchor(user_id)
     identity_facts = await _retrieve_identity_facts(user_id, user_anchor)
     
-    # Hard Facts (EXCLUSIVE predicates)
+    # Hard & Soft Facts (RC-3/RC-8)
+    from time import time
+    t_start = time()
     raw_hard_facts = await _retrieve_hard_facts(user_id, user_anchor, catalog)
-    
-    # Soft Signals (ADDITIVE/TEMPORAL predicates)
     raw_soft_signals = await _retrieve_soft_signals(user_id, catalog)
+    if trace: trace.timings_ms["fetch_semantic_ms"] += (time() - t_start) * 1000
     
     # RC-8: Precision Filtering
     hard_facts = []
@@ -328,8 +332,10 @@ async def build_memory_context_v3(
         overlap = get_token_overlap(sig_str, user_message)
         if overlap > 0 or intent == "PERSONAL":
             soft_signals.append(signal)
+            if trace: trace.selected["fact_ids"].append(signal.get('id', 'soft_signal'))
         elif stats is not None:
              stats["semantic_filtered_out_count"] = stats.get("semantic_filtered_out_count", 0) + 1
+             if trace: trace.filtered_counts["semantic_filtered"] += 1
 
     # Open Questions (eksik EXCLUSIVE'ler) - Sadece PERSONAL/TASK'ta göster
     open_questions = []
@@ -598,7 +604,8 @@ async def build_chat_context_v1(
     user_id: str,
     session_id: str,
     user_message: str,
-    stats: Optional[dict] = None
+    stats: Optional[dict] = None,
+    trace: Optional[Any] = None
 ) -> str:
     """
     Atlas Hibrit Bağlam Paketleyicisi (V3 - RC-8).
@@ -619,15 +626,33 @@ async def build_chat_context_v1(
 
     # 1. Niyet ve Bütçe (RC-8)
     from Atlas.config import BYPASS_MEMORY_INJECTION, BYPASS_ADAPTIVE_BUDGET
+    from time import time
+    from Atlas.memory.trace import ContextTrace
+    
+    b_start = time()
+    if trace is None:
+        trace = ContextTrace(request_id=f"trace_{int(time())}", user_id=user_id, session_id=session_id)
     
     intent = classify_intent_tr(user_message)
+    trace.intent = intent
     if stats is not None: stats["intent"] = intent
 
     mode = await neo4j_manager.get_user_memory_mode(user_id)
+    trace.memory_mode = mode
     
     # Kill-switch: Adaptive budget bypass
     effective_intent = intent if not BYPASS_ADAPTIVE_BUDGET else "MIXED"
+    if BYPASS_ADAPTIVE_BUDGET: trace.add_reason("BYPASS_ADAPTIVE_BUDGET=true")
+    
     budgeter = ContextBudgeter(mode=mode, intent=effective_intent)
+    
+    # Trace budgets
+    trace.budgets = {
+        "transcript": budgeter.get_layer_budget("transcript"),
+        "episodic": budgeter.get_layer_budget("episodic"),
+        "semantic": budgeter.get_layer_budget("semantic"),
+        "total": budgeter.max_total
+    }
     
     # Kill-switch: Memory injection bypass
     if BYPASS_MEMORY_INJECTION:
@@ -637,7 +662,13 @@ async def build_chat_context_v1(
             for t in turns:
                 role = "Kullanıcı" if t["role"] == "user" else "Atlas"
                 lines.append(f"{role}: {t['content']}")
-        return f"[BİLGİ]: Bellek enjeksiyonu devre dışı bırakıldı.\n\nSON KONUŞMALAR:\n" + ("\n".join(lines) if lines else "(Henüz bu oturumda konuşma yapılmadı)")
+        
+        msg = f"[BİLGİ]: Bellek enjeksiyonu devre dışı bırakıldı.\n\nSON KONUŞMALAR:\n" + ("\n".join(lines) if lines else "(Henüz bu oturumda konuşma yapılmadı)")
+        if trace:
+            trace.add_reason("BYPASS_MEMORY_INJECTION=true")
+            trace.timings_ms["build_total_ms"] = (time() - b_start) * 1000
+            if stats is not None: stats["context_build_ms"] = trace.timings_ms["build_total_ms"]
+        return msg
 
     all_context_texts = [] # Dedupe havuzu
 
@@ -657,11 +688,13 @@ async def build_chat_context_v1(
                 transcript_lines.append(line)
                 current_transcript_size += len(line) + 1
                 all_context_texts.append(line)
+                if trace: trace.selected["turn_ids"].append(t.get('id', 'turn'))
             else:
                 break
         
         if stats is not None:
             stats["layer_usage"]["transcript"] = current_transcript_size
+        if trace: trace.usage["transcript_chars"] = current_transcript_size
             
         transcript_text = "\n".join(transcript_lines)
     else:
@@ -748,6 +781,14 @@ async def build_chat_context_v1(
         
         if stats is not None:
             stats["layer_usage"]["episodic"] = curr_ep_size
+        if trace:
+            trace.usage["episode_chars"] = curr_ep_size
+            trace.usage["total_chars"] = trace.usage["transcript_chars"] + trace.usage["episode_chars"] + trace.usage["semantic_chars"]
+            trace.timings_ms["build_total_ms"] = (time() - b_start) * 1000
+            if stats is not None:
+                stats["context_build_ms"] = trace.timings_ms["build_total_ms"]
+                stats["trace"] = trace.to_dict()
+        
         episodic_text = "\n".join(selected_ep_lines)
 
     # 3. Nihai Birleştirme
