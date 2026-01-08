@@ -31,7 +31,7 @@ API yanıtındaki `debug_trace` artık seçilen her episod için şu detayları 
 ### Neo4j Doğrulama
 Yeni episodların embedding ile kaydedildiğini şu sorguyla kontrol edebilirsiniz:
 ```cypher
-MATCH (e:Episode) WHERE e.embedding IS NOT_NULL RETURN e.summary, size(e.embedding)
+MATCH (e:Episode) WHERE e.embedding IS NOT NULL RETURN e.summary, size(e.embedding)
 ```
 
 Vektör indeksi oluşturmak için (Neo4j sürümünüz destekliyorsa):
