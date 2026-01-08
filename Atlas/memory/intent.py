@@ -53,8 +53,8 @@ def classify_intent_tr(user_message: str) -> str:
     is_general = any(kw in msg_words for kw in GENERAL_TRIGGERS)
     
     # Kişisel veya Görev tespiti (Öncelikli)
-    is_personal = any(kw in msg for kw in PERSONAL_TRIGGERS)
-    is_task = any(kw in msg for kw in TASK_TRIGGERS)
+    is_personal = any(re.search(rf"\b{kw}\b", msg) for kw in PERSONAL_TRIGGERS)
+    is_task = any(re.search(rf"\b{kw}\b", msg) for kw in TASK_TRIGGERS)
     
     # Eğer hava durumu ise, personal/task'tan önce GENERAL döner (Korumalı kontrol)
     if "hava" in msg_words:
@@ -69,7 +69,7 @@ def classify_intent_tr(user_message: str) -> str:
         return "TASK"
         
     # Takip (Follow-up) tespiti
-    if any(kw in msg for kw in FOLLOWUP_TRIGGERS):
+    if any(re.search(rf"\b{kw}\b", msg) for kw in FOLLOWUP_TRIGGERS):
         return "FOLLOWUP"
     
     # Soru kalıpları (Genel sorgu sinyali - ASCII)
