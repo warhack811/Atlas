@@ -45,6 +45,21 @@ jobs:
             fi
             
             sudo systemctl restart atlas
+            
+            # Servisin başlaması için bekle
+            echo "⏳ Servis başlatılıyor, 10 saniye bekleniyor..."
+            sleep 10
+            
+            # Health check - başarısız olursa deploy fail olur
+            echo "🔍 Health check yapılıyor..."
+            if curl -f --retry 3 --retry-delay 2 --max-time 10 http://127.0.0.1:${PORT:-8080}/api/health; then
+                echo "✅ Health check başarılı!"
+            else
+                echo "❌ Health check başarısız! Servis logları:"
+                sudo journalctl -u atlas -n 100 --no-pager
+                exit 1
+            fi
+            
             echo "--- Paket Listesi ---"
             $VENV_PATH list
             echo "--- Kritik Servis Logları ---"
