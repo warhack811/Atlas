@@ -303,7 +303,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
         # Arka planda bilgi çıkarımı yaparak graf veritabanını günceller
         # FAZ2: source_turn_id (request_id) iz sürme için extractor'a gönderiliyor
         from Atlas.memory.extractor import extract_and_save as extract_and_save_task
-        background_tasks.add_task(extract_and_save_task, user_message, session_id, record.request_id)
+        background_tasks.add_task(extract_and_save_task, user_message, user_id, record.request_id)
 
         return ChatResponse(
             response=response_text,
@@ -472,7 +472,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             # Arka planda bilgi çıkarımı yaparak graf veritabanını günceller
             # FAZ2: source_turn_id (request_id) iz sürme için extractor'a gönderiliyor
             from Atlas.memory.extractor import extract_and_save as extract_and_save_task
-            background_tasks.add_task(extract_and_save_task, request.message, session_id, record.request_id)
+            background_tasks.add_task(extract_and_save_task, request.message, user_id, record.request_id)
 
             rdr.save_rdr(record)
             yield f"data: {json.dumps({'type': 'done', 'rdr': record.to_dict(), 'debug_trace': serialize_neo4j_value(trace.to_dict()) if trace else None}, default=str)}\n\n"
