@@ -15,52 +15,107 @@ jobs:
           username: ${{ secrets.OCI_USER }}
           key: ${{ secrets.OCI_SSH_KEY }}
           script: |
+            set -e
+            
+            # ============================================
+            # ATLAS DEPLOY SCRIPT WITH AUTO-ROLLBACK
+            # ============================================
+            
             # Sunucu üzerindeki gerçek proje dizinine git
             cd $HOME/atlas_root/Atlas || cd $HOME/Atlas || exit 1
+            echo "📁 Çalışma dizini: $(pwd)"
             
-            echo "Çalışma dizini: $(pwd)"
-            git reset --hard
-            git pull
-            
-            # Sanal ortam yolunu belirle ve paketleri yönet
+            # Sanal ortam yolunu belirle
             VENV_PATH="./.venv/bin/pip"
             if [ ! -f "$VENV_PATH" ]; then
                 VENV_PATH="venv/bin/pip"
             fi
             
+            # ============================================
+            # 1. ROLLBACK NOKTASI KAYDET
+            # ============================================
+            PREV_SHA=$(git rev-parse HEAD)
+            echo "📌 Rollback noktası: $PREV_SHA"
+            
+            # ============================================
+            # 2. YENİ KODU ÇEK VE KURU
+            # ============================================
+            echo "⬇️ Yeni kod çekiliyor..."
+            git reset --hard
+            git pull
+            NEW_SHA=$(git rev-parse HEAD)
+            echo "🆕 Yeni SHA: $NEW_SHA"
+            
             $VENV_PATH install -r requirements.txt
             $VENV_PATH install -e .
             
-            # Tarih damgasını bas ve kontrol et (Türkiye saatine göre)
+            # Tarih damgasını bas
             TIMESTAMP=$(TZ='Europe/Istanbul' date '+%d.%m.%Y %H:%M:%S')
-            echo "Görünen yerel saat: $TIMESTAMP"
+            echo "🕐 Deploy zamanı: $TIMESTAMP"
             
-            # index.html konumunu doğrula (Atlas/ui/index.html)
             if [ -f "Atlas/ui/index.html" ]; then
                 sed -i "s/BUILD_TIMESTAMP_PLACEHOLDER/$TIMESTAMP/g" Atlas/ui/index.html
-                echo "Zaman damgası basıldı."
-            else
-                echo "HATA: Atlas/ui/index.html bulunamadı! Mevcut dosyalar:"
-                find . -name index.html
             fi
             
+            # ============================================
+            # 3. SERVİS RESTART + HEALTH CHECK
+            # ============================================
+            echo "🔄 Servis yeniden başlatılıyor..."
             sudo systemctl restart atlas
             
-            # Servisin başlaması için bekle
             echo "⏳ Servis başlatılıyor, 10 saniye bekleniyor..."
             sleep 10
             
-            # Health check - başarısız olursa deploy fail olur
             echo "🔍 Health check yapılıyor..."
-            if curl -f --retry 3 --retry-delay 2 --max-time 10 http://127.0.0.1:${PORT:-8080}/api/health; then
-                echo "✅ Health check başarılı!"
+            if curl -sf --retry 3 --retry-delay 2 --max-time 10 http://127.0.0.1:${PORT:-8080}/api/health; then
+                echo ""
+                echo "============================================"
+                echo "✅ DEPLOY BAŞARILI!"
+                echo "   SHA: $NEW_SHA"
+                echo "   Zaman: $TIMESTAMP"
+                echo "============================================"
             else
-                echo "❌ Health check başarısız! Servis logları:"
-                sudo journalctl -u atlas -n 100 --no-pager
-                exit 1
+                # ============================================
+                # 4. ROLLBACK - Önceki sürüme dön
+                # ============================================
+                echo ""
+                echo "❌ Health check başarısız! ROLLBACK başlatılıyor..."
+                echo "🔙 Geri dönülüyor: $PREV_SHA"
+                
+                git reset --hard $PREV_SHA
+                $VENV_PATH install -r requirements.txt
+                $VENV_PATH install -e .
+                
+                sudo systemctl restart atlas
+                echo "⏳ Rollback sonrası 10 saniye bekleniyor..."
+                sleep 10
+                
+                # Rollback sonrası health check
+                echo "🔍 Rollback health check..."
+                if curl -sf --retry 3 --retry-delay 2 --max-time 10 http://127.0.0.1:${PORT:-8080}/api/health; then
+                    echo ""
+                    echo "============================================"
+                    echo "⚠️ DEPLOY BAŞARISIZ - ROLLBACK BAŞARILI"
+                    echo "   Aktif SHA: $PREV_SHA"
+                    echo "   Reddedilen: $NEW_SHA"
+                    echo "============================================"
+                    exit 1
+                else
+                    echo ""
+                    echo "============================================"
+                    echo "🚨 KRİTİK: ROLLBACK DA BAŞARISIZ!"
+                    echo "   Manuel müdahale gerekli!"
+                    echo "============================================"
+                    sudo journalctl -u atlas -n 100 --no-pager
+                    exit 2
+                fi
             fi
             
+            # ============================================
+            # 5. DEPLOY SONRASI BİLGİLER
+            # ============================================
+            echo ""
             echo "--- Paket Listesi ---"
-            $VENV_PATH list
-            echo "--- Kritik Servis Logları ---"
-            sudo journalctl -u atlas -n 50 --no-pager
+            $VENV_PATH list | head -20
+            echo "--- Son Servis Logları ---"
+            sudo journalctl -u atlas -n 30 --no-pager
