@@ -466,6 +466,111 @@
             filter: brightness(1.2);
         }
 
+        /* --- Auth & Modal --- */
+        .auth-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        .login-btn,
+        .logout-btn {
+            background: var(--surface-accent);
+            border: 1px solid var(--border);
+            color: var(--cyan);
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: 0.2s;
+        }
+
+        .login-btn:hover {
+            border-color: var(--cyan);
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);
+        }
+
+        .login-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+            backdrop-filter: blur(5px);
+        }
+
+        .login-card {
+            background: var(--surface);
+            border: 1px solid var(--matrix-green);
+            padding: 32px;
+            border-radius: 20px;
+            width: 350px;
+            box-shadow: 0 0 40px rgba(0, 255, 65, 0.1);
+        }
+
+        .login-card h2 {
+            color: var(--matrix-green);
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .login-input {
+            width: 100%;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            outline: none;
+        }
+
+        .login-input:focus {
+            border-color: var(--cyan);
+        }
+
+        .login-submit {
+            width: 100%;
+            background: var(--matrix-green);
+            color: #000;
+            border: none;
+            padding: 12px;
+            border-radius: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .locked-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 11, 16, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--matrix-green);
+            font-weight: 700;
+            display: none;
+        }
+
         /* --- Notifications Panel --- */
         .notif-panel {
             position: absolute;
@@ -568,6 +673,53 @@
             background: #484f58;
         }
 
+        /* --- Chat Management Minimal UI --- */
+        .chat-mgmt-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-right: 15px;
+            padding-right: 15px;
+            border-right: 1px solid var(--border);
+        }
+
+        .chat-select-minimal {
+            background: var(--surface-accent);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            max-width: 150px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .mgmt-btn-mini {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .mgmt-btn-mini:hover {
+            border-color: var(--matrix-green);
+            color: var(--matrix-green);
+        }
+
+        .mgmt-btn-mini.del:hover {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
         /* --- Mobile Responsiveness --- */
         @media (max-width: 768px) {
             .header {
@@ -660,6 +812,9 @@
             <span id="statusLabel">ENGINE STANDBY</span>
         </div>
         <div class="header-actions">
+            <div id="authArea" class="auth-area">
+                <!-- Syncing with status... -->
+            </div>
             <div
                 style="font-size: 0.65rem; color: var(--text-dim); text-align: right; margin-right: 15px; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">
                 Build: <span style="color: var(--cyan)">BUILD_TIMESTAMP_PLACEHOLDER</span>
@@ -667,6 +822,14 @@
             <a href="/arena" class="arena-link">
                 🏟️ Arena
             </a>
+            <div class="chat-mgmt-container">
+                <button class="mgmt-btn-mini" onclick="newChat()" title="Yeni Sohbet"><span>+</span></button>
+                <select id="chatSelect" class="chat-select-minimal" onchange="switchChat(this.value)">
+                    <option value="">Sohbetler...</option>
+                </select>
+                <button class="mgmt-btn-mini del" onclick="deleteChat()" title="Sohbeti Sil"><span>🗑️</span></button>
+                <button class="mgmt-btn-mini" onclick="clearAllChats()" title="Tümünü Temizle"><span>🧹</span></button>
+            </div>
             <div class="notification-bell" onclick="toggleNotifications()">
                 🔔<span class="notification-count" id="notifCount">0</span>
             </div>
@@ -674,6 +837,25 @@
     </div>
 
     <div class="main-container">
+        <div class="locked-overlay" id="lockedOverlay">
+            <div style="text-align:center;">
+                <div style="font-size: 2rem; margin-bottom: 10px;">🔒</div>
+                SYSTEM LOCKED<br>Geleceği Gözlemlemek İçin Giriş Yapın
+            </div>
+        </div>
+
+        <div class="login-modal" id="loginModal">
+            <div class="login-card">
+                <h2>ATLAS Girişi</h2>
+                <input type="text" id="loginUser" class="login-input" placeholder="Kullanıcı Adı">
+                <input type="password" id="loginPass" class="login-input" placeholder="Şifre">
+                <button class="login-submit" onclick="handleLogin()">Giriş Yap</button>
+                <div id="loginError"
+                    style="color:var(--danger); font-size:0.75rem; margin-top:10px; text-align:center;">
+                </div>
+            </div>
+        </div>
+
         <div class="chat-view" id="chatView">
             <div class="message-wrapper ai">
                 <div class="bubble">
@@ -739,14 +921,161 @@
         const fileInput = document.getElementById('fileInput');
 
         let isProcessing = false;
+        let currentUser = null;
+        let activeSessionId = localStorage.getItem('atlas_active_session') || `session-${Date.now()}`;
+        let sessions = JSON.parse(localStorage.getItem('atlas_sessions') || '[]');
 
-        // Auto-refresh notifications
-        setInterval(refreshNotifications, 60000); // 1 min
-        refreshNotifications();
+        // --- Auth Logic ---
+        async function checkAuthStatus() {
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/me`);
+                if (res.ok) {
+                    currentUser = await res.json();
+                    showLoggedIn();
+                } else {
+                    currentUser = null;
+                    showLoggedOut();
+                }
+            } catch (e) {
+                console.error("Auth check failed", e);
+            }
+        }
+
+        async function handleLogin() {
+            const u = document.getElementById('loginUser').value;
+            const p = document.getElementById('loginPass').value;
+            const err = document.getElementById('loginError');
+
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: u, password: p })
+                });
+
+                if (res.ok) {
+                    await checkAuthStatus();
+                    document.getElementById('loginModal').style.display = 'none';
+                } else {
+                    err.innerText = "❌ Geçersiz kimlik bilgileri.";
+                }
+            } catch (e) {
+                err.innerText = "🚨 Bağlantı hatası.";
+            }
+        }
+
+        async function handleLogout() {
+            await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST' });
+            currentUser = null;
+            showLoggedOut();
+        }
+
+        function showLoggedIn() {
+            document.getElementById('lockedOverlay').style.display = 'none';
+            document.getElementById('userInput').disabled = false;
+            document.getElementById('authArea').innerHTML = `
+                <div class="user-info">
+                    <span>${currentUser.username} (${currentUser.role})</span>
+                    <button class="logout-btn" onclick="handleLogout()">Çıkış</button>
+                </div>
+            `;
+            initSessions();
+        }
+
+        function showLoggedOut() {
+            document.getElementById('lockedOverlay').style.display = 'flex';
+            document.getElementById('userInput').disabled = true;
+            document.getElementById('authArea').innerHTML = `
+                <button class="login-btn" onclick="document.getElementById('loginModal').style.display='flex'">Giriş Yap</button>
+            `;
+            initSessions();
+        }
+
+        // --- Chat Management Logic ---
+        function initSessions() {
+            // Namespace sessions by user
+            const key = currentUser ? `atlas_sessions_v1::${currentUser.username}` : `atlas_sessions_v1::anon`;
+            sessions = JSON.parse(localStorage.getItem(key) || '[]');
+            activeSessionId = localStorage.getItem(`${key}::active`) || `session-${Date.now()}`;
+            renderSessions();
+        }
+
+        function saveSessions() {
+            const key = currentUser ? `atlas_sessions_v1::${currentUser.username}` : `atlas_sessions_v1::anon`;
+            localStorage.setItem(key, JSON.stringify(sessions));
+            localStorage.setItem(`${key}::active`, activeSessionId);
+        }
+
+        function renderSessions() {
+            const select = document.getElementById('chatSelect');
+            if (!select) return;
+            if (sessions.length === 0) {
+                if (!sessions.find(s => s.id === activeSessionId)) {
+                    sessions.push({ id: activeSessionId, title: "Mevcut Sohbet", date: new Date().toISOString() });
+                }
+            }
+            select.innerHTML = sessions.map(s => `
+                <option value="${s.id}" ${s.id === activeSessionId ? 'selected' : ''}>${s.title}</option>
+            `).join('');
+            saveSessions();
+        }
+
+        function newChat() {
+            activeSessionId = `session-${Date.now()}`;
+            sessions.unshift({ id: activeSessionId, title: "Yeni Sohbet", date: new Date().toISOString() });
+            renderSessions();
+            chatView.innerHTML = `
+                <div class="message-wrapper ai">
+                    <div class="bubble">
+                        <h3>Sisteme Hoş Geldin, Observer.</h3>
+                        <p>Yeni bir sohbet oturumu başlatıldı. Analiz hazır.</p>
+                    </div>
+                </div>
+            `;
+            appendSystemNotification("✨ Yeni sohbet başlatıldı.");
+        }
+
+        function switchChat(id) {
+            if (!id || id === activeSessionId) return;
+            activeSessionId = id;
+            saveSessions();
+            chatView.innerHTML = '';
+            appendSystemNotification(`🔄 Sohbet oturumu değiştirildi: ${sessions.find(s => s.id === id)?.title || id}`);
+        }
+
+        function deleteChat() {
+            sessions = sessions.filter(s => s.id !== activeSessionId);
+            activeSessionId = sessions.length > 0 ? sessions[0].id : `session-${Date.now()}`;
+            if (sessions.length === 0) sessions.push({ id: activeSessionId, title: "Yeni Sohbet", date: new Date().toISOString() });
+            renderSessions();
+            chatView.innerHTML = '';
+            appendSystemNotification("🗑️ Sohbet silindi.");
+        }
+
+        function clearAllChats() {
+            if (!confirm("Tüm sohbetleri temizlemek istiyor musunuz?")) return;
+            sessions = [];
+            activeSessionId = `session-${Date.now()}`;
+            renderSessions();
+            chatView.innerHTML = '';
+            appendSystemNotification("🧹 Tüm geçmiş temizlendi.");
+        }
+
+        function updateSessionTitle(msg) {
+            const current = sessions.find(s => s.id === activeSessionId);
+            if (current && (current.title === "Yeni Sohbet" || current.title === "Mevcut Sohbet")) {
+                current.title = msg.substring(0, 25) + (msg.length > 25 ? "..." : "");
+                renderSessions();
+            }
+        }
+
+        // Init Sessions
+        renderSessions();
 
         async function refreshNotifications() {
             try {
-                const res = await fetch(`${API_BASE}/api/notifications/test_user`);
+                const url = `${API_BASE}/api/notifications?session_id=${activeSessionId}${currentUser ? `&user_id=${currentUser.username}` : ''}`;
+                const res = await fetch(url);
                 const data = await res.json();
                 const list = data.notifications || [];
 
@@ -787,7 +1116,7 @@
                     const formData = new FormData();
                     formData.append('file', file);
 
-                    const res = await fetch(`${API_BASE}/api/upload?session_id=sandbox-session`, {
+                    const res = await fetch(`${API_BASE}/api/upload?session_id=${activeSessionId}`, {
                         method: 'POST',
                         body: formData
                     });
@@ -825,6 +1154,7 @@
             if (!msg || isProcessing) return;
 
             setLoading(true);
+            updateSessionTitle(msg);
             appendMessage('user', msg);
             userInput.value = '';
 
@@ -843,7 +1173,7 @@
                     body: JSON.stringify({
                         message: msg,
                         mode: personaSelect.value,
-                        session_id: "sandbox-session"
+                        session_id: activeSessionId
                     })
                 });
 
@@ -1093,6 +1423,24 @@
             // Show selected
             document.getElementById(`${tabName}-${msgId}`).classList.add('active');
         }
+
+        // Global Exposure
+        window.newChat = newChat;
+        window.switchChat = switchChat;
+        window.deleteChat = deleteChat;
+        window.clearAllChats = clearAllChats;
+        window.toggleNotifications = toggleNotifications;
+        window.toggleThought = toggleThought;
+        window.toggleInspector = toggleInspector;
+        window.switchTab = switchTab;
+        window.handleSend = handleSend;
+        window.handleLogin = handleLogin;
+        window.handleLogout = handleLogout;
+
+        // Init
+        checkAuthStatus();
+        setInterval(refreshNotifications, 60000); // 1 min
+        refreshNotifications();
     </script>
 </body>
 
