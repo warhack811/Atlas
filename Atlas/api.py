@@ -22,11 +22,12 @@ import traceback
 from datetime import datetime
 from typing import Optional
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, BackgroundTasks, File, UploadFile
+from fastapi import FastAPI, HTTPException, BackgroundTasks, File, UploadFile, Request, Response, Depends, Cookie
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from Atlas.auth import create_session_token, decode_session_token, verify_credentials
 
 logger = logging.getLogger("api")
 
@@ -59,6 +60,14 @@ class ChatRequest(BaseModel):
     style: Optional[dict] = None
     mode: Optional[str] = "standard"
     debug_trace: bool = False
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 
 class ChatResponse(BaseModel):
@@ -146,15 +155,51 @@ async def startup_event():
     asyncio.create_task(keep_alive_pulse())
 
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Uygulama kapandığında çalışacak görevler."""
-    from Atlas.scheduler import stop_scheduler
-    stop_scheduler()
+# --- AUTH & SESSION ---
 
+async def get_current_user(atlas_session: Optional[str] = Cookie(None)):
+    """Cookie'den kullanıcı bilgisini çözer."""
+    if not atlas_session:
+        return None
+    user_data = decode_session_token(atlas_session)
+    return user_data
+
+@app.post("/api/auth/login")
+async def login(request: LoginRequest, response: Response):
+    role = verify_credentials(request.username, request.password)
+    if not role:
+        raise HTTPException(status_code=401, detail="Hatalı kullanıcı adı veya şifre")
+    
+    token = create_session_token(request.username, role)
+    # HttpOnly Cookie set et (7 gün)
+    response.set_cookie(
+        key="atlas_session",
+        value=token,
+        httponly=True,
+        max_age=604800,
+        expires=604800,
+        path="/",
+        samesite="lax",
+        secure=False  # Local test için False, prod'da HTTPS varsa True yapılabilir
+    )
+    return {"message": "Giriş başarılı", "username": request.username, "role": role}
+
+@app.post("/api/auth/logout")
+async def logout(response: Response):
+    response.delete_cookie(key="atlas_session", path="/")
+    return {"message": "Çıkış yapıldı"}
+
+@app.get("/api/auth/me")
+async def get_me(user=Depends(get_current_user)):
+    if not user:
+        raise HTTPException(status_code=401, detail="Oturum açılmamış")
+    return {"username": user["username"], "role": user["role"]}
+
+
+# --- CHAT ENDPOINTS ---
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
+async def chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Depends(get_current_user)):
     """Standart blok yanıt üreten ana sohbet endpoint'i."""
     from Atlas.memory import SessionManager, MessageBuffer
     import Atlas.orchestrator as orchestrator
@@ -164,8 +209,11 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     start_time = time.time()
     
     # 0. ERİŞİM KONTROLÜ: INTERNAL_ONLY modunda whitelist kontrolü
+    # Öncelik: login > body > session_id
+    logged_in_username = user["username"] if user else None
+    user_id = logged_in_username or request.user_id or request.session_id
+    
     from Atlas.config import is_user_whitelisted, INTERNAL_ONLY
-    user_id = request.user_id if request.user_id else request.session_id
     if not is_user_whitelisted(user_id):
         logger.warning(f"INTERNAL_ONLY: Erişim reddedildi - user_id: {user_id}")
         raise HTTPException(
@@ -203,7 +251,10 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     
     try:
         session_id = request.session_id
-        user_id = request.user_id if request.user_id else session_id
+        # user_id yukarıda erişim kontrolünde zaten belirlenmişti (priority: login > body > session_id)
+        # Ancak burada tekrar atanması gerekebilir eğer yerel kapsamda kullanılıyorsa
+        logged_in_username = user["username"] if user else None
+        user_id = logged_in_username or request.user_id or session_id
         
         # RC-2: Kullanıcı-Session eşleşmesini sağla
         from Atlas.memory.neo4j_manager import neo4j_manager
@@ -327,14 +378,17 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
 
 
 @app.post("/api/chat/stream")
-async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
+async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks, user=Depends(get_current_user)):
     """SSE (Server-Sent Events) kullanarak akış formatında yanıt üretir."""
     from Atlas.memory import SessionManager, MessageBuffer
     from Atlas import orchestrator, dag_executor, synthesizer
     
     # 0. ERİŞİM KONTROLÜ: INTERNAL_ONLY modunda whitelist kontrolü
+    # Öncelik: login > body > session_id
+    logged_in_username = user["username"] if user else None
+    user_id = logged_in_username or request.user_id or request.session_id
+    
     from Atlas.config import is_user_whitelisted
-    user_id = request.user_id if request.user_id else request.session_id
     if not is_user_whitelisted(user_id):
         logger.warning(f"INTERNAL_ONLY: Erişim reddedildi (stream) - user_id: {user_id}")
         raise HTTPException(
@@ -353,7 +407,8 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             from Atlas import orchestrator, dag_executor, synthesizer
             
             session_id = request.session_id
-            user_id = request.user_id if request.user_id else session_id
+            logged_in_username = user["username"] if user else None
+            user_id = logged_in_username or request.user_id or session_id
             
             # RC-2: Kullanıcı-Session eşleşmesini sağla
             from Atlas.memory.neo4j_manager import neo4j_manager
@@ -821,6 +876,14 @@ async def root():
 
 if UI_PATH.exists():
     app.mount("/static", StaticFiles(directory=str(UI_PATH)), name="static")
+    # Phase 1: Modular CSS/JS file serving
+    css_path = UI_PATH / "css"
+    js_path = UI_PATH / "js"
+    if css_path.exists():
+        app.mount("/css", StaticFiles(directory=str(css_path)), name="css")
+    if js_path.exists():
+        app.mount("/js", StaticFiles(directory=str(js_path)), name="js")
+
 
 async def _maybe_trigger_episodic_memory(user_id: str, session_id: str):
     """
