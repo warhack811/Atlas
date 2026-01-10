@@ -1,19 +1,78 @@
 /* ========================================================================
    ATLAS Main Stylesheet
    Extracted from index.html - Phase 1: Module Separation
+   Phase 2: Modern Design System with Extended Tokens
    ======================================================================== */
 
 :root {
+    /* === Color Palette === */
     --bg-dark: #0a0b10;
     --surface: #161b22;
     --surface-accent: #21262d;
     --matrix-green: #00ff41;
     --cyan: #00e5ff;
     --danger: #ff003c;
+    --warning: #ffa500;
+    --success: #00ff41;
+    --info: #00e5ff;
     --text-main: #e6edf3;
     --text-dim: #8b949e;
     --border: #30363d;
     --glow: 0 0 15px rgba(0, 255, 65, 0.3);
+
+    /* === Extended Color System === */
+    --purple: #a855f7;
+    --amber: #f59e0b;
+    --blue: #3b82f6;
+    --surface-glass: rgba(22, 27, 34, 0.7);
+
+    /* === Spacing Scale === */
+    --gap-xs: 4px;
+    --gap-sm: 8px;
+    --gap-md: 16px;
+    --gap-lg: 24px;
+    --gap-xl: 32px;
+    --gap-2xl: 48px;
+    --gap-3xl: 64px;
+
+    /* === Border Radius === */
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --radius-full: 9999px;
+
+    /* === Shadow System === */
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+    --shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.7);
+    --shadow-glow-cyan: 0 0 20px rgba(0, 229, 255, 0.3);
+    --shadow-glow-green: 0 0 20px rgba(0, 255, 65, 0.3);
+
+    /* === Typography Scale === */
+    --text-xs: 0.65rem;
+    --text-sm: 0.75rem;
+    --text-base: 0.95rem;
+    --text-lg: 1.1rem;
+    --text-xl: 1.4rem;
+    --text-2xl: 1.8rem;
+
+    --font-mono: 'Fira Code', 'Consolas', monospace;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+    /* === Transitions === */
+    --transition-fast: 150ms ease;
+    --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* === Z-Index Scale === */
+    --z-base: 1;
+    --z-dropdown: 1000;
+    --z-sticky: 1100;
+    --z-overlay: 2000;
+    --z-modal: 3000;
+    --z-toast: 4000;
 }
 
 * {

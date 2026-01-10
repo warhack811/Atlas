@@ -1,0 +1,555 @@
+/* ========================================================================
+   PHASE 2: MODERN UTILITY CLASSES & ANIMATIONS
+   Glassmorphism, Grid System, Flex Utilities, Advanced Animations
+   ======================================================================== */
+
+/* === Glassmorphism Utilities === */
+.glass {
+    background: var(--surface-glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-strong {
+    background: rgba(22, 27, 34, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.glass-light {
+    background: rgba(22, 27, 34, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* === Grid System === */
+.grid {
+    display: grid;
+}
+
+.grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.grid-auto {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.gap-xs {
+    gap: var(--gap-xs);
+}
+
+.gap-sm {
+    gap: var(--gap-sm);
+}
+
+.gap-md {
+    gap: var(--gap-md);
+}
+
+.gap-lg {
+    gap: var(--gap-lg);
+}
+
+.gap-xl {
+    gap: var(--gap-xl);
+}
+
+/* === Flex Utilities === */
+.flex {
+    display: flex;
+}
+
+.flex-col {
+    flex-direction: column;
+}
+
+.flex-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.items-center {
+    align-items: center;
+}
+
+.justify-between {
+    justify-content: space-between;
+}
+
+.justify-center {
+    justify-content: center;
+}
+
+.flex-1 {
+    flex: 1;
+}
+
+/* === Spacing Utilities === */
+.p-xs {
+    padding: var(--gap-xs);
+}
+
+.p-sm {
+    padding: var(--gap-sm);
+}
+
+.p-md {
+    padding: var(--gap-md);
+}
+
+.p-lg {
+    padding: var(--gap-lg);
+}
+
+.p-xl {
+    padding: var(--gap-xl);
+}
+
+.m-xs {
+    margin: var(--gap-xs);
+}
+
+.m-sm {
+    margin: var(--gap-sm);
+}
+
+.m-md {
+    margin: var(--gap-md);
+}
+
+.m-lg {
+    margin: var(--gap-lg);
+}
+
+.m-xl {
+    margin: var(--gap-xl);
+}
+
+.mt-sm {
+    margin-top: var(--gap-sm);
+}
+
+.mt-md {
+    margin-top: var(--gap-md);
+}
+
+.mt-lg {
+    margin-top: var(--gap-lg);
+}
+
+.mb-sm {
+    margin-bottom: var(--gap-sm);
+}
+
+.mb-md {
+    margin-bottom: var(--gap-md);
+}
+
+.mb-lg {
+    margin-bottom: var(--gap-lg);
+}
+
+/* === Border Radius Utilities === */
+.rounded-sm {
+    border-radius: var(--radius-sm);
+}
+
+.rounded-md {
+    border-radius: var(--radius-md);
+}
+
+.rounded-lg {
+    border-radius: var(--radius-lg);
+}
+
+.rounded-xl {
+    border-radius: var(--radius-xl);
+}
+
+.rounded-full {
+    border-radius: var(--radius-full);
+}
+
+/* === Shadow Utilities === */
+.shadow-sm {
+    box-shadow: var(--shadow-sm);
+}
+
+.shadow-md {
+    box-shadow: var(--shadow-md);
+}
+
+.shadow-lg {
+    box-shadow: var(--shadow-lg);
+}
+
+.shadow-xl {
+    box-shadow: var(--shadow-xl);
+}
+
+.shadow-glow-cyan {
+    box-shadow: var(--shadow-glow-cyan);
+}
+
+.shadow-glow-green {
+    box-shadow: var(--shadow-glow-green);
+}
+
+/* === Advanced Animations === */
+@keyframes shimmer {
+    0% {
+        background-position: -200% center;
+    }
+
+    100% {
+        background-position: 200% center;
+    }
+}
+
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+@keyframes glow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 5px currentColor;
+    }
+
+    50% {
+        box-shadow: 0 0 20px currentColor, 0 0 30px currentColor;
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideInLeft {
+    from {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideInUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes rotateIn {
+    from {
+        transform: rotate(-180deg) scale(0.5);
+        opacity: 0;
+    }
+
+    to {
+        transform: rotate(0deg) scale(1);
+        opacity: 1;
+    }
+}
+
+/* === Animation Classes === */
+.animate-shimmer {
+    background: linear-gradient(90deg,
+            transparent,
+            rgba(0, 255, 65, 0.1),
+            transparent);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+}
+
+.animate-float {
+    animation: float 3s ease-in-out infinite;
+}
+
+.animate-glow {
+    animation: glow 2s ease-in-out infinite;
+}
+
+.animate-slide-right {
+    animation: slideInRight 0.3s ease-out;
+}
+
+.animate-slide-left {
+    animation: slideInLeft 0.3s ease-out;
+}
+
+.animate-slide-up {
+    animation: slideInUp 0.3s ease-out;
+}
+
+.animate-scale {
+    animation: scaleIn 0.3s ease-out;
+}
+
+.animate-rotate {
+    animation: rotateIn 0.5s ease-out;
+}
+
+/* === Transition Utilities === */
+.transition-fast {
+    transition: all var(--transition-fast);
+}
+
+.transition-base {
+    transition: all var(--transition-base);
+}
+
+.transition-slow {
+    transition: all var(--transition-slow);
+}
+
+/* === Interactive States === */
+.hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.hover-glow-cyan:hover {
+    box-shadow: var(--shadow-glow-cyan);
+    border-color: var(--cyan);
+}
+
+.hover-glow-green:hover {
+    box-shadow: var(--shadow-glow-green);
+    border-color: var(--matrix-green);
+}
+
+.hover-scale:hover {
+    transform: scale(1.05);
+}
+
+/* === Text Utilities === */
+.text-xs {
+    font-size: var(--text-xs);
+}
+
+.text-sm {
+    font-size: var(--text-sm);
+}
+
+.text-base {
+    font-size: var(--text-base);
+}
+
+.text-lg {
+    font-size: var(--text-lg);
+}
+
+.text-xl {
+    font-size: var(--text-xl);
+}
+
+.text-2xl {
+    font-size: var(--text-2xl);
+}
+
+.font-mono {
+    font-family: var(--font-mono);
+}
+
+.font-sans {
+    font-family: var(--font-sans);
+}
+
+.text-cyan {
+    color: var(--cyan);
+}
+
+.text-green {
+    color: var(--matrix-green);
+}
+
+.text-danger {
+    color: var(--danger);
+}
+
+.text-warning {
+    color: var(--warning);
+}
+
+.text-dim {
+    color: var(--text-dim);
+}
+
+.font-bold {
+    font-weight: 700;
+}
+
+.font-semibold {
+    font-weight: 600;
+}
+
+.font-medium {
+    font-weight: 500;
+}
+
+.uppercase {
+    text-transform: uppercase;
+}
+
+.lowercase {
+    text-transform: lowercase;
+}
+
+.capitalize {
+    text-transform: capitalize;
+}
+
+/* === Background Utilities === */
+.bg-surface {
+    background: var(--surface);
+}
+
+.bg-surface-accent {
+    background: var(--surface-accent);
+}
+
+.bg-dark {
+    background: var(--bg-dark);
+}
+
+/* === Border Utilities === */
+.border {
+    border: 1px solid var(--border);
+}
+
+.border-cyan {
+    border-color: var(--cyan);
+}
+
+.border-green {
+    border-color: var(--matrix-green);
+}
+
+.border-danger {
+    border-color: var(--danger);
+}
+
+/* === Cursor Utilities === */
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.cursor-not-allowed {
+    cursor: not-allowed;
+}
+
+/* === Display Utilities === */
+.hidden {
+    display: none !important;
+}
+
+.block {
+    display: block;
+}
+
+.inline-block {
+    display: inline-block;
+}
+
+/* === Overflow Utilities === */
+.overflow-hidden {
+    overflow: hidden;
+}
+
+.overflow-auto {
+    overflow: auto;
+}
+
+.overflow-x-auto {
+    overflow-x: auto;
+}
+
+.overflow-y-auto {
+    overflow-y: auto;
+}
+
+/* === Position Utilities === */
+.relative {
+    position: relative;
+}
+
+.absolute {
+    position: absolute;
+}
+
+.fixed {
+    position: fixed;
+}
+
+.sticky {
+    position: sticky;
+}
+
+/* === Width/Height Utilities === */
+.w-full {
+    width: 100%;
+}
+
+.h-full {
+    height: 100%;
+}
+
+.w-auto {
+    width: auto;
+}
+
+.h-auto {
+    height: auto;
+}
