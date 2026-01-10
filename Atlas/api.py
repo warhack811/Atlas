@@ -163,7 +163,17 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     
     start_time = time.time()
     
-    # 0. GÜVENLİK DENETİMİ: Girdide zararlı içerik veya hassas veri (PII) kontrolü
+    # 0. ERİŞİM KONTROLÜ: INTERNAL_ONLY modunda whitelist kontrolü
+    from Atlas.config import is_user_whitelisted, INTERNAL_ONLY
+    user_id = request.user_id if request.user_id else request.session_id
+    if not is_user_whitelisted(user_id):
+        logger.warning(f"INTERNAL_ONLY: Erişim reddedildi - user_id: {user_id}")
+        raise HTTPException(
+            status_code=403, 
+            detail="Bu API şu anda sadece yetkili kullanıcılara açıktır. (INTERNAL_ONLY mode)"
+        )
+    
+    # 1. GÜVENLİK DENETİMİ: Girdide zararlı içerik veya hassas veri (PII) kontrolü
     from Atlas.safety import safety_gate
     is_safe, sanitized_text, issues, used_model = await safety_gate.check_input_safety(request.message)
     safety_ms = int((time.time() - start_time) * 1000)
@@ -321,6 +331,16 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
     """SSE (Server-Sent Events) kullanarak akış formatında yanıt üretir."""
     from Atlas.memory import SessionManager, MessageBuffer
     from Atlas import orchestrator, dag_executor, synthesizer
+    
+    # 0. ERİŞİM KONTROLÜ: INTERNAL_ONLY modunda whitelist kontrolü
+    from Atlas.config import is_user_whitelisted
+    user_id = request.user_id if request.user_id else request.session_id
+    if not is_user_whitelisted(user_id):
+        logger.warning(f"INTERNAL_ONLY: Erişim reddedildi (stream) - user_id: {user_id}")
+        raise HTTPException(
+            status_code=403, 
+            detail="Bu API şu anda sadece yetkili kullanıcılara açıktır. (INTERNAL_ONLY mode)"
+        )
 
     async def event_generator():
         """Süreç adımlarını ve metin parçalarını ileten jeneratör."""

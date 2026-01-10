@@ -166,6 +166,29 @@ DEBUG = False  # Admin endpointları için (Purge vb.)
 BYPASS_MEMORY_INJECTION = False  # True ise semantic+episodic kapalı
 BYPASS_ADAPTIVE_BUDGET = False   # True ise intent profilleri kapalı (standard profile)
 
+# --- ACCESS CONTROL (INTERNAL_ONLY Mode) ---
+# True ise sadece whitelist'teki user_id'ler erişebilir, diğerleri 403 alır
+INTERNAL_ONLY = getenv("INTERNAL_ONLY", "false").lower() == "true"
+
+# Virgülle ayrılmış whitelist user_id'leri (env'den veya varsayılanlar)
+# Örnek: INTERNAL_WHITELIST_USER_IDS="u_admin123,u_dev456,u_test789"
+_whitelist_raw = getenv("INTERNAL_WHITELIST_USER_IDS", "")
+INTERNAL_WHITELIST_USER_IDS: set[str] = set(
+    uid.strip() for uid in _whitelist_raw.split(",") if uid.strip()
+)
+
+def is_user_whitelisted(user_id: str) -> bool:
+    """
+    INTERNAL_ONLY modunda kullanıcının erişim yetkisi var mı kontrol eder.
+    
+    Returns:
+        True: INTERNAL_ONLY kapalı VEYA user_id whitelist'te
+        False: INTERNAL_ONLY açık VE user_id whitelist'te değil
+    """
+    if not INTERNAL_ONLY:
+        return True  # Açık erişim
+    return user_id in INTERNAL_WHITELIST_USER_IDS
+
 # --- RETENTION & FORGETFULNESS (RC-6) ---
 RETENTION_SETTINGS = {
     "TURN_RETENTION_DAYS": 30,
