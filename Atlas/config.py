@@ -177,6 +177,11 @@ INTERNAL_WHITELIST_USER_IDS: set[str] = set(
     uid.strip() for uid in _whitelist_raw.split(",") if uid.strip()
 )
 
+# Startup log for debugging
+import logging as _logging
+_config_logger = _logging.getLogger("config")
+_config_logger.info(f"[CONFIG] INTERNAL_ONLY={INTERNAL_ONLY}, WHITELIST={INTERNAL_WHITELIST_USER_IDS or '(empty)'}")
+
 def is_user_whitelisted(user_id: str) -> bool:
     """
     INTERNAL_ONLY modunda kullanıcının erişim yetkisi var mı kontrol eder.
@@ -187,7 +192,14 @@ def is_user_whitelisted(user_id: str) -> bool:
     """
     if not INTERNAL_ONLY:
         return True  # Açık erişim
-    return user_id in INTERNAL_WHITELIST_USER_IDS
+    
+    is_allowed = user_id in INTERNAL_WHITELIST_USER_IDS
+    if not is_allowed:
+        _config_logger.warning(
+            f"[ACCESS_DENIED] INTERNAL_ONLY=true, user_id='{user_id}', "
+            f"whitelist={list(INTERNAL_WHITELIST_USER_IDS)}"
+        )
+    return is_allowed
 
 # --- RETENTION & FORGETFULNESS (RC-6) ---
 RETENTION_SETTINGS = {
