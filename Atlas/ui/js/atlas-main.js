@@ -5,6 +5,79 @@
 // =============================================================================
 const API_BASE = '';
 
+// =============================================================================
+// Persona Configuration System
+// =============================================================================
+const PERSONA_CONFIG = {
+    standard: {
+        name: 'Standart',
+        shortName: 'Std',
+        icon: '⚡',
+        description: 'Dengeli ve profesyonel yaklaşım',
+        color: '#3b82f6'
+    },
+    professional: {
+        name: 'Kurumsal',
+        shortName: 'Pro',
+        icon: '💼',
+        description: 'Formal ve ciddi ton',
+        color: '#6366f1'
+    },
+    kanka: {
+        name: 'Kanka',
+        shortName: 'Knk',
+        icon: '🤝',
+        description: 'Samimi ve rahat sohbet',
+        color: '#f59e0b'
+    },
+    creative: {
+        name: 'Sanatçı',
+        shortName: 'Art',
+        icon: '🎨',
+        description: 'Yaratıcı ve ilham verici',
+        color: '#a855f7'
+    },
+    concise: {
+        name: 'Net & Öz',
+        shortName: 'Öz',
+        icon: '🎯',
+        description: 'Kısa ve net cevaplar',
+        color: '#ef4444'
+    },
+    sincere: {
+        name: 'İçten Dost',
+        shortName: 'İçt',
+        icon: '💙',
+        description: 'Samimi ve anlayışlı',
+        color: '#06b6d4'
+    },
+    detailed: {
+        name: 'Eğitmen',
+        shortName: 'Eğt',
+        icon: '📚',
+        description: 'Detaylı ve öğretici',
+        color: '#10b981'
+    },
+    girlfriend: {
+        name: 'Sevgili',
+        shortName: 'Sev',
+        icon: '💕',
+        description: 'Sevgi dolu ve şefkatli',
+        color: '#ec4899'
+    },
+    friendly: {
+        name: 'Yardımsever',
+        shortName: 'Yrd',
+        icon: '😊',
+        description: 'Dostane ve yardımsever',
+        color: '#84cc16'
+    }
+};
+
+// Persona state management
+let currentPersona = 'standard';
+let isPersonaDropdownOpen = false;
+
 const chatView = document.getElementById('chatView');
 const userInput = document.getElementById('userInput');
 const personaSelect = document.getElementById('personaSelect');
@@ -50,7 +123,12 @@ async function handleLogin() {
 
         if (res.ok) {
             await checkAuthStatus();
-            document.getElementById('loginModal').style.display = 'none';
+            // Close forced modal
+            const loginModal = document.getElementById('loginModal');
+            if (loginModal) {
+                loginModal.classList.remove('forced');
+                loginModal.style.display = 'none';
+            }
         } else {
             err.innerText = "❌ Geçersiz kimlik bilgileri.";
         }
@@ -66,26 +144,54 @@ async function handleLogout() {
 }
 
 function showLoggedIn() {
-    document.getElementById('lockedOverlay').style.display = 'none';
+    // Hide login modal
+    const loginModal = document.getElementById('loginModal');
+    if (loginModal) {
+        loginModal.classList.remove('forced');
+        loginModal.style.display = 'none';
+    }
+
+    // Enable input
     document.getElementById('userInput').disabled = false;
-    // PHASE 3: Modern user menu in header-right
-    document.getElementById('authArea').innerHTML = `
-                <div class="user-menu">
-                    <div class="avatar">👤</div>
-                    <span class="username">${currentUser.username}</span>
-                    <button class="logout-btn" onclick="handleLogout()" style="margin-left: 8px; padding: 4px 12px; border-radius: 6px; background: transparent; border: 1px solid var(--border); color: var(--cyan); cursor: pointer; font-size: 0.75rem;">Çıkış</button>
-                </div>
-            `;
+
+    // Update dropdown trigger
+    const userDropdownName = document.getElementById('userDropdownName');
+    if (userDropdownName && currentUser) {
+        userDropdownName.innerText = currentUser.username;
+    }
+
+    // Show/hide dropdown menu items
+    const logoutMenuItem = document.getElementById('logoutMenuItem');
+    const loginMenuItem = document.getElementById('loginMenuItem');
+    if (logoutMenuItem) logoutMenuItem.style.display = 'flex';
+    if (loginMenuItem) loginMenuItem.style.display = 'none';
+
     initSessions();
 }
 
 function showLoggedOut() {
-    document.getElementById('lockedOverlay').style.display = 'flex';
+    // Force show login modal (unclosable)
+    const loginModal = document.getElementById('loginModal');
+    if (loginModal) {
+        loginModal.classList.add('forced');
+        loginModal.style.display = 'flex';
+    }
+
+    // Disable input
     document.getElementById('userInput').disabled = true;
-    // PHASE 3: Modern login button in header
-    document.getElementById('authArea').innerHTML = `
-                <button class="login-btn" onclick="document.getElementById('loginModal').style.display='flex'" style="padding: 6px 16px; border-radius: 8px; background: var(--surface-accent); border: 1px solid var(--border); color: var(--cyan); cursor: pointer; font-size: 0.8rem; transition: all 0.2s;">Giriş Yap</button>
-            `;
+
+    // Update dropdown trigger
+    const userDropdownName = document.getElementById('userDropdownName');
+    if (userDropdownName) {
+        userDropdownName.innerText = 'Guest';
+    }
+
+    // Show/hide dropdown menu items
+    const logoutMenuItem = document.getElementById('logoutMenuItem');
+    const loginMenuItem = document.getElementById('loginMenuItem');
+    if (logoutMenuItem) logoutMenuItem.style.display = 'none';
+    if (loginMenuItem) loginMenuItem.style.display = 'flex';
+
     initSessions();
 }
 
@@ -226,8 +332,18 @@ async function refreshNotifications() {
         const list = data.notifications || [];
 
         if (list.length > 0) {
-            notifCountBadge.innerText = list.length;
-            notifCountBadge.style.display = 'block';
+            // Update both badges
+            const countText = list.length.toString();
+            if (notifCountBadge) { // Null check
+                notifCountBadge.innerText = countText;
+                notifCountBadge.style.display = 'block';
+            }
+            const notifCountDropdown = document.getElementById('notifCountDropdown');
+            if (notifCountDropdown) {
+                notifCountDropdown.innerText = countText;
+                notifCountDropdown.style.display = 'block';
+            }
+
             notifList.innerHTML = list.map(n => `
                         <div class="notif-item">
                             <div class="time">${new Date(n.timestamp).toLocaleTimeString()}</div>
@@ -235,7 +351,13 @@ async function refreshNotifications() {
                         </div>
                     `).join('');
         } else {
-            notifCountBadge.style.display = 'none';
+            if (notifCountBadge) { // Null check
+                notifCountBadge.style.display = 'none';
+            }
+            const notifCountDropdown = document.getElementById('notifCountDropdown');
+            if (notifCountDropdown) {
+                notifCountDropdown.style.display = 'none';
+            }
         }
     } catch (e) {
         console.error("Notif fetch error", e);
@@ -329,13 +451,13 @@ async function handleSend() {
         const decoder = new TextDecoder();
         const bubble = document.getElementById(`bubble-${aiMsgId}`);
         bubble.innerHTML = `
-                    <div class="thought-container collapsed" id="thought-container-${aiMsgId}">
-                        <div class="thought-header" id="thought-header-${aiMsgId}" onclick="toggleThought('${aiMsgId}')">
-                            <span><span class="pulse-thinking"></span><span id="header-text-${aiMsgId}">Atlas Düşünüyor...</span></span>
-                            <i class="fas fa-chevron-down"></i>
-                        </div>
+                    <details class="ai-thought" id="thought-container-${aiMsgId}">
+                        <summary id="thought-header-${aiMsgId}">
+                            <span class="pulse-thinking"></span>
+                            <span id="header-text-${aiMsgId}">Atlas Düşünüyor...</span>
+                        </summary>
                         <div class="thought-content" id="thought-content-${aiMsgId}"></div>
-                    </div>
+                    </details>
                     <div class="final-answer" id="answer-${aiMsgId}">...</div>
                 `;
         const thoughtHeader = document.getElementById(`header-text-${aiMsgId}`);
@@ -413,12 +535,17 @@ async function handleSend() {
 
 function toggleThought(id) {
     const container = document.getElementById(`thought-container-${id}`);
-    container.classList.toggle('collapsed');
+    if (container && container.tagName === 'DETAILS') {
+        // Native details element handles toggle automatically
+        // This function kept for compatibility
+    } else if (container) {
+        container.classList.toggle('collapsed');
+    }
 }
 
 function appendRDRTrigger(msgId, rdr) {
     const bubble = document.getElementById(`bubble-${msgId}`);
-    const wrapper = bubble.parentElement;
+    if (!bubble) return; // Safety check
 
     const trigger = document.createElement('div');
     trigger.className = "rdr-trigger";
@@ -517,8 +644,9 @@ function appendRDRTrigger(msgId, rdr) {
                 </div>
              `;
 
-    wrapper.appendChild(trigger);
-    wrapper.appendChild(insp);
+    // CRITICAL: Append to bubble, not wrapper!
+    bubble.appendChild(trigger);
+    bubble.appendChild(insp);
 }
 
 function setLoading(loading) {
@@ -570,12 +698,18 @@ function switchTab(event, msgId, tabName) {
     document.getElementById(`${tabName}-${msgId}`).classList.add('active');
 }
 
-// PHASE 6: Persona Selection Functions
+// PHASE 6: Input-Integrated Persona Selection Functions
 function selectPersona(persona) {
+    // Update current persona state
+    currentPersona = persona;
+
     // Update hidden select for backend compatibility
     document.getElementById('personaSelect').value = persona;
 
-    // Update pill states
+    // Update input-integrated UI
+    updatePersonaInputDisplay(persona);
+
+    // Update old pill states for backward compatibility (if they exist)
     document.querySelectorAll('.persona-pill').forEach(pill => {
         pill.classList.remove('active');
     });
@@ -583,19 +717,133 @@ function selectPersona(persona) {
         item.classList.remove('active');
     });
 
-    // Activate selected pill
-    const selectedPill = document.querySelector(`[data-persona="${persona}"]`);
-    if (selectedPill) {
-        selectedPill.classList.add('active');
+    // Update new dropdown items
+    document.querySelectorAll('.persona-dropdown-item').forEach(item => {
+        item.classList.remove('active');
+    });
+
+    const selectedItem = document.querySelector(`[data-persona="${persona}"]`);
+    if (selectedItem) {
+        selectedItem.classList.add('active');
     }
 
-    // Close dropdown if open
-    const dropdown = document.getElementById('personaDropdownMenu');
-    if (dropdown) {
-        dropdown.classList.remove('open');
+    // Close dropdown
+    closePersonaInputDropdown();
+}
+
+function updatePersonaInputDisplay(persona) {
+    const config = PERSONA_CONFIG[persona];
+    if (!config) return;
+
+    const iconElement = document.getElementById('currentPersonaIcon');
+    const shortNameElement = document.getElementById('currentPersonaShort');
+
+    if (iconElement) iconElement.textContent = config.icon;
+    if (shortNameElement) shortNameElement.textContent = config.shortName;
+}
+
+function togglePersonaInput() {
+    console.log('togglePersonaInput called');
+    const dropdown = document.getElementById('personaInputDropdown');
+    const btn = document.getElementById('personaInputBtn');
+
+    console.log('dropdown:', dropdown, 'btn:', btn);
+
+    if (!dropdown || !btn) {
+        console.log('Elements not found!');
+        return;
+    }
+
+    if (isPersonaDropdownOpen) {
+        console.log('Closing dropdown');
+        closePersonaInputDropdown();
+    } else {
+        console.log('Opening dropdown');
+        openPersonaInputDropdown();
     }
 }
 
+// Keyboard navigation for persona selector
+document.addEventListener('keydown', (e) => {
+    if (!isPersonaDropdownOpen) return;
+
+    const dropdown = document.getElementById('personaInputDropdown');
+    if (!dropdown) return;
+
+    const items = dropdown.querySelectorAll('.persona-dropdown-item');
+    const currentActive = dropdown.querySelector('.persona-dropdown-item.keyboard-focus');
+    let currentIndex = currentActive ? Array.from(items).indexOf(currentActive) : -1;
+
+    switch (e.key) {
+        case 'ArrowDown':
+            e.preventDefault();
+            if (currentActive) currentActive.classList.remove('keyboard-focus');
+            currentIndex = (currentIndex + 1) % items.length;
+            items[currentIndex].classList.add('keyboard-focus');
+            items[currentIndex].scrollIntoView({ block: 'nearest' });
+            break;
+
+        case 'ArrowUp':
+            e.preventDefault();
+            if (currentActive) currentActive.classList.remove('keyboard-focus');
+            currentIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+            items[currentIndex].classList.add('keyboard-focus');
+            items[currentIndex].scrollIntoView({ block: 'nearest' });
+            break;
+
+        case 'Enter':
+        case ' ':
+            e.preventDefault();
+            if (currentActive) {
+                const persona = currentActive.getAttribute('data-persona');
+                if (persona) selectPersona(persona);
+            }
+            break;
+
+        case 'Escape':
+            e.preventDefault();
+            closePersonaInputDropdown();
+            document.getElementById('personaInputBtn')?.focus();
+            break;
+    }
+});
+
+function openPersonaInputDropdown() {
+    const dropdown = document.getElementById('personaInputDropdown');
+    const btn = document.getElementById('personaInputBtn');
+
+    if (!dropdown || !btn) return;
+
+    dropdown.classList.add('open');
+    btn.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+    isPersonaDropdownOpen = true;
+
+    // Update active state
+    const activeItem = dropdown.querySelector(`[data-persona="${currentPersona}"]`);
+    if (activeItem) {
+        activeItem.classList.add('active');
+        activeItem.setAttribute('aria-selected', 'true');
+    }
+}
+
+function closePersonaInputDropdown() {
+    const dropdown = document.getElementById('personaInputDropdown');
+    const btn = document.getElementById('personaInputBtn');
+
+    if (!dropdown || !btn) return;
+
+    dropdown.classList.remove('open');
+    btn.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+    isPersonaDropdownOpen = false;
+
+    // Clear keyboard focus
+    const keyboardFocus = dropdown.querySelector('.keyboard-focus');
+    if (keyboardFocus) keyboardFocus.classList.remove('keyboard-focus');
+}
+
+// Legacy function for backward compatibility
 function togglePersonaDropdown() {
     const dropdown = document.getElementById('personaDropdownMenu');
     if (dropdown) {
@@ -603,12 +851,44 @@ function togglePersonaDropdown() {
     }
 }
 
-// Close dropdown when clicking outside
+// Analytics Modal Functions
+function openAnalytics() {
+    document.getElementById('analyticsModal').classList.add('open');
+}
+
+function closeAnalytics() {
+    document.getElementById('analyticsModal').classList.remove('open');
+}
+
+// Header Dropdown Toggle
+function toggleHeaderDropdown() {
+    const menu = document.getElementById('headerDropdownMenu');
+    if (menu) {
+        menu.classList.toggle('open');
+    }
+}
+
+// Close dropdowns when clicking outside
 document.addEventListener('click', (e) => {
+    // Close input-integrated persona dropdown
+    const personaInputDropdown = document.getElementById('personaInputDropdown');
+    const personaInputBtn = document.getElementById('personaInputBtn');
+    if (personaInputDropdown && !personaInputDropdown.contains(e.target) && !personaInputBtn?.contains(e.target)) {
+        closePersonaInputDropdown();
+    }
+
+    // Legacy persona dropdown (for backward compatibility)
     const dropdown = document.getElementById('personaDropdownMenu');
     const moreBtn = document.querySelector('.more-btn');
-    if (dropdown && !dropdown.contains(e.target) && !moreBtn.contains(e.target)) {
+    if (dropdown && !dropdown.contains(e.target) && !moreBtn?.contains(e.target)) {
         dropdown.classList.remove('open');
+    }
+
+    // Header dropdown
+    const headerMenu = document.getElementById('headerDropdownMenu');
+    const headerTrigger = document.getElementById('userDropdownTrigger');
+    if (headerMenu && !headerMenu.contains(e.target) && !headerTrigger?.contains(e.target)) {
+        headerMenu.classList.remove('open');
     }
 });
 
@@ -619,17 +899,42 @@ window.switchChat = switchChat;
 window.deleteChat = deleteChat;
 window.clearAllChats = clearAllChats;
 window.toggleNotifications = toggleNotifications;
-window.toggleSidebar = toggleSidebar; // PHASE 3
+window.toggleSidebar = toggleSidebar;
 window.toggleThought = toggleThought;
 window.toggleInspector = toggleInspector;
 window.switchTab = switchTab;
 window.handleSend = handleSend;
 window.handleLogin = handleLogin;
 window.handleLogout = handleLogout;
-window.selectPersona = selectPersona; // PHASE 6
-window.togglePersonaDropdown = togglePersonaDropdown; // PHASE 6
+window.selectPersona = selectPersona;
+window.togglePersonaInput = togglePersonaInput;
+window.togglePersonaDropdown = togglePersonaDropdown; // Legacy
+window.openAnalytics = openAnalytics;
+window.closeAnalytics = closeAnalytics;
+window.toggleHeaderDropdown = toggleHeaderDropdown;
+
+// Initialize persona UI immediately
+function initPersonaUI() {
+    console.log('Initializing persona UI...');
+    // Set initial persona display
+    updatePersonaInputDisplay(currentPersona);
+
+    // Mark initial active persona in dropdown
+    const activeItem = document.querySelector(`[data-persona="${currentPersona}"]`);
+    if (activeItem) {
+        activeItem.classList.add('active');
+    }
+    console.log('Persona UI initialized');
+}
 
 // Init
 checkAuthStatus();
 setInterval(refreshNotifications, 60000); // 1 min
 refreshNotifications();
+
+// Initialize persona UI when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPersonaUI);
+} else {
+    initPersonaUI();
+}

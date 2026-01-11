@@ -1,0 +1,333 @@
+/* ========================================================================
+   ATLAS UI OVERRIDES - Final Polish
+   All user-requested refinements
+   ======================================================================== */
+
+/* === TYPOGRAPHY - ChatGPT Scale === */
+:root {
+    --text-xs: 0.75rem !important;
+    --text-sm: 1rem !important;
+    --text-base: 1.125rem !important;
+    --text-lg: 1.375rem !important;
+    --text-xl: 1.75rem !important;
+}
+
+body {
+    font-size: var(--text-base);
+}
+
+/* === AI MESSAGES - NO AVATAR === */
+.message-wrapper.ai::before {
+    display: none !important;
+    /* Remove avatar */
+}
+
+.message-wrapper.ai .bubble {
+    padding: 4px 0 !important;
+    /* No left offset */
+    font-size: 1.05rem !important;
+}
+
+/* === THOUGHT BOX - Clean Style === */
+.ai-thought {
+    background: transparent !important;
+    border: none !important;
+    padding: 12px 0 !important;
+    margin: 16px 0 !important;
+}
+
+.ai-thought summary {
+    font-weight: 600;
+    color: var(--text-main) !important;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    list-style: none;
+    cursor: pointer;
+}
+
+.ai-thought summary::-webkit-details-marker {
+    display: none;
+}
+
+/* Toggle arrow - Enhanced visibility */
+.ai-thought summary::before {
+    content: "▶";
+    font-size: 0.85rem !important;
+    transition: transform 0.2s, color 0.2s;
+    display: inline-block;
+    color: #60a5fa !important;
+    margin-right: 8px;
+    font-weight: bold;
+}
+
+.ai-thought[open] summary::before {
+    content: "▼";
+    transform: rotate(0deg);
+}
+
+.ai-thought summary:hover::before {
+    color: #3b82f6 !important;
+}
+
+/* === RDR BUTTON - BELOW MESSAGE (Enhanced) === */
+.rdr-trigger {
+    display: block !important;
+    clear: both !important;
+    /* Force below */
+    width: 100% !important;
+    /* Break flex */
+    margin-top: 16px !important;
+    margin-left: 0 !important;
+    padding: 10px 14px !important;
+    font-size: 0.9rem !important;
+    max-width: fit-content;
+}
+
+/* RDR container if it exists */
+.message-wrapper .rdr-trigger {
+    position: static !important;
+    float: none !important;
+}
+
+/* === PERSONA PILLS - More Compact === */
+.persona-pill {
+    padding: 4px 10px !important;
+    font-size: 0.7rem !important;
+    gap: 3px !important;
+}
+
+.persona-container {
+    gap: 6px !important;
+}
+
+/* === Modern Login Modal (Unclosable) === */
+.login-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(10, 11, 16, 0.95);
+    backdrop-filter: blur(20px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.login-modal.forced {
+    display: flex !important;
+    pointer-events: auto;
+}
+
+.login-card {
+    background: linear-gradient(135deg, rgba(26, 29, 36, 0.95), rgba(22, 27, 34, 0.98));
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: var(--radius-xl);
+    padding: var(--gap-2xl);
+    min-width: 400px;
+    max-width: 450px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7), 0 0 40px rgba(59, 130, 246, 0.2);
+    backdrop-filter: blur(20px);
+    animation: slideInScale 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.login-card h2 {
+    color: #60a5fa;
+    font-size: 1.75rem;
+    margin: 0 0 var(--gap-xs) 0;
+    text-align: center;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.login-card p {
+    color: var(--text-dim);
+    font-size: var(--text-sm);
+    text-align: center;
+    margin: 0 0 var(--gap-xl) 0;
+}
+
+.login-input {
+    width: 100%;
+    padding: 14px 18px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-main);
+    font-size: var(--text-base);
+    margin-bottom: var(--gap-md);
+    transition: all var(--transition-base);
+    font-family: inherit;
+}
+
+.login-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.login-input::placeholder {
+    color: var(--text-dim);
+}
+
+.login-submit {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border: none;
+    border-radius: var(--radius-md);
+    color: #ffffff;
+    font-size: var(--text-base);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-base);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.login-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+}
+
+.login-submit:active {
+    transform: translateY(0);
+}
+
+#loginError {
+    color: var(--danger);
+    font-size: var(--text-sm);
+    text-align: center;
+    margin-top: var(--gap-md);
+    min-height: 20px;
+}
+
+.login-divider {
+    display: flex;
+    align-items: center;
+    margin: var(--gap-lg) 0;
+    color: var(--text-dim);
+    font-size: var(--text-xs);
+}
+
+.login-divider::before,
+.login-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+.login-divider span {
+    padding: 0 var(--gap-md);
+}
+
+/* Hide old locked overlay */
+.locked-overlay {
+    display: none !important;
+}
+
+/* === ICON STANDARDIZATION - Monochrome === */
+/* Convert all emoji icons to grayscale single-color */
+.header .icon,
+.dropdown-menu-item .icon,
+.persona-icon,
+.pill-icon,
+.quick-action-icon,
+.session-icon,
+.brand-icon {
+    filter: grayscale(1) opacity(0.85);
+    transition: filter var(--transition-fast);
+}
+
+.dropdown-menu-item:hover .icon,
+.persona-dropdown-item:hover .persona-icon {
+    filter: grayscale(1) opacity(1);
+}
+
+/* Make brand icon slightly more visible */
+.brand-icon {
+    filter: grayscale(1) opacity(0.9);
+}
+
+/* === SIDEBAR - Reorganized === */
+.sidebar {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Session manager at top */
+.session-manager {
+    order: 1;
+    flex: 1;
+}
+
+/* Backend health at bottom */
+.backend-monitor {
+    order: 3;
+    margin-top: auto;
+}
+
+/* Hide quick actions */
+.quick-actions {
+    display: none !important;
+}
+
+/* === GENERAL TEXT SIZE INCREASES === */
+.header {
+    font-size: 1rem;
+}
+
+.section-title {
+    font-size: 0.85rem !important;
+}
+
+.session-title {
+    font-size: 1rem !important;
+}
+
+.monitor-stat {
+    font-size: 0.95rem !important;
+}
+
+.bubble p,
+.bubble li {
+    font-size: 1.05rem !important;
+}
+
+.bubble h3 {
+    font-size: 1.3rem !important;
+}
+
+/* === USER MESSAGE - Larger Font === */
+.message-wrapper.user .bubble {
+    font-size: 1.05rem !important;
+}
+
+/* === FOOTER INPUT === */
+#userInput {
+    font-size: 1rem !important;
+}
+
+/* === RDR INSPECTOR PANEL === */
+.inspector-panel {
+    position: static !important;
+    /* Not floating */
+    margin-top: 16px !important;
+    margin-left: 0 !important;
+}

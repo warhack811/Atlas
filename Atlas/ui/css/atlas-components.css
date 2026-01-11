@@ -71,11 +71,13 @@
 
     0%,
     100% {
-        filter: drop-shadow(0 0 5px var(--matrix-green));
+        filter: drop-shadow(0 0 5px #60a5fa);
+        /* Soft blue glow */
     }
 
     50% {
-        filter: drop-shadow(0 0 15px var(--matrix-green));
+        filter: drop-shadow(0 0 15px #3b82f6);
+        /* Brighter blue glow */
     }
 }
 

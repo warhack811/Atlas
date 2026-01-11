@@ -1,0 +1,216 @@
+/* ========================================================================
+   Analytics Modal & Header Dropdown Styles
+   ======================================================================== */
+
+/* === Analytics Modal === */
+.analytics-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(10, 11, 16, 0.95);
+    backdrop-filter: blur(10px);
+    z-index: var(--z-modal);
+    display: none;
+    /* Hidden by default */
+    align-items: center;
+    justify-content: center;
+}
+
+.analytics-modal.open {
+    display: flex;
+}
+
+.analytics-content {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: var(--gap-xl);
+    max-width: 700px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-xl);
+}
+
+.analytics-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--gap-lg);
+    padding-bottom: var(--gap-md);
+    border-bottom: 1px solid var(--border);
+}
+
+.analytics-header h2 {
+    color: #60a5fa;
+    font-size: 1.3rem;
+    margin: 0;
+}
+
+.analytics-close {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1.5rem;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    transition: var(--transition-fast);
+}
+
+.analytics-close:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+}
+
+.analytics-section {
+    margin-bottom: var(--gap-lg);
+}
+
+.analytics-section h3 {
+    color: var(--text-main);
+    font-size: 1rem;
+    margin-bottom: var(--gap-md);
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+}
+
+.analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--gap-md);
+}
+
+.analytics-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--gap-md);
+}
+
+.analytics-card-label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.analytics-card-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #60a5fa;
+    font-family: var(--font-mono);
+}
+
+.analytics-card-bar {
+    margin-top: 8px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.analytics-card-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    transition: width 0.3s ease;
+}
+
+/* === User Dropdown Menu (Claude Style) === */
+.header-dropdown {
+    position: relative;
+}
+
+.header-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    padding: 6px 12px;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: var(--transition-base);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    font-size: var(--text-sm);
+    color: var(--text-main);
+}
+
+.header-dropdown-trigger:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.header-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--gap-xs);
+    min-width: 200px;
+    box-shadow: var(--shadow-xl);
+    backdrop-filter: blur(20px);
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    z-index: var(--z-dropdown);
+}
+
+.header-dropdown-menu.open {
+    display: flex;
+    animation: slideInDown 0.2s ease-out;
+}
+
+@keyframes slideInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dropdown-menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-md);
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition-fast);
+    color: var(--text-main);
+    font-size: var(--text-sm);
+    text-decoration: none;
+}
+
+.dropdown-menu-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.dropdown-menu-item .icon {
+    opacity: 0.7;
+    font-size: 1rem;
+}
+
+.dropdown-menu-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+}
+
+.dropdown-menu-item.danger {
+    color: var(--danger);
+}
+
+.dropdown-menu-item.danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
