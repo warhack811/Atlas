@@ -21,6 +21,7 @@ class Config:
     """Merkezi konfigürasyon yönetimi."""
     SERPER_API_KEY = getenv("SERPER_API_KEY", "")
     FLUX_API_URL = getenv("FLUX_API_URL", "http://localhost:7860/sdapi/v1/txt2img") # Varsayılan Forge/A1111 URL
+    ATLAS_SESSION_SECRET = getenv("ATLAS_SESSION_SECRET", None)
     
     # Neo4j Ayarları
     NEO4J_URI = getenv("NEO4J_URI", "bolt://localhost:7687")

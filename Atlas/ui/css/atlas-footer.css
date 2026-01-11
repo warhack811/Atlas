@@ -1,0 +1,300 @@
+/* ========================================================================
+   PHASE 6: FOOTER & PERSONA ENHANCEMENT STYLES
+   Modern persona pills, Enhanced input wrapper, Action buttons
+   ======================================================================== */
+
+/* === Footer Container === */
+.footer {
+    padding: var(--gap-lg);
+    background: linear-gradient(180deg, rgba(13, 17, 23, 0.95) 0%, rgba(10, 11, 16, 0.98) 100%);
+    border-top: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-md);
+}
+
+/* === Persona Pills Container === */
+.persona-pills-container {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-md);
+    flex-wrap: wrap;
+}
+
+.persona-label {
+    font-size: var(--text-sm);
+    color: var(--text-dim);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.persona-pills {
+    display: flex;
+    gap: var(--gap-sm);
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.persona-pill {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+}
+
+.persona-pill:hover {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 229, 255, 0.2);
+}
+
+.persona-pill.active {
+    background: linear-gradient(135deg, var(--cyan) 0%, var(--matrix-green) 100%);
+    color: #000;
+    border-color: var(--cyan);
+    font-weight: 600;
+    box-shadow: 0 0 20px rgba(0, 229, 255, 0.4);
+}
+
+.persona-pill.active:hover {
+    transform: translateY(-2px) scale(1.05);
+}
+
+.pill-icon {
+    font-size: 1.1rem;
+}
+
+/* === More Persona Dropdown === */
+.persona-more-dropdown {
+    position: relative;
+}
+
+.more-btn {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.persona-dropdown-menu {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: var(--gap-sm);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--gap-xs);
+    min-width: 200px;
+    box-shadow: var(--shadow-xl);
+    backdrop-filter: blur(20px);
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    z-index: var(--z-dropdown);
+}
+
+.persona-dropdown-menu.open {
+    display: flex;
+    animation: slideInUp 0.2s ease-out;
+}
+
+.dropdown-item {
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: var(--transition-fast);
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    text-align: left;
+}
+
+.dropdown-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--cyan);
+    color: var(--cyan);
+}
+
+/* === Enhanced Input Wrapper === */
+.input-wrapper {
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+    background: rgba(22, 27, 34, 0.85);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    display: flex;
+    align-items: center;
+    padding: var(--gap-sm) var(--gap-md);
+    gap: var(--gap-md);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    transition: var(--transition-base);
+}
+
+.input-wrapper:focus-within {
+    border-color: var(--cyan);
+    box-shadow: 0 8px 32px rgba(0, 229, 255, 0.2);
+}
+
+/* === Input Action Button (File Upload) === */
+.input-action-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition-base);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    flex-shrink: 0;
+}
+
+.input-action-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--cyan);
+    color: var(--cyan);
+    transform: scale(1.1);
+}
+
+.input-action-btn svg {
+    transition: var(--transition-base);
+}
+
+.input-action-btn:hover svg {
+    transform: rotate(-15deg);
+}
+
+/* === Main Text Input === */
+.main-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    padding: 12px;
+    font-size: 1rem;
+    outline: none;
+    font-family: var(--font-sans);
+}
+
+.main-input::placeholder {
+    color: var(--text-dim);
+    opacity: 0.6;
+}
+
+/* === Enhanced Send Button === */
+.send-btn-enhanced {
+    background: linear-gradient(135deg, var(--matrix-green) 0%, var(--cyan) 100%);
+    color: #000;
+    border: none;
+    padding: 12px 24px;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    font-weight: 700;
+    font-size: var(--text-sm);
+    transition: all var(--transition-base);
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 255, 65, 0.3);
+}
+
+.send-btn-enhanced:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 255, 65, 0.5);
+}
+
+.send-btn-enhanced:active {
+    transform: translateY(0);
+}
+
+.send-btn-enhanced:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.send-icon {
+    transition: var(--transition-base);
+}
+
+.send-btn-enhanced:hover .send-icon {
+    transform: translateX(4px);
+}
+
+.send-text {
+    font-weight: 700;
+}
+
+/* === Mobile Responsive === */
+@media (max-width: 768px) {
+    .footer {
+        padding: var(--gap-md);
+    }
+
+    .persona-pills-container {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--gap-sm);
+    }
+
+    .persona-pills {
+        width: 100%;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: var(--gap-xs);
+    }
+
+    .persona-pills::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    .persona-pills::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: var(--radius-sm);
+    }
+
+    .persona-pill {
+        padding: 6px 12px;
+        font-size: var(--text-xs);
+        white-space: nowrap;
+    }
+
+    .input-wrapper {
+        padding: var(--gap-xs) var(--gap-sm);
+        gap: var(--gap-sm);
+    }
+
+    .main-input {
+        padding: 8px;
+        font-size: 0.9rem;
+    }
+
+    .send-text {
+        display: none;
+        /* Hide text, show only icon on mobile */
+    }
+
+    .send-btn-enhanced {
+        padding: 12px;
+        width: 44px;
+        height: 44px;
+        justify-content: center;
+    }
+}

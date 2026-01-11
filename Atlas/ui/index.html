@@ -13,110 +13,262 @@
     <link rel="stylesheet" href="css/atlas-main.css">
     <!-- Atlas Utility Classes (Phase 2) -->
     <link rel="stylesheet" href="css/atlas-utilities.css">
+    <!-- Atlas Component Styles (Phase 3 & 4) -->
+    <link rel="stylesheet" href="css/atlas-components.css">
+    <!-- Atlas Footer Styles (Phase 6) -->
+    <link rel="stylesheet" href="css/atlas-footer.css">
 
 </head>
 
 <body>
 
+
+    <!-- ========== PHASE 3: MODERN HEADER ========== -->
     <div class="header">
-        <div class="brand">
-            <span>⚡ ATLAS</span>
-            <div style="width: 1px; height: 20px; background: var(--border);"></div>
-            <span style="font-size: 0.7rem; opacity: 0.8;">Obs Panel v7.0</span>
-        </div>
-        <div class="engine-status">
-            <div class="status-dot" id="statusDot"></div>
-            <span id="statusLabel">ENGINE STANDBY</span>
-        </div>
-        <div class="header-actions">
-            <div id="authArea" class="auth-area">
-                <!-- Syncing with status... -->
+        <!-- Left: Hamburger + Brand -->
+        <div class="header-left">
+            <button class="hamburger-btn" onclick="toggleSidebar()" title="Toggle Sidebar">
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+            </button>
+            <div class="brand">
+                <span class="brand-icon">⚡</span>
+                <span class="brand-text">ATLAS</span>
+                <span class="version-badge">v7.0</span>
             </div>
-            <div
-                style="font-size: 0.65rem; color: var(--text-dim); text-align: right; margin-right: 15px; border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px;">
-                Build: <span style="color: var(--cyan)">BUILD_TIMESTAMP_PLACEHOLDER</span>
+        </div>
+
+        <!-- Center: Engine Status Card -->
+        <div class="header-center">
+            <div class="engine-status-card">
+                <div class="status-indicator">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusLabel">ENGINE STANDBY</span>
+                </div>
+                <div class="quick-stats">
+                    <span class="stat">⚡ <span id="latencyStat">--</span>ms</span>
+                    <span class="stat">📊 <span id="requestStat">--</span></span>
+                </div>
             </div>
-            <a href="/arena" class="arena-link">
-                🏟️ Arena
+        </div>
+
+        <!-- Right: Actions -->
+        <div class="header-right">
+            <!-- Arena Link -->
+            <a href="/arena" class="icon-btn arena-link-icon" title="Arena">
+                🏟️
             </a>
-            <div class="chat-mgmt-container">
-                <button class="mgmt-btn-mini" onclick="newChat()" title="Yeni Sohbet"><span>+</span></button>
-                <select id="chatSelect" class="chat-select-minimal" onchange="switchChat(this.value)">
-                    <option value="">Sohbetler...</option>
-                </select>
-                <button class="mgmt-btn-mini del" onclick="deleteChat()" title="Sohbeti Sil"><span>🗑️</span></button>
-                <button class="mgmt-btn-mini" onclick="clearAllChats()" title="Tümünü Temizle"><span>🧹</span></button>
+
+            <!-- Notification Bell -->
+            <button class="icon-btn" onclick="toggleNotifications()" title="Notifications">
+                <span class="icon">🔔</span>
+                <span class="badge" id="notifCount" style="display:none;">0</span>
+            </button>
+
+            <!-- User Menu -->
+            <div class="user-menu-trigger" id="authArea">
+                <!-- Auth content will be injected here -->
             </div>
-            <div class="notification-bell" onclick="toggleNotifications()">
-                🔔<span class="notification-count" id="notifCount">0</span>
-            </div>
+
+            <!-- Settings -->
+            <button class="icon-btn" onclick="alert('Settings panel coming soon!')" title="Settings">
+                ⚙️
+            </button>
         </div>
     </div>
 
+    <!-- ========== PHASE 4: MAIN CONTAINER WITH SIDEBAR ========== -->
     <div class="main-container">
+        <!-- Left Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <!-- Backend Health Monitor -->
+            <div class="backend-monitor glass-light p-md rounded-lg mb-md">
+                <div class="section-header">
+                    <span class="section-title">🖥️ BACKEND HEALTH</span>
+                </div>
+                <div class="monitor-stats">
+                    <div class="monitor-stat">
+                        <span class="stat-label">🟢 Status</span>
+                        <span class="stat-value">ONLINE</span>
+                    </div>
+                    <div class="monitor-stat">
+                        <span class="stat-label">⚡ Latency</span>
+                        <span class="stat-value" id="sidebarLatency">--ms</span>
+                    </div>
+                    <div class="monitor-stat">
+                        <span class="stat-label">📊 Requests</span>
+                        <span class="stat-value" id="sidebarRequests">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Session Manager (replacing dropdown) -->
+            <div class="session-manager glass-light rounded-lg p-md mb-md">
+                <div class="section-header">
+                    <span class="section-title">💬 SOHBETLER</span>
+                    <button class="btn-new-session" onclick="newChat()">
+                        <span class="icon">+</span> Yeni
+                    </button>
+                </div>
+
+                <div class="session-list" id="sessionList">
+                    <!-- Session cards will be dynamically injected here -->
+                </div>
+
+                <button class="btn-clear-all" onclick="clearAllChats()">
+                    🧹 Tümünü Temizle
+                </button>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="quick-actions glass-light rounded-lg p-md">
+                <div class="section-header">
+                    <span class="section-title">⚡ HIZLI ERİŞİM</span>
+                </div>
+                <div class="quick-action-item" onclick="window.location.href='/arena'">
+                    <span class="quick-action-icon">🏟️</span>
+                    <span>Arena</span>
+                </div>
+                <div class="quick-action-item" onclick="alert('Analytics coming soon!')">
+                    <span class="quick-action-icon">📊</span>
+                    <span>Analytics</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Chat View (Center) -->
         <div class="locked-overlay" id="lockedOverlay">
             <div style="text-align:center;">
                 <div style="font-size: 2rem; margin-bottom: 10px;">🔒</div>
                 SYSTEM LOCKED<br>Geleceği Gözlemlemek İçin Giriş Yapın
             </div>
         </div>
+    </div>
+    </div>
 
-        <div class="login-modal" id="loginModal">
-            <div class="login-card">
-                <h2>ATLAS Girişi</h2>
-                <input type="text" id="loginUser" class="login-input" placeholder="Kullanıcı Adı">
-                <input type="password" id="loginPass" class="login-input" placeholder="Şifre">
-                <button class="login-submit" onclick="handleLogin()">Giriş Yap</button>
-                <div id="loginError"
-                    style="color:var(--danger); font-size:0.75rem; margin-top:10px; text-align:center;">
-                </div>
-            </div>
-        </div>
-
-        <div class="chat-view" id="chatView">
-            <div class="message-wrapper ai">
-                <div class="bubble">
-                    <h3>Sisteme Hoş Geldin, Observer.</h3>
-                    <p>ATLAS motoru tüm katmanlarıyla aktif. Analiz raporlarını görmek için mesajların altındaki
-                        <strong>[RDR]</strong> butonlarını kullanabilirsin.
-                    </p>
-                </div>
-            </div>
-        </div>
-
-        <div class="notif-panel" id="notifPanel">
-            <div class="notif-header">
-                PROAKTİF UYARILAR
-                <span style="cursor:pointer" onclick="toggleNotifications()">×</span>
-            </div>
-            <div id="notifList">
-                <p style="padding: 20px; color: var(--text-dim); font-size: 0.8rem; text-align:center;">Yeni bildirim
-                    bulunmuyor.</p>
+    <div class="login-modal" id="loginModal">
+        <div class="login-card">
+            <h2>ATLAS Girişi</h2>
+            <input type="text" id="loginUser" class="login-input" placeholder="Kullanıcı Adı">
+            <input type="password" id="loginPass" class="login-input" placeholder="Şifre">
+            <button class="login-submit" onclick="handleLogin()">Giriş Yap</button>
+            <div id="loginError" style="color:var(--danger); font-size:0.75rem; margin-top:10px; text-align:center;">
             </div>
         </div>
     </div>
 
+    <div class="chat-view" id="chatView">
+        <div class="message-wrapper ai">
+            <div class="bubble">
+                <h3>Sisteme Hoş Geldin, Observer.</h3>
+                <p>ATLAS motoru tüm katmanlarıyla aktif. Analiz raporlarını görmek için mesajların altındaki
+                    <strong>[RDR]</strong> butonlarını kullanabilirsin.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="notif-panel" id="notifPanel">
+        <div class="notif-header">
+            PROAKTİF UYARILAR
+            <span style="cursor:pointer" onclick="toggleNotifications()">×</span>
+        </div>
+        <div id="notifList">
+            <p style="padding: 20px; color: var(--text-dim); font-size: 0.8rem; text-align:center;">Yeni bildirim
+                bulunmuyor.</p>
+        </div>
+    </div>
+    </div>
+
+
+    <!-- ========== PHASE 6: MODERN FOOTER & PERSONA ENHANCEMENT ========== -->
     <div class="footer">
-        <div class="input-wrapper">
-            <select id="personaSelect" class="persona-select">
-                <option value="standard">Standart</option>
-                <option value="professional">Kurumsal / Ciddi</option>
-                <option value="sincere">İçten Dost</option>
-                <option value="kanka">Kanka</option>
-                <option value="creative">Sanatçı / Şair</option>
-                <option value="concise">Net & Öz (Uzman)</option>
-                <option value="detailed">Eğitmen / Öğretmen</option>
-                <option value="girlfriend">Sevgili</option>
-                <option value="friendly">Yardımsever</option>
-            </select>
+        <!-- Persona Pills -->
+        <div class="persona-pills-container">
+            <span class="persona-label">Persona:</span>
+            <div class="persona-pills" id="personaPills">
+                <button class="persona-pill active" data-persona="standard" onclick="selectPersona('standard')">
+                    <span class="pill-icon">⚡</span> Standart
+                </button>
+                <button class="persona-pill" data-persona="professional" onclick="selectPersona('professional')">
+                    <span class="pill-icon">💼</span> Kurumsal
+                </button>
+                <button class="persona-pill" data-persona="kanka" onclick="selectPersona('kanka')">
+                    <span class="pill-icon">🤝</span> Kanka
+                </button>
+                <button class="persona-pill" data-persona="creative" onclick="selectPersona('creative')">
+                    <span class="pill-icon">🎨</span> Sanatçı
+                </button>
+                <button class="persona-pill" data-persona="concise" onclick="selectPersona('concise')">
+                    <span class="pill-icon">🎯</span> Net & Öz
+                </button>
+                <!-- More personas in dropdown -->
+                <div class="persona-more-dropdown">
+                    <button class="persona-pill more-btn" onclick="togglePersonaDropdown()">
+                        <span class="pill-icon">⋯</span> Daha Fazla
+                    </button>
+                    <div class="persona-dropdown-menu" id="personaDropdownMenu">
+                        <button class="dropdown-item" data-persona="sincere" onclick="selectPersona('sincere')">
+                            <span class="pill-icon">💙</span> İçten Dost
+                        </button>
+                        <button class="dropdown-item" data-persona="detailed" onclick="selectPersona('detailed')">
+                            <span class="pill-icon">📚</span> Eğitmen
+                        </button>
+                        <button class="dropdown-item" data-persona="girlfriend" onclick="selectPersona('girlfriend')">
+                            <span class="pill-icon">💕</span> Sevgili
+                        </button>
+                        <button class="dropdown-item" data-persona="friendly" onclick="selectPersona('friendly')">
+                            <span class="pill-icon">😊</span> Yardımsever
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Enhanced Input Wrapper -->
+        <div class="input-wrapper glass-strong">
+            <!-- Hidden file input -->
             <input type="file" id="fileInput" multiple accept="image/jpeg,image/png,image/webp,image/gif"
                 style="display: none;">
-            <button class="action-btn" onclick="document.getElementById('fileInput').click()"
-                style="background:transparent; border:none; cursor:pointer; font-size:1.2rem; margin-right:8px; color: var(--text-dim); transition: 0.2s; flex-shrink: 0;"
-                onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--text-dim)'">📎</button>
-            <input type="text" id="userInput" placeholder="Sisteme bir komut ver..." autocomplete="off">
-            <button class="send-btn" onclick="handleSend()" id="sendBtn">▶</button>
+
+            <!-- File Upload Button -->
+            <button class="input-action-btn" onclick="document.getElementById('fileInput').click()"
+                title="Upload Image">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path
+                        d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48">
+                    </path>
+                </svg>
+            </button>
+
+            <!-- Main Text Input -->
+            <input type="text" id="userInput" class="main-input" placeholder="Sisteme bir komut ver..."
+                autocomplete="off">
+
+            <!-- Send Button -->
+            <button class="send-btn-enhanced" id="sendBtn" onclick="handleSend()" title="Send Message">
+                <svg class="send-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                <span class="send-text">Gönder</span>
+            </button>
         </div>
+
+        <!-- Hidden Legacy Select for Compatibility -->
+        <select id="personaSelect" style="display: none;">
+            <option value="standard">Standart</option>
+            <option value="professional">Kurumsal / Ciddi</option>
+            <option value="sincere">İçten Dost</option>
+            <option value="kanka">Kanka</option>
+            <option value="creative">Sanatçı / Şair</option>
+            <option value="concise">Net & Öz (Uzman)</option>
+            <option value="detailed">Eğitmen / Öğretmen</option>
+            <option value="girlfriend">Sevgili</option>
+            <option value="friendly">Yardımsever</option>
+        </select>
     </div>
 
     <!-- Atlas Main Script -->

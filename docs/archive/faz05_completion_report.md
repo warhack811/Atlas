@@ -1,134 +1,75 @@
-# FAZ 5: Lifecycle & Conflict Engine - Completion Report
+# FAZ 5 — Completion Report: Lifecycle Engine & Conflict Resolution
 
-**Status:** ✅ TAMAMLANDI  
-**Last Commit:** (pending)
-**Repository:** warhack811/Atlas (main)
+**Status**: ✅ Tamamlandı  
+**Date**: 2026-01-07  
+**Commit Count**: 2  
 
 ---
 
 ## Özet
-EXCLUSIVE/ADDITIVE predicate lifecycle management eklendi. Temporal conflict resolution ile EXCLUSIVE predicate'ler supersede ediliyor, ADDITIVE ise accumulate oluyor.
 
-## Değişen Dosyalar
-
-| Dosya | Değişiklik | Açıklama |
-|:------|:-----------|:---------|
-| `Atlas/memory/lifecycle_engine.py` | +180 satır (YENİ) | Conflict resolution engine |
-| `Atlas/memory/neo4j_manager.py` | +21 satır | Lifecycle entegrasyonu |
-
-**Toplam:** 2 dosya, ~200 satır
+FAZ 5'te memory sistemine "çakışma çözümü" (conflict resolution) ve "yaşam döngüsü" (lifecycle) kuralları eklendi. Bu kurallar sayesine aynı türden bilgilerin (örn: YAŞAR_YER) birbirini geçersiz kılması (EXCLUSIVE) veya birikmesi (ADDITIVE) sağlandı.
 
 ---
 
-## Lifecycle Davranışları
+## İmplementasyon
 
-### EXCLUSIVE Predicates (İSİM, YAŞI, YAŞAR_YER, MESLEĞİ)
+### 1. Lifecycle Engine (FAZ5)
 
-**Senaryo 1: Değer Değişikliği**
-```
-Turn 1: Ali YAŞAR_YER İstanbul → ACTIVE
-Turn 2: Ali YAŞAR_YER Ankara   → İstanbul SUPERSEDED, Ankara ACTIVE
-```
+Dosya: `Atlas/memory/lifecycle_engine.py`
 
-**Senaryo 2: Aynı Değer**
-```
-Turn 1: Ali İSİM Ahmet → ACTIVE
-Turn 2: Ali İSİM Ahmet → source_turn_id_last güncelle (no conflict)
-```
+#### Ana Mantık
+- **EXCLUSIVE**: Aynı (subject, predicate) için sadece en güncel bilgi ACTIVE kalır. Yeni bilgi geldiğinde eski bilgi `status = 'SUPERSEDED'` olarak işaretlenir.
+- **ADDITIVE**: Aynı (subject, predicate) için birden fazla bilgi ACTIVE kalabilir. Aynı nesne (object) tekrar ederse sadece `updated_at` ve `source_turn_id_last` güncellenir.
 
-### ADDITIVE Predicates (SEVER, ARKADAŞI, SAHİP)
-
-**Senaryo 1: Yeni Değer**
-```
-Turn 1: Ali SEVER Pizza → ACTIVE
-Turn 2: Ali SEVER Sushi → Pizza ACTIVE, Sushi ACTIVE (accumulate)
-```
-
-**Senaryo 2: Aynı Değer**
-```
-Turn 1: Ali SEVER Pizza → ACTIVE
-Turn 2: Ali SEVER Pizza → source_turn_id_last güncelle (recurrence)
-```
+#### Fonksiyonlar
+- `resolve_conflicts()`: Gelen triplet listesini mevcut hafıza ile karşılaştırıp `new_triplets` ve `supersede_ops` üretir.
+- `supersede_relationship()`: Neo4j'de bir ilişkiyi pasife çeker ve provenance alanlarını doldurur.
+- `_find_active_relationship()`: Belirli bir anahtar için mevcut aktif ilişkiyi sorgular.
 
 ---
 
-## Manuel Doğrulama
+### 2. Neo4j Entegrasyonu
 
-### 1️⃣ EXCLUSIVE Overwrite Test
+Dosya: `Atlas/memory/neo4j_manager.py`
+- `store_triplets` içerisinde `lifecycle_engine` çağrısı entegre edildi.
+- `fact_exists()` yardımcı metodu eklendi.
+
+---
+
+### 3. Test Coverage (7/7 başarılı) ✅
+
+Dosya: `Atlas/memory/test_faz5_lifecycle.py`
+
+✅ **EXCLUSIVE Tests**
+- Farklı değer gelince eski değer SUPERSEDED olur.
+- Aynı değer gelince supersede olmaz (update).
+
+✅ **ADDITIVE Tests**
+- Birden fazla değer (örn: SEVER) birikir, birbirini silmez.
+
+✅ **Multi-user Isolation**
+- Kullanıcı A'nın güncellemeleri Kullanıcı B'nin hafızasını etkilemez.
+
+✅ **Provenance Integrity**
+- `superseded_by_turn_id` ve `superseded_at` alanları doğru set edilir.
+
+---
+
+## İzlenebilirlik
+
+### Test Çalıştırma
 ```bash
-# First value
-curl -X POST http://localhost:8000/api/chat `
-  -H "Content-Type: application/json" `
-  -d '{"session_id": "faz5_exc", "message": "İstanbul''da yaşıyorum."}'
-
-# Check Neo4j
-MATCH (s)-[r:FACT {user_id: "faz5_exc", predicate: "YAŞAR_YER"}]->(o)
-RETURN r.status, o.name
-// Expected: ACTIVE, İstanbul
-
-# Second value (conflict)
-curl -X POST http://localhost:8000/api/chat `
-  -H "Content-Type: application/json" `
-  -d '{"session_id": "faz5_exc", "message": "Ankara''ya taşındım."}'
-
-# Check Neo4j again
-MATCH (s)-[r:FACT {user_id: "faz5_exc", predicate: "YAŞAR_YER"}]->(o)
-RETURN r.status, o.name, r.superseded_by_turn_id
-ORDER BY r.updated_at DESC
-// Expected:
-// - ACTIVE, Ankara, null
-// - SUPERSEDED, İstanbul, <turn_id>
+# Tüm FAZ 5 testlerini çalıştır
+python -m unittest Atlas.memory.test_faz5_lifecycle -v
 ```
 
 ---
 
-### 2️⃣ ADDITIVE Accumulation Test
-```bash
-curl -X POST http://localhost:8000/api/chat `
-  -d '{"session_id": "faz5_add", "message": "Pizza seviyorum."}'
+## Sonuç
 
-curl -X POST http://localhost:8000/api/chat `
-  -d '{"session_id": "faz5_add", "message": "Sushi de seviyorum."}'
-
-# Check Neo4j
-MATCH (s)-[r:FACT {user_id: "faz5_add", predicate: "SEVER"}]->(o)
-WHERE r.status IS NULL OR r.status = 'ACTIVE'
-RETURN o.name, r.status
-// Expected: Pizza ACTIVE, Sushi ACTIVE (both exist)
-```
-
----
-
-### 3️⃣ SUPERSEDED Context Filter Test
-```bash
-# After exclusive overwrite test above
-curl -X POST http://localhost:8000/api/chat `
-  -d '{"session_id": "faz5_exc", "message": "Nerede yaşıyorum?"}'
-
-# Response should only mention "Ankara", not "İstanbul"
-# Because context filter: r.status IS NULL OR r.status = 'ACTIVE'
-```
-
----
-
-## Yeni Schema Fields
-
-```cypher
-// FACT relationship FAZ 5 schema
-r.status = 'ACTIVE' | 'SUPERSEDED' | 'RETRACTED'
-r.superseded_by_turn_id  // Hangi turn tarafından supersede edildi
-r.superseded_at          // Ne zaman supersede edildi (datetime)
-```
-
----
-
-## Geriye Dönük Uyumluluk
-
-✅ **Eski relationships:** status=NULL treated as ACTIVE (FAZ 2 filter)  
-✅ **Context/Observer:** `r.status IS NULL OR r.status = 'ACTIVE'` mevcut  
-✅ **SUPERSEDED:** Automatically excluded from context  
-✅ **Multi-user isolation:** user_id filter korundu  
-
----
-
-**FAZ 5 DURUMU: ✅ TAMAMLANDI**
+✅ **FAZ 5 başarıyla tamamlandı**
+- EXCLUSIVE/ADDITIVE kuralları aktif.
+- Temporal conflict resolution çalışıyor.
+- Provenance (FAZ2) ile tam uyumlu.
+- **7/7 unit test başarılı (Test borcu kapatıldı)**
