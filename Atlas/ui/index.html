@@ -21,6 +21,8 @@
     <link rel="stylesheet" href="css/atlas-modals.css">
     <!-- Atlas Final Overrides -->
     <link rel="stylesheet" href="css/atlas-overrides.css">
+    <!-- Font Awesome 6 for professional icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
 </head>
 
@@ -63,31 +65,31 @@
             <!-- User Dropdown -->
             <div class="header-dropdown">
                 <div class="header-dropdown-trigger" onclick="toggleHeaderDropdown()" id="userDropdownTrigger">
-                    <span class="icon" style="opacity: 0.8;">👤</span>
+                    <span class="icon"><i class="fa-solid fa-user"></i></span>
                     <span id="userDropdownName">User</span>
                     <span style="opacity: 0.5; font-size: 0.7rem;">▼</span>
                 </div>
 
                 <div class="header-dropdown-menu" id="headerDropdownMenu">
                     <a href="/arena" class="dropdown-menu-item">
-                        <span class="icon" style="opacity: 0.7;">🏟️</span>
+                        <span class="icon"><i class="fa-solid fa-play"></i></span>
                         <span>Arena</span>
                     </a>
 
                     <div class="dropdown-menu-item" onclick="toggleNotifications(); toggleHeaderDropdown();">
-                        <span class="icon" style="opacity: 0.7;">🔔</span>
+                        <span class="icon"><i class="fa-solid fa-bell"></i></span>
                         <span>Notifications</span>
                         <span class="badge" id="notifCountDropdown"
                             style="display:none; margin-left: auto; background: var(--danger); color: white; padding: 2px 6px; border-radius: 6px; font-size: 0.65rem;">0</span>
                     </div>
 
                     <div class="dropdown-menu-item" onclick="openAnalytics(); toggleHeaderDropdown();">
-                        <span class="icon" style="opacity: 0.7;">📊</span>
+                        <span class="icon"><i class="fa-solid fa-chart-simple"></i></span>
                         <span>Analytics</span>
                     </div>
 
                     <div class="dropdown-menu-item" onclick="alert('Settings coming soon!'); toggleHeaderDropdown();">
-                        <span class="icon" style="opacity: 0.7;">⚙️</span>
+                        <span class="icon"><i class="fa-solid fa-gear"></i></span>
                         <span>Settings</span>
                     </div>
 
@@ -95,14 +97,14 @@
 
                     <div class="dropdown-menu-item danger" onclick="handleLogout(); toggleHeaderDropdown();"
                         id="logoutMenuItem">
-                        <span class="icon" style="opacity: 0.7;">🚪</span>
+                        <span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span>
                         <span>Logout</span>
                     </div>
 
                     <div class="dropdown-menu-item"
                         onclick="document.getElementById('loginModal').style.display='flex'; toggleHeaderDropdown();"
                         id="loginMenuItem">
-                        <span class="icon" style="opacity: 0.7;">🔑</span>
+                        <span class="icon"><i class="fa-solid fa-right-to-bracket"></i></span>
                         <span>Login</span>
                     </div>
                 </div>
@@ -117,7 +119,7 @@
             <!-- Backend Health Monitor -->
             <div class="backend-monitor glass-light p-md rounded-lg mb-md">
                 <div class="section-header">
-                    <span class="section-title">🖥️ BACKEND HEALTH</span>
+                    <span class="section-title"><i class="fa-solid fa-server"></i> BACKEND HEALTH</span>
                 </div>
                 <div class="monitor-stats">
                     <div class="monitor-stat">
@@ -138,9 +140,9 @@
             <!-- Session Manager (replacing dropdown) -->
             <div class="session-manager glass-light rounded-lg p-md mb-md">
                 <div class="section-header">
-                    <span class="section-title">💬 SOHBETLER</span>
+                    <span class="section-title"><i class="fa-solid fa-messages"></i> SOHBETLER</span>
                     <button class="btn-new-session" onclick="newChat()">
-                        <span class="icon">+</span> Yeni
+                        <span class="icon"><i class="fa-solid fa-plus"></i></span> Yeni
                     </button>
                 </div>
 
@@ -149,7 +151,7 @@
                 </div>
 
                 <button class="btn-clear-all" onclick="clearAllChats()">
-                    🧹 Tümünü Temizle
+                    <i class="fa-solid fa-broom"></i> Tümünü Temizle
                 </button>
             </div>
 
@@ -193,7 +195,7 @@
     <!-- Modern Login Modal (Forced, Unclosable) -->
     <div class="login-modal" id="loginModal">
         <div class="login-card">
-            <h2>🔐 ATLAS Giriş</h2>
+            <h2><i class="fa-solid fa-lock"></i> ATLAS Giriş</h2>
             <p>Sisteme erişim için kimlik doğrulama gereklidir</p>
             <input type="text" id="loginUser" class="login-input" placeholder="Kullanıcı Adı" autocomplete="username">
             <input type="password" id="loginPass" class="login-input" placeholder="Şifre"
@@ -217,12 +219,12 @@
     <div class="analytics-modal" id="analyticsModal">
         <div class="analytics-content">
             <div class="analytics-header">
-                <h2>📊 Analytics & Usage</h2>
+                <h2><i class="fa-solid fa-chart-line"></i> Analytics & Usage</h2>
                 <button class="analytics-close" onclick="closeAnalytics()">×</button>
             </div>
 
             <div class="analytics-section">
-                <h3>🔑 API Keys</h3>
+                <h3><i class="fa-solid fa-key"></i> API Keys</h3>
                 <div class="analytics-grid">
                     <div class="analytics-card">
                         <div class="analytics-card-label">Groq API</div>
@@ -236,7 +238,7 @@
             </div>
 
             <div class="analytics-section">
-                <h3>📈 Model Usage Limits</h3>
+                <h3><i class="fa-solid fa-chart-line"></i> Model Usage Limits</h3>
                 <div class="analytics-grid">
                     <div class="analytics-card">
                         <div class="analytics-card-label">Groq Requests</div>
@@ -366,28 +368,18 @@
             <input type="file" id="fileInput" multiple accept="image/jpeg,image/png,image/webp,image/gif"
                 style="display: none;">
 
-            <!-- File Upload Button -->
-            <button class="input-action-btn" onclick="document.getElementById('fileInput').click()"
-                title="Upload Image">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path
-                        d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48">
-                    </path>
-                </svg>
+            <!-- Action Buttons -->
+            <button class="action-btn" id="uploadBtn" onclick="document.getElementById('fileInput').click()"
+                title="Dosya Yükle">
+                <span class="icon"><i class="fa-solid fa-paperclip"></i></span>
             </button>
 
-            <!-- Main Text Input -->
-            <input type="text" id="userInput" class="main-input" placeholder="Sisteme bir komut ver..."
-                autocomplete="off">
+            <!-- Main Input Field -->
+            <input type="text" id="userInput" class="main-input" placeholder="Mesajınızı yazın..." autocomplete="off">
 
             <!-- Send Button -->
-            <button class="send-btn-enhanced" id="sendBtn" onclick="handleSend()" title="Send Message">
-                <svg class="send-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="2">
-                    <line x1="22" y1="2" x2="11" y2="13"></line>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
-                <span class="send-text">Gönder</span>
+            <button class="action-btn send-btn" id="sendBtn" onclick="handleSend()" title="Gönder">
+                <span class="icon"><i class="fa-solid fa-arrow-right"></i></span>
             </button>
         </div>
 

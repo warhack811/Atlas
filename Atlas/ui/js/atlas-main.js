@@ -12,63 +12,63 @@ const PERSONA_CONFIG = {
     standard: {
         name: 'Standart',
         shortName: 'Std',
-        icon: '⚡',
+        icon: '<i class="fa-solid fa-bolt"></i>',
         description: 'Dengeli ve profesyonel yaklaşım',
         color: '#3b82f6'
     },
     professional: {
         name: 'Kurumsal',
         shortName: 'Pro',
-        icon: '💼',
+        icon: '<i class="fa-solid fa-briefcase"></i>',
         description: 'Formal ve ciddi ton',
         color: '#6366f1'
     },
     kanka: {
         name: 'Kanka',
         shortName: 'Knk',
-        icon: '🤝',
+        icon: '<i class="fa-solid fa-handshake"></i>',
         description: 'Samimi ve rahat sohbet',
         color: '#f59e0b'
     },
     creative: {
         name: 'Sanatçı',
         shortName: 'Art',
-        icon: '🎨',
+        icon: '<i class="fa-solid fa-palette"></i>',
         description: 'Yaratıcı ve ilham verici',
         color: '#a855f7'
     },
     concise: {
         name: 'Net & Öz',
         shortName: 'Öz',
-        icon: '🎯',
+        icon: '<i class="fa-solid fa-bullseye"></i>',
         description: 'Kısa ve net cevaplar',
         color: '#ef4444'
     },
     sincere: {
         name: 'İçten Dost',
         shortName: 'İçt',
-        icon: '💙',
+        icon: '<i class="fa-solid fa-heart"></i>',
         description: 'Samimi ve anlayışlı',
         color: '#06b6d4'
     },
     detailed: {
         name: 'Eğitmen',
         shortName: 'Eğt',
-        icon: '📚',
+        icon: '<i class="fa-solid fa-book"></i>',
         description: 'Detaylı ve öğretici',
         color: '#10b981'
     },
     girlfriend: {
         name: 'Sevgili',
         shortName: 'Sev',
-        icon: '💕',
+        icon: '<i class="fa-solid fa-heart-pulse"></i>',
         description: 'Sevgi dolu ve şefkatli',
         color: '#ec4899'
     },
     friendly: {
         name: 'Yardımsever',
         shortName: 'Yrd',
-        icon: '😊',
+        icon: '<i class="fa-solid fa-face-smile"></i>',
         description: 'Dostane ve yardımsever',
         color: '#84cc16'
     }
@@ -550,7 +550,7 @@ function appendRDRTrigger(msgId, rdr) {
     const trigger = document.createElement('div');
     trigger.className = "rdr-trigger";
     trigger.onclick = () => toggleInspector(msgId);
-    trigger.innerHTML = `<span>⚡ RDR Raporu [Observability]</span>`;
+    trigger.innerHTML = `<span><i class="fa-solid fa-bolt"></i> RDR Raporu [Observability]</span>`;
 
     const insp = document.createElement('div');
     insp.className = "inspector-panel";
@@ -558,11 +558,11 @@ function appendRDRTrigger(msgId, rdr) {
     insp.innerHTML = `
                 <div class="inspector-tabs">
                     <div class="tab active" onclick="switchTab(event, '${msgId}', 'summ')">Özet</div>
-                    <div class="tab" onclick="switchTab(event, '${msgId}', 'orch')">🧠 Orhc</div>
-                    <div class="tab" onclick="switchTab(event, '${msgId}', 'tool')">🛠️ Tools</div>
-                    <div class="tab" onclick="switchTab(event, '${msgId}', 'safe')">🛡️ Safe</div>
-                    <div class="tab" onclick="switchTab(event, '${msgId}', 'synth')">🎭 Synth</div>
-                    <div class="tab" style="color:var(--danger)" onclick="switchTab(event, '${msgId}', 'err')">❌ Hata</div>
+                    <div class="tab" onclick="switchTab(event, '${msgId}', 'orch')"><i class="fa-solid fa-brain"></i> Orhc</div>
+                    <div class="tab" onclick="switchTab(event, '${msgId}', 'tool')"><i class="fa-solid fa-wrench"></i> Tools</div>
+                    <div class="tab" onclick="switchTab(event, '${msgId}', 'safe')"><i class="fa-solid fa-shield"></i> Safe</div>
+                    <div class="tab" onclick="switchTab(event, '${msgId}', 'synth')"><i class="fa-solid fa-masks-theater"></i> Synth</div>
+                    <div class="tab" style="color:var(--danger)" onclick="switchTab(event, '${msgId}', 'err')"><i class="fa-solid fa-triangle-exclamation"></i> Hata</div>
                 </div>
                 
                 <div class="tab-content active" id="summ-${msgId}">
@@ -581,11 +581,11 @@ function appendRDRTrigger(msgId, rdr) {
                     <div style="margin-top:15px; background:rgba(0,0,0,0.2); border-radius:8px; padding:10px; border:1px solid var(--border);">
                         <div style="font-size:0.7rem; color:var(--text-dim); margin-bottom:8px; font-weight:700; text-transform:uppercase; letter-spacing:1px;">Performans ve Model Kırılımı</div>
                         <div style="display:grid; grid-template-columns: 1fr; gap:8px; font-size:0.75rem;">
-                            <div class="timing-item">🛡️ Güvenlik: <span style="color:var(--matrix-green)">${rdr.safety_ms || 0}ms</span> <span style="opacity:0.6; font-size:0.65rem;">[${rdr.safety_model || "Regex"}]</span></div>
-                            <div class="timing-item">🧠 Orkestrasyon: <span style="color:var(--matrix-green)">${rdr.classification_ms || 0}ms</span> <span style="opacity:0.6; font-size:0.65rem;">[${rdr.orchestrator_model || "N/A"}]</span></div>
-                            <div class="timing-item">⚙️ Yürütme (Tool): <span style="color:var(--matrix-green)">${rdr.dag_execution_ms || 0}ms</span> <span style="opacity:0.6; font-size:0.65rem;">[Expert DAG]</span></div>
-                            <div class="timing-item">🎭 Sentez: <span style="color:var(--matrix-green)">${rdr.synthesis_ms || 0}ms</span> <span style="opacity:0.6; font-size:0.65rem;">[${rdr.synthesizer_model || "N/A"}]</span></div>
-                            <div class="timing-item">✅ Kalite: <span style="color:var(--matrix-green)">${rdr.quality_ms || 0}ms</span></div>
+                            <div class="timing-item"><i class="fa-solid fa-shield"></i> Güvenlik: <span style="color:var(--matrix-green)">${rdr.safety_ms || 0}ms</span> <span style="opacity:0.6; font-size:0.65rem;">[${rdr.safety_model || "Regex"}]</span></div>
+                            <div class="timing-item"><i class="fa-solid fa-brain"></i> Orkestrasyon: <span style="color:var(--matrix-green)">${rdr.classification_ms || 0}ms</span> <span style="opacity:0.6; font-size:0.65rem;">[${rdr.orchestrator_model || "N/A"}]</span></div>
+                            <div class="timing-item"><i class="fa-solid fa-cog"></i> Yürütme (Tool): <span style="color:var(--matrix-green)">${rdr.dag_execution_ms || 0}ms</span> <span style="opacity:0.6; font-size:0.65rem;">[Expert DAG]</span></div>
+                            <div class="timing-item"><i class="fa-solid fa-masks-theater"></i> Sentez: <span style="color:var(--matrix-green)">${rdr.synthesis_ms || 0}ms</span> <span style="opacity:0.6; font-size:0.65rem;">[${rdr.synthesizer_model || "N/A"}]</span></div>
+                            <div class="timing-item"><i class="fa-solid fa-check"></i> Kalite: <span style="color:var(--matrix-green)">${rdr.quality_ms || 0}ms</span></div>
                         </div>
                     </div>
                 </div>

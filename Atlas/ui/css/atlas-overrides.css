@@ -242,27 +242,59 @@ body {
     display: none !important;
 }
 
-/* === ICON STANDARDIZATION - Monochrome === */
-/* Convert all emoji icons to grayscale single-color */
-.header .icon,
-.dropdown-menu-item .icon,
-.persona-icon,
-.pill-icon,
-.quick-action-icon,
-.session-icon,
-.brand-icon {
-    filter: grayscale(1) opacity(0.85);
-    transition: filter var(--transition-fast);
+/* === ICON STANDARDIZATION - Font Awesome === */
+/* All icons are Font Awesome 6 */
+.fa-solid,
+.fa-regular,
+.fa-brands {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.875rem;
+    transition: color var(--transition-fast), transform var(--transition-fast);
 }
 
-.dropdown-menu-item:hover .icon,
-.persona-dropdown-item:hover .persona-icon {
-    filter: grayscale(1) opacity(1);
+/* Icon containers */
+.header .icon .fa-solid,
+.dropdown-menu-item .icon .fa-solid,
+.persona-icon .fa-solid,
+.action-btn .icon .fa-solid,
+.section-title .fa-solid {
+    font-size: 1rem;
 }
 
-/* Make brand icon slightly more visible */
-.brand-icon {
-    filter: grayscale(1) opacity(0.9);
+/* Hover states */
+.dropdown-menu-item:hover .icon .fa-solid,
+.action-btn:hover .icon .fa-solid {
+    color: rgba(255, 255, 255, 0.95);
+    transform: scale(1.05);
+}
+
+/* Contextual colors */
+.dropdown-menu-item.danger .icon .fa-solid {
+    color: #ef4444 !important;
+}
+
+/* Send button - larger and white */
+.send-btn .icon .fa-solid {
+    font-size: 1.2rem;
+    color: #ffffff !important;
+}
+
+/* Brand icon - blue */
+.brand-icon .fa-solid {
+    color: #60a5fa !important;
+    font-size: 1.4rem;
+}
+
+/* RDR panel icons */
+.inspector-tabs .fa-solid {
+    margin-right: 4px;
+    font-size: 0.85rem;
+}
+
+.timing-item .fa-solid {
+    margin-right: 6px;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.6);
 }
 
 /* === SIDEBAR - Reorganized === */
