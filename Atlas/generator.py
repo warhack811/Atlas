@@ -305,7 +305,12 @@ async def _stream_groq(model_id: str, api_key: str, messages: list, intent: str)
     
     client = await GlobalClient.get_client()
     async with client.stream("POST", f"{API_CONFIG['groq_api_base']}/chat/completions",
-                          headers={"Authorization": f"Bearer {api_key}"}, json=payload) as resp:
+                          headers={"Authorization": f"Bearer {api_key}"}, json=payload,
+                          timeout=30.0) as resp:
+        if resp.status_code != 200:
+            yield f"Groq Stream Hatası: HTTP {resp.status_code}"
+            return
+
         async for line in resp.aiter_lines():
             if line.startswith("data: "):
                 data_str = line[6:]

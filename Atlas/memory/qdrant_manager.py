@@ -153,6 +153,23 @@ class QdrantManager:
                 logger.info(f"Created Qdrant collection: {self.collection_name}")
             else:
                 logger.info(f"Qdrant collection already exists: {self.collection_name}")
+
+            # Ensure payload indexes for filtering (Critical for delete operations)
+            try:
+                self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name="user_id",
+                    field_schema="keyword"
+                )
+                self.client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name="session_id",
+                    field_schema="keyword"
+                )
+                logger.debug("Qdrant payload indexes ensured for user_id and session_id")
+            except Exception as ie:
+                logger.warning(f"Failed to ensure Qdrant payload indexes: {ie}")
+
         except Exception as e:
             logger.error(f"Failed to ensure collection: {e}")
             raise

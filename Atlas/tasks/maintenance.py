@@ -21,6 +21,8 @@ class MaintenanceJob(BaseJob):
         
         # FAZ-Y.5: Memory Pruning
         await neo4j_manager.prune_low_importance_memory(importance_threshold=0.4, age_days=30)
+        # V4.3: Emotional Continuity TTL
+        await neo4j_manager.archive_expired_moods(days=3)
         logger.info("Maintenance Job: Temizlik tamamlandı.")
 
 @register_job

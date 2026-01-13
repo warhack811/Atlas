@@ -193,11 +193,14 @@ body {
 /* --- Main Layout (Grid System) --- */
 .main-container {
     flex: 1;
-    display: grid; /* Flex yerine Grid */
-    grid-template-columns: 260px 1fr 420px; /* Sidebar | Chat | Neural Monitor */
+    display: grid;
+    /* Flex yerine Grid */
+    grid-template-columns: 260px 1fr 420px;
+    /* Sidebar | Chat | Neural Monitor */
     overflow: hidden;
     position: relative;
-    height: calc(100vh - 60px); /* Header hariç yükseklik */
+    height: calc(100vh - 60px);
+    /* Header hariç yükseklik */
 }
 
 .sidebar {
@@ -214,7 +217,8 @@ body {
     flex-direction: column;
     padding: 20px;
     overflow-y: auto;
-    border-right: 1px solid var(--border); /* Sağ panele sınır */
+    border-right: 1px solid var(--border);
+    /* Sağ panele sınır */
     background-color: var(--bg-dark);
 }
 
@@ -261,7 +265,7 @@ body {
 
 .monitor-tab:hover {
     color: var(--text-main);
-    background: rgba(255,255,255,0.02);
+    background: rgba(255, 255, 255, 0.02);
 }
 
 .monitor-tab.active {
@@ -275,7 +279,8 @@ body {
     overflow-y: auto;
     padding: 16px;
     font-family: var(--font-mono);
-    display: none; /* Varsayılan gizli */
+    display: none;
+    /* Varsayılan gizli */
 }
 
 .monitor-content.active {
@@ -327,13 +332,49 @@ body {
 /* Mobile Responsive Override */
 @media (max-width: 1024px) {
     .main-container {
-        grid-template-columns: 1fr; /* Mobilde tek sütun */
+        grid-template-columns: 1fr;
+        /* Mobilde tek sütun */
     }
+
     .sidebar {
-        display: none; /* Sidebar toggle ile açılır (mevcut mantık) */
+        display: none;
+        /* Sidebar toggle ile açılır (mevcut mantık) */
     }
+
     .neural-monitor {
-        display: none; /* Mobilde sağ panel gizli */
+        display: none;
+        /* Mobilde sağ panel gizli */
+        position: fixed;
+        top: 60px;
+        right: 0;
+        width: 85%;
+        max-width: 400px;
+        height: calc(100vh - 60px);
+        z-index: 2000;
+        background: var(--bg-dark);
+        box-shadow: -5px 0 20px rgba(0, 0, 0, 0.5);
+        border-left: 1px solid var(--border);
+    }
+
+    .neural-monitor.open {
+        display: flex;
+        animation: slideInRight 0.3s ease-out;
+    }
+
+    .mobile-only {
+        display: block !important;
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
     }
 }
 

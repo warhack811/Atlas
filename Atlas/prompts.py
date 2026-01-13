@@ -26,19 +26,21 @@ MEVCUT ARAÇLAR (TOOLS):
 GÖREV TİPLERİ:
 - generation: Sohbet, kod yazma, mantık yürütme.
 - tool: Araç kullanımı.
-- memory_control: Hafıza silme, unutma, resetleme talepleri. (params: {{"action": "forget_all" | "forget_entity", "entity": "..."}})
+- memory_control: Hafıza silme, unutma, resetleme talepleri. (params: {{"action": "forget_all" | "forget_entity", "entity": "...", "hard_delete": true | false}})
+- context_clarification: Kullanıcının dolaylı olarak bir bilginin değiştiğini ima ettiği durumlarda ("Artık doktor değilim" gibi) bu bilgiyi arşivleyip yeni durumu nazikçe sormak/teyit etmek için kullanılır.
 
 ANALİZ KURALLARI:
 1. Kullanıcı "Resim çiz" derse -> `flux_tool` kullan.
 2. Kullanıcı "Dolar ne kadar?", "Hava nasıl?", "Kimdir?" derse -> `search_tool` kullan.
 3. Kullanıcı "Beni unut", "Hafızanı sil", "Hakkımdaki her şeyi temizle" derse -> `memory_control` (forget_all) kullan.
-4. Kullanıcı "X bilgisini hafızandan çıkar", "X'i unut" derse -> `memory_control` (forget_entity) kullan.
-   - ÖNEMLİ: "Bu kodu sil", "Şu mesajı sil" gibi teknik/operasyonel talepler `memory_control` DEĞİLDİR, `generation` veya ilgili araçtır. Sadece kişisel veriler ve hafıza için tetikle.
-5. Kullanıcı "Kod yaz", "Şiir yaz", "Nasılsın" derse -> `generation` kullan.
-4. ÖNEMLİ: Eğer geçmişte [CONTEXT - VISION_ANALYSIS] varsa, kullanıcı bu resimle ilgili soru sormuştur. Tekrar arama yapma, eldeki bilgiyi kullan.
-5. KRİTİK: Eğer geçmişte [CONTEXT - VISION_ERROR] notu varsa, görsel kota/hata nedeniyle işlenememiştir. Arama yapma, kullanıcıya dürüstçe görselin şu an işlenemediğini (kota doluluğu vb.) belirt.
-6. PARALEL PLANLAMA: Birbiriyle ilgisiz görevleri (örn: hem arama, hem resim çizme) aynı anda başlatmak için `dependencies` alanını boş bırak. Sadece bir görevin çıktısı diğerine lazımsa bağımlılık ekle.
-7. DÜŞÜNCE ZİNCİRİ: Her bir 'generation' görevinin 'instruction' alanına şu talimatı mutlaka ekle: "Yanıtının asıl kısmından önce, kullanıcıya yönelik profesyonel bir iş özetini mutlaka SADECE TÜRKÇE olarak <thought>...</thought> etiketleri içine yaz. Kesinlikle 'Merhaba', 'Tabii', 'Size yardımcı olacağım' gibi selamlaşmalar kullanma. Sadece neyi analiz ettiğini ve neyi başarmayı hedeflediğini anlat."
+4. Kullanıcı AÇIKÇA "X bilgisini hafızandan çıkar", "X'i unut" derse -> `memory_control` (forget_entity, hard_delete: true) kullan.
+5. Kullanıcı DOLAYLI olarak bir değişikliği ima ederse ("Artık X değilim", "X'i bıraktım", "X değil Y oldum") -> `context_clarification` kullan.
+   - Bu görevde `instruction` kısmına kullanıcının neyi değiştirdiğini ve neyi teyit etmen gerektiğini yaz.
+6. ÖNEMLİ: "Bu kodu sil", "Şu mesajı sil" gibi teknik/operasyonel talepler `memory_control` DEĞİLDİR, `generation` veya ilgili araçtır. Sadece kişisel veriler ve hafıza için tetikle.
+7. ÖNEMLİ: Eğer geçmişte [CONTEXT - VISION_ANALYSIS] varsa, kullanıcı bu resimle ilgili soru sormuştur. Tekrar arama yapma, eldeki bilgiyi kullan.
+8. KRİTİK: Eğer geçmişte [CONTEXT - VISION_ERROR] notu varsa, görsel kota/hata nedeniyle işlenememiştir. Arama yapma, kullanıcıya dürüstçe görselin şu an işlenemediğini (kota doluluğu vb.) belirt.
+9. PARALEL PLANLAMA: Birbiriyle ilgisiz görevleri (örn: hem arama, hem resim çizme) aynı anda başlatmak için `dependencies` alanını boş bırak. Sadece bir görevin çıktısı diğerine lazımsa bağımlılık ekle.
+10. DÜŞÜNCE ZİNCİRİ: Her bir 'generation' veya 'context_clarification' görevinin 'instruction' alanına şu talimatı mutlaka ekle: "Yanıtının asıl kısmından önce, kullanıcıya yönelik profesyonel bir iş özetini mutlaka SADECE TÜRKÇE olarak <thought>...</thought> etiketleri içine yaz. Kesinlikle 'Merhaba', 'Tabii', 'Size yardımcı olacağım' gibi selamlaşmalar kullanma. Sadece neyi analiz ettiğini ve neyi başarmayı hedeflediğini anlat."
 8. KONU TAKİBİ (TOPIC TRACKING):
    - Kullanıcının aktif olarak konuştuğu ana konuyu 1-3 kelime ile özetle (Örn: "Python Kodlama", "Tatil Planı", "Hava Durumu").
    - Eğer konu bir öncekiyle aynıysa veya belirsizse "SAME" döndür.
@@ -251,10 +253,11 @@ Kullanıcının mesajından kalıcı, önemli ve ileride hatırlanması gereken 
 KURALLAR:
 1. Sadece kalıcı gerçekleri (Ad, meslek vb.) VE kullanıcının o anki bariz DUYGU durumunu (yorgun, mutlu, gergin) çıkar.
 2. Selamlaşmaları ve çok önemsiz detayları atla. Anlık duygular Mirroring için önemlidir, 'HİSSEDİYOR' olarak çıkar.
-3. ÖZNEL BİLGİ: Kullanıcı kendisi hakkında bilgi veriyorsa (örn: 'Adım Ali', '32 yaşındayım'), OZNE (subject) olarak KESİNLİKLE 'KULLANICI' yaz. Üçüncü şahıslar için gerçek isimlerini kullan.
-4. Çıktıyı SADECE ve SADECE şu JSON formatında bir liste olarak ver: [{"subject": "...", "predicate": "...", "object": "...", "category": "personal" | "general"}]
-5. Açıklama yapma, sadece JSON döndür.
-6. ÖNEMLİ: Eğer kullanıcı bilgi vermiyor, sadece soru soruyorsa (örn: 'Adım ne?', 'Yaşımı biliyor musun?') veya bilgi belirsizse (örn: 'Bilmiyorum', 'Hatırlamıyorum') BOŞ LİSTE [] döndür. Kesinlikle 'Bilgi Yok', 'Bilinmiyor' gibi tripletler üretme.
+3. KESİNLİKLE KOMUTLARI ATLA: "Beni unut", "Tüm bilgileri sil", "Hafızanı tazele", "Şu konuyu bir daha hatırlama" gibi ASİSTAN TALİMATLARI veya SİSTEM YÖNETİMİ ile ilgili ifadelerden ASLA triplet üretme. Bunlar bilgi değil, komuttur.
+4. ÖZNEL BİLGİ: Kullanıcı kendisi hakkında bilgi veriyorsa (örn: 'Adım Ali', '32 yaşındayım'), OZNE (subject) olarak KESİNLİKLE 'KULLANICI' yaz. Üçüncü şahıslar için gerçek isimlerini kullan.
+5. Çıktıyı SADECE ve SADECE şu JSON formatında bir liste olarak ver: [{"subject": "...", "predicate": "...", "object": "...", "category": "personal" | "general"}]
+6. Açıklama yapma, sadece JSON döndür.
+7. ÖNEMLİ: Eğer kullanıcı bilgi vermiyor, sadece soru soruyorsa (örn: 'Adım ne?', 'Yaşımı biliyor musun?') veya bilgi belirsizse (örn: 'Bilmiyorum', 'Hatırlamıyorum') BOŞ LİSTE [] döndür. Kesinlikle 'Bilgi Yok', 'Bilinmiyor' gibi tripletler üretme.
 
 İZİN VERİLEN PREDICATE'LER (sadece bunları kullan):
 - İSİM, LAKABI, YAŞI, MESLEĞİ, YAŞAR_YER, GELDİĞİ_YER
@@ -265,15 +268,11 @@ KURALLAR:
 Eğer bir predicate yukarıdaki listede yoksa, o triplet'i üretme.
 
 ÖRNEK:
-Kullanıcı: "Ben Ali, İstanbul'da yaşıyorum ve Python yazmayı çok seviyorum."
+Kullanıcı: "Ben Ali, İstanbul'da yaşıyorum ve her şeyi unutmanı istiyorum."
 Çıktı: [
-  {{"subject": "Ali", "predicate": "YAŞAR_YER", "object": "İstanbul", "category": "personal"}},
-  {{"subject": "Ali", "predicate": "SEVER", "object": "Python Yazmak", "category": "general"}}
+  {"subject": "Ali", "predicate": "YAŞAR_YER", "object": "İstanbul", "category": "personal"}
 ]
-
-Kullanıcı: "Bugün yorgunum ve evdeyim."
-Çıktı: []
-(Neden: "yorgunum" geçici durum; "Ben" zamirinden "evdeyim" için gerçek subject çıkmıyor)
+(Not: "her şeyi unutmanı istiyorum" bir komuttur, İSTİYOR yüklemiyle dahi ÇIKARILMAZ.)
 """
 
 

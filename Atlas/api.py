@@ -181,6 +181,16 @@ async def get_current_user(atlas_session: Optional[str] = Cookie(None)):
     user_data = decode_session_token(atlas_session)
     return user_data
 
+async def get_current_user_optional(atlas_session: Optional[str] = Cookie(None)):
+    """Cookie'den kullanıcı bilgisini çözer, yoksa None döner (Hata fırlatmaz)."""
+    if not atlas_session:
+        return None
+    try:
+        user_data = decode_session_token(atlas_session)
+        return user_data
+    except:
+        return None
+
 @app.post("/api/auth/login")
 async def login(request: LoginRequest, response: Response):
     role = verify_credentials(request.username, request.password)
@@ -465,75 +475,119 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Dep
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+
+
+    # --- SESSION MANAGEMENT ENDPOINTS ---
+
+@app.get("/api/sessions")
+async def list_sessions(user=Depends(get_current_user)):
+    """Kullanıcının geçmiş sohbet oturumlarını listeler."""
+    if not user:
+        return {"sessions": []}
+    
+    uid = user["username"]
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    
+    # Sessionları ve son aktivite zamanını çek
+    query = """
+    MATCH (u:User {id: $uid})-[:HAS_SESSION]->(s:Session)
+    OPTIONAL MATCH (s)-[:HAS_TURN]->(t:Turn)
+    WITH s, max(t.created_at) as last_msg_time, count(t) as msg_count
+    ORDER BY COALESCE(last_msg_time, s.created_at) DESC
+    RETURN s.id as id, 
+           COALESCE(s.title, 'Yeni Sohbet') as title, 
+           toString(COALESCE(last_msg_time, s.created_at)) as date,
+           msg_count
+    """
+    try:
+        results = await neo4j_manager.query_graph(query, {"uid": uid})
+        # Neo4j results are records, need to extract values
+        # Assuming query_graph returns list of dicts if using the helper, 
+        # but let's be safe and serialize
+        formatted_sessions = []
+        for r in results:
+            # Check if r is a Record object or dict
+            # Atlas neo4j_manager.query_graph usually returns list of dicts via `data()`
+            formatted_sessions.append(r)
+            
+        return {"sessions": formatted_sessions}
+    except Exception as e:
+        logger.error(f"Session list error: {e}")
+        return {"sessions": []}
+
+@app.delete("/api/sessions/{session_id}")
+async def delete_session(session_id: str, user=Depends(get_current_user)):
+    """Belirli bir sohbet oturumunu siler."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Oturum silmek için giriş yapmalısınız.")
+    
+    uid = user["username"]
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    success = await neo4j_manager.delete_session(uid, session_id)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Oturum silinemedi.")
+    
+    return {"status": "success", "message": f"Session {session_id} silindi."}
+
+@app.delete("/api/sessions")
+async def clear_all_sessions(user=Depends(get_current_user)):
+    """Kullanıcının tüm sohbet oturumlarını temizler."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Oturumları temizlemek için giriş yapmalısınız.")
+    
+    uid = user["username"]
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    success = await neo4j_manager.delete_all_sessions(uid)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Oturumlar temizlenemedi.")
+    
+    return {"status": "success", "message": "Tüm oturumlar silindi."}
+
+# --- IMPORTS FOR STREAM CHAT ---
+from Atlas import safety, rdr
+from Atlas.memory import SessionManager, MessageBuffer
+from Atlas import orchestrator, dag_executor, synthesizer
+from Atlas.memory.neo4j_manager import neo4j_manager
+from Atlas.memory.request_context import AtlasRequestContext
+from Atlas.memory.trace import ContextTrace
+
 @app.post("/api/chat/stream")
-async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks, user=Depends(get_current_user)):
-    """SSE (Server-Sent Events) kullanarak akış formatında yanıt üretir."""
-    from Atlas.memory import SessionManager, MessageBuffer
-    from Atlas import orchestrator, dag_executor, synthesizer
+async def stream_chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Depends(get_current_user_optional)):
+    """
+    Yapay zeka yanıtını akan metin (stream) olarak döndürür.
+    """
     
-    # 0. ERİŞİM KONTROLÜ: INTERNAL_ONLY modunda whitelist kontrolü
-    # Öncelik: login > body > session_id
-    logged_in_username = user["username"] if user else None
-    user_id = (logged_in_username or request.user_id or request.session_id).lower()
-    
-    from Atlas.config import is_user_whitelisted
-    if not is_user_whitelisted(user_id):
-        logger.warning(f"INTERNAL_ONLY: Erişim reddedildi (stream) - user_id: {user_id}")
-        raise HTTPException(
-            status_code=403, 
-            detail="Bu API şu anda sadece yetkili kullanıcılara açıktır. (INTERNAL_ONLY mode)"
-        )
-
-    # --- PHASE 0.5: Y.5 CACHE HIT CHECK FOR STREAM ---
-    if ENABLE_SEMANTIC_CACHE:
-        cache_lock = await get_cache_lock(user_id, request.message)
-        async with cache_lock:
-            try:
-                cache_res = await semantic_cache.get_with_meta(user_id, request.message)
-                if cache_res["response"]:
-                    # Simulated stream for cache hit
-                    async def cached_event_generator():
-                        yield json.dumps({"type": "thought", "content": "Hafızadan getiriliyor..."}) + "\n"
-                        yield json.dumps({"type": "chunk", "content": cache_res["response"]}) + "\n"
-                        yield json.dumps({"type": "done", "status": "success"}) + "\n"
-                    # Staff: Explicit turn persistence on hit (Y.5)
-                    await neo4j_manager.append_turn(user_id, request.session_id, "assistant", cache_res["response"])
-
-                    # Background extraction even on cache hit (optional but good for graph consistency)
-                    from Atlas.memory.extractor import extract_and_save as extract_and_save_task
-                    if background_tasks:
-                        background_tasks.add_task(extract_and_save_task, request.message, user_id, f"cached_{int(time.time())}")
-                    else:
-                        asyncio.create_task(extract_and_save_task(request.message, user_id, f"cached_{int(time.time())}"))
-                    
-                    logger.info(f"STREAM CACHE HIT: user={user_id}")
-                    return StreamingResponse(cached_event_generator(), media_type="text/event-stream")
-            except Exception as e:
-                logger.warning(f"Stream cache hit check failed: {e}")
-
     async def event_generator():
         """Süreç adımlarını ve metin parçalarını ileten jeneratör."""
-        from Atlas import rdr, safety
-        record = rdr.RDR.create(request.message)
+        
+        try:
+            record = rdr.RDR.create(request.message)
+        except Exception as e:
+            print(f"[DEBUG] CRITICAL SETUP ERROR: {e}", flush=True)
+            yield f"data: {json.dumps({'type': 'error', 'content': f'System Error: {e}'}, default=str)}\n\n"
+            return
 
         try:
             start_time = time.time()
-            from Atlas.memory import SessionManager, MessageBuffer
-            from Atlas import orchestrator, dag_executor, synthesizer
             
             session_id = request.session_id
             logged_in_username = user["username"] if user else None
             user_id = (logged_in_username or request.user_id or session_id).lower()
             
+            print("[DEBUG] Step 1: ensure_user_session", flush=True)
             # RC-2: Kullanıcı-Session eşleşmesini sağla
-            from Atlas.memory.neo4j_manager import neo4j_manager
             await neo4j_manager.ensure_user_session(user_id, session_id)
             
+            print("[DEBUG] Step 2: append_turn", flush=True)
             # RC-3: Transcript Persistence (User Turn)
             await neo4j_manager.append_turn(user_id, session_id, "user", request.message)
             
             MessageBuffer.add_user_message(session_id, request.message)
 
+            print("[DEBUG] Step 3: check_input_safety", flush=True)
             safety_start = time.time()
             is_safe, sanitized_text, issues, used_model = await safety.safety_gate.check_input_safety(request.message)
             safety_ms = int((time.time() - safety_start) * 1000)
@@ -552,8 +606,6 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks, u
 
             classify_start = time.time()
             # 1. Bellek ve Bağlam Hazırlığı - AtlasRequestContext Pattern
-            from Atlas.memory.request_context import AtlasRequestContext
-            from Atlas.memory.trace import ContextTrace
             
             persona_name = (request.style.get("persona") if request.style else None) or "friendly"
             
@@ -562,6 +614,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks, u
             if DEBUG and request.debug_trace:
                 trace = ContextTrace(request_id=f"trace_{int(time.time())}", user_id=user_id, session_id=session_id)
             
+            print("[DEBUG] Step 4: AtlasRequestContext.create", flush=True)
             # Create unified request context (fetches identity from Neo4j ONCE)
             request_context = await AtlasRequestContext.create(
                 request_id=f"req_{int(time.time())}",
@@ -652,6 +705,11 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks, u
                     full_response += chunk
                     yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, default=str)}\n\n"
             
+            if not full_response:
+                error_msg = "Sentezleyici boş yanıt döndürdü."
+                logger.error(error_msg)
+                yield f"data: {json.dumps({'type': 'error', 'content': error_msg}, default=str)}\n\n"
+                
             synth_ms = int((time.time() - synth_start) * 1000)
             record.synthesis_ms = synth_ms
 
@@ -661,7 +719,6 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks, u
                 record.metadata["memory_tiers"] = trace.active_tiers
             
             # RC-3: Transcript Persistence (Assistant Turn)
-            from Atlas.memory.neo4j_manager import neo4j_manager
             await neo4j_manager.append_turn(user_id, session_id, "assistant", full_response)
             
             # RC-3: Episodic Memory Trigger (Her 20 turn'de bir)
@@ -776,12 +833,54 @@ async def upload_image(session_id: str, file: UploadFile = File(...)):
 
 @app.get("/api/health")
 async def health():
-    """Sistem sağlığı ve API anahtarı durumlarını döndürür."""
+    """Sistem sağlığı ve altyapı bağlantılarını raporlar (Oracle VM Uyumluluk Testi)."""
     from Atlas.key_manager import KeyManager
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    from Atlas.memory.qdrant_manager import qdrant_manager
+    from Atlas.memory.semantic_cache import semantic_cache
+    
+    # 1. Ortam Değişkenleri Kontrolü (Sadece varlık kontrolü)
+    env_status = {
+        "REDIS": "OK" if os.getenv("REDIS_URL") else "MISSING",
+        "QDRANT": "OK" if os.getenv("QDRANT_URL") and os.getenv("QDRANT_API_KEY") else "MISSING",
+        "NEO4J": "OK" if os.getenv("NEO4J_URI") else "MISSING",
+        "GEMINI": "OK" if os.getenv("GOOGLE_API_KEY") else "MISSING",
+        "GROQ": "OK" if os.getenv("GROQ_API_KEY") or os.getenv("MODEL_KEYS") else "MISSING"
+    }
+    
+    # 2. Canlı Bağlantı Testleri
+    db_status = {"neo4j": "Error", "qdrant": "Error", "redis": "Error"}
+    
+    try:
+        # Neo4j testi
+        await neo4j_manager.query_graph("RETURN 1 as test")
+        db_status["neo4j"] = "Connected"
+    except Exception as e: db_status["neo4j"] = f"Failed: {str(e)}"
+
+    try:
+        # Qdrant testi
+        q_healthy = await qdrant_manager.health_check()
+        db_status["qdrant"] = "Connected" if q_healthy else "Unreachable"
+    except: db_status["qdrant"] = "Connection Error"
+
+    try:
+        # Redis testi
+        if semantic_cache.client:
+            await semantic_cache.client.ping()
+            db_status["redis"] = "Connected"
+        else:
+            db_status["redis"] = "Disabled (No URL)"
+    except: db_status["redis"] = "Connection Error"
+
     return {
-        "status": "ok",
-        "available_keys": KeyManager.get_available_count(),
-        "key_stats": KeyManager.get_stats()
+        "status": "online",
+        "timestamp": datetime.now().isoformat(),
+        "env_check": env_status,
+        "connectivity": db_status,
+        "key_manager": {
+            "available_keys": KeyManager.get_available_count(),
+            "active_models": list(KeyManager.get_stats().keys())
+        }
     }
 
 
@@ -877,40 +976,49 @@ async def get_chat_history(session_id: str, user=Depends(get_current_user)):
 @app.post("/api/memory/forget")
 async def forget_memory(request: MemoryForgetRequest):
     """
-    Kullanıcının belirli bir bilgiyi veya tüm hafızasını 'unutmasını' sağlar. (RC-2)
-    Strateji: İlişkileri siler, node'ları bırakır.
+    Kullanıcının belirli bir bilgiyi veya tüm hafızasını 'unutmasını' sağlar. (RC-2/V4.3)
+    Strateji: Varsayılan olarak arşivler (superseded), 'hard' parametresi ile kalıcı siler.
     """
     uid = request.user_id if request.user_id else request.session_id
     from Atlas.memory.neo4j_manager import neo4j_manager
     
-    query = ""
-    params = {"uid": uid}
+    # V4.3: request modeline 'hard' flag'i eklenebilir veya varsayılan arşivleme yapılır.
+    # Şimdilik plan gereği 'arşivleme' odaklı ilerliyoruz.
+    is_hard = getattr(request, 'hard', False) 
     
-    if request.scope == "all":
-        # Kullanıcının tüm ilişkilerini sil (FACT, KNOWS, TASK, NOTIFICATION, SESSION)
-        # Node silme yapılmaz, sadece sahiplik bağları koparılır.
-        query = """
-        MATCH (u:User {id: $uid})-[r:KNOWS|HAS_TASK|HAS_NOTIFICATION|HAS_SESSION|HAS_ANCHOR|HAS_FACT]->() DELETE r
-        WITH 1 as dummy
-        MATCH ()-[r:FACT {user_id: $uid}]->() DELETE r
-        """
-    elif request.scope == "predicate" and request.predicate:
-        # Belirli bir predicate tipindeki FACT ve KNOWS ilişkilerini sil
-        query = """
-        MATCH (u:User {id: $uid})-[r:KNOWS]->(e:Entity) WHERE r.predicate = $pred DELETE r
-        WITH 1 as dummy
-        MATCH ()-[r:FACT {user_id: $uid}]->() WHERE r.predicate = $pred DELETE r
-        """
-        params["pred"] = request.predicate.upper()
-    elif request.scope == "item" and request.item_id:
-        # Belirli bir item'a olan ilişkiyi sil
-        query = "MATCH (u:User {id: $uid})-[r:KNOWS|HAS_FACT]->(e:Entity {id: $eid}) DELETE r"
-        params["eid"] = request.item_id
-    else:
-        raise HTTPException(status_code=400, detail="Geçersiz forget kapsamı veya eksik parametre.")
-        
-    await neo4j_manager.query_graph(query, params)
-    return {"success": True, "message": f"Memory scope '{request.scope}' forgotten for user."}
+    try:
+        if request.scope == "all":
+            # V4.3: delete_all_memory artık Turn, Session ve Episode'ları da temizliyor.
+            await neo4j_manager.delete_all_memory(uid)
+            message = "Tüm hafıza ve konuşma geçmişi başarıyla temizlendi."
+            
+        elif request.scope == "predicate" and request.predicate:
+            # Belirli bir yüklem (preference vb) bazlı arşivleme
+            # NOT: Bu operasyon neo4j_manager içinde özelleştirilmiş bir metod gerektirebilir
+            # Ancak MVP olarak Cypher üzerinden V4.3 uyumlu arşivleme yapıyoruz.
+            query = """
+            MATCH ()-[r:FACT {user_id: $uid}]->() 
+            WHERE toUpper(r.predicate) = $pred AND (r.status = 'ACTIVE' OR r.status IS NULL)
+            SET r.status = 'SUPERSEDED', r.valid_until = datetime(), r.updated_at = datetime()
+            RETURN count(r) as count
+            """
+            res = await neo4j_manager.query_graph(query, {"uid": uid, "pred": request.predicate.upper()})
+            count = res[0]['count'] if res else 0
+            message = f"'{request.predicate}' kategorisindeki {count} kayıt arşivlendi."
+            
+        elif request.scope == "item" and request.item_id:
+            # Belirli bir entity (Nesne) bazlı unutma
+            count = await neo4j_manager.forget_fact(uid, request.item_id, hard_delete=is_hard)
+            action = "silindi" if is_hard else "arşivlendi"
+            message = f"'{request.item_id}' ile ilgili {count} kayıt {action}."
+            
+        else:
+            raise HTTPException(status_code=400, detail="Geçersiz forget kapsamı veya eksik parametre.")
+            
+        return {"success": True, "message": message}
+    except Exception as e:
+        logger.error(f"API Memory Forget hatası: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/memory/correct")
 async def correct_memory(request: MemoryCorrectionRequest):

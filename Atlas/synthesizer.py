@@ -101,27 +101,12 @@ class Synthesizer:
             import re
             mood_match = re.search(r"ÖNCEKİ DUYGU DURUMU.*?'([^']+)'", formatted_data + history_text)
             if mood_match:
-                mood = mood_match.group(1).lower()
-                
-                # Negatif duygular
-                negative_moods = ["üzgün", "kızgın", "sinirli", "depresif", "mutsuz", "hasta", "yorgun", "stresli", "gergin"]
-                # Pozitif duygular
-                positive_moods = ["mutlu", "neşeli", "heyecanlı", "enerjik", "motive", "rahat", "iyi"]
-                
-                if any(neg in mood for neg in negative_moods):
-                    emotional_instruction = (
-                        "\n[EMOTIONAL_CONTINUITY]: Kullanıcının önceki duygu durumu negatif idi. "
-                        "Selamlaşırken çok nazik ol, ısrarcı sorular sorma. "
-                        "'Umarım daha iyisindir' veya 'Nasıl gidiyor?' gibi empatik bir giriş yap. "
-                        "Ana cevabı bu durum etkilememeli, sadece selamlaşma kısmında kullan."
-                    )
-                elif any(pos in mood for pos in positive_moods):
-                    emotional_instruction = (
-                        "\n[EMOTIONAL_CONTINUITY]: Kullanıcının önceki duygu durumu pozitif idi. "
-                        "Enerjik ve destekleyici ol. "
-                        "'Enerjin harika görünüyordu!' veya 'Harika, o ruh halini koruyorsun!' gibi olumlu bir giriş yap. "
-                        "Ana cevabı bu durum etkilememeli, sadece selamlaşma kısmında kullan."
-                    )
+                mood = mood_match.group(1)
+                emotional_instruction = (
+                    f"\n[EMOTIONAL_CONTINUITY]: Bu yeni bir oturum. Kullanıcı geçen sefer '{mood}' durumundaydı. "
+                    "Selamlamanı buna göre yap (Örn: 'Umarım daha iyisindir', 'Enerjin yerindedir umarım' vb.). "
+                    "Konuya girmeden önce hal hatır sor."
+                )
 
         messages = [
             {"role": "system", "content": style_instruction + mirroring_instruction + conflict_instruction + topic_transition_instruction + emotional_instruction},
@@ -256,14 +241,11 @@ class Synthesizer:
             import re
             mood_match = re.search(r"ÖNCEKİ DUYGU DURUMU.*?'([^']+)'", formatted_data + history_text)
             if mood_match:
-                mood = mood_match.group(1).lower()
-                negative_moods = ["üzgün", "kızgın", "sinirli", "depresif", "mutsuz", "hasta", "yorgun", "stresli", "gergin"]
-                positive_moods = ["mutlu", "neşeli", "heyecanlı", "enerjik", "motive", "rahat", "iyi"]
-                
-                if any(neg in mood for neg in negative_moods):
-                    emotional_instruction = "\n[EMOTIONAL_CONTINUITY]: Önceki duygu negatif. Empatik selamlaşma yap."
-                elif any(pos in mood for pos in positive_moods):
-                    emotional_instruction = "\n[EMOTIONAL_CONTINUITY]: Önceki duygu pozitif. Enerjik ve destekleyici ol."
+                mood = mood_match.group(1)
+                emotional_instruction = (
+                    f"\n[EMOTIONAL_CONTINUITY]: Bu yeni bir oturum. Kullanıcı geçen sefer '{mood}' durumundaydı. "
+                    "Selamlamanı buna göre yap. Konuya girmeden önce hal hatır sor."
+                )
 
         # 3. Sırayla modelleri dene (Stream versiyonu)
         synth_models = MODEL_GOVERNANCE.get("synthesizer", ["llama-3.3-70b-versatile"])

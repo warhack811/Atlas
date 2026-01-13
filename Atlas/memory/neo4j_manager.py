@@ -94,6 +94,7 @@ class Neo4jManager:
         
         # Execute supersede/conflict operations first
         for op in supersede_ops:
+            # V4.3: Physical delete replaced with status='SUPERSEDED' in supersede_relationship
             await supersede_relationship(
                 op["user_id"],
                 op["subject"],
@@ -150,10 +151,11 @@ class Neo4jManager:
             nt["object"] = object_str if object_str.startswith("__USER__") else object_str.title()
             pred = str(t.get("predicate", "")).strip().upper()
             nt["predicate"] = pred
-            # FAZ-Y: Importance scoring (ADIM 3.2)
-            nt["importance_score"] = importance_map.get(pred, 0.5)
+            nt["confidence"] = t.get("confidence", 1.0)
+            nt["status"] = t.get("status", "ACTIVE")
+            nt["category"] = t.get("category", "general")
             
-            logger.info(f"[NEO4J WRITE DEBUG] Normalized triplet: subject='{nt['subject']}', pred='{pred}', object='{nt['object']}'")
+            logger.info(f"[NEO4J WRITE DEBUG] Normalized triplet: subject='{nt['subject']}', pred='{pred}', object='{nt['object']}', status='{nt['status']}'")
             normalized_triplets.append(nt)
 
         # KNOWS ilişkisi için User node'u oluştur
@@ -166,8 +168,7 @@ class Neo4jManager:
         WITH u, s, o, t
         
         
-        // FAZ-Y: Conflict Detection (ADIM 3.1)
-        // FAZ-Y: Conflict Detection (ADIM 3.1)
+        // V4.3: Versioning over Erasure (EXCLUSIVE conflict handling)
         CALL {
             WITH s, t, u
             OPTIONAL MATCH (s)-[old_r:FACT {predicate: t.predicate, user_id: $user_id}]->(old_o:Entity)
@@ -175,7 +176,7 @@ class Neo4jManager:
               AND old_o IS NOT NULL 
               AND old_o.name <> t.object 
               AND (old_r.status = 'ACTIVE' OR old_r.status IS NULL)
-            SET old_r.status = 'CONFLICTED', old_r.updated_at = datetime()
+            SET old_r.status = 'SUPERSEDED', old_r.valid_until = datetime(), old_r.updated_at = datetime()
         }
 
         // FAZ0.1-1: İlişkiyi hem predicate hem de user_id ile MERGE et (multi-user isolation)
@@ -186,6 +187,7 @@ class Neo4jManager:
             r.category = COALESCE(t.category, 'general'),
             r.created_at = datetime(),
             r.updated_at = datetime(),
+            r.last_verified_at = datetime(),
             r.schema_version = 2,
             r.status = COALESCE(t.status, 'ACTIVE'),
             r.source_turn_id_first = $source_turn_id,
@@ -200,6 +202,7 @@ class Neo4jManager:
             r.category = COALESCE(t.category, r.category),
             r.status = COALESCE(t.status, r.status),
             r.updated_at = datetime(),
+            r.last_verified_at = datetime(),
             r.source_turn_id_last = $source_turn_id,
             r.schema_version = COALESCE(r.schema_version, 2)
         
@@ -225,43 +228,133 @@ class Neo4jManager:
 
     async def delete_all_memory(self, user_id: str) -> bool:
         """Kullanıcıya ait tüm graf hafızasını siler (Hard Reset).
-        FAZ0.1-4: Shared Entity node'ları değil, sadece kullanıcıya ait ilişkileri siler.
+        V4.3: FACT ilişkileriyle birlikte Turn, Session ve Episode düğümlerini de temizler.
+        Ayrıca Qdrant, Semantic Cache ve RAM State'i de temizler.
         """
+        # 1. Graf Temizliği (Neo4j)
         query = """
         MATCH (u:User {id: $uid})
-        // Kullanıcının KNOWS ilişkilerini sil
-        OPTIONAL MATCH (u)-[k:KNOWS]->(e:Entity)
-        DELETE k
-        // Kullanıcının FACT ilişkilerini sil (user_id ile filtrelenerek)
-        WITH u
+        OPTIONAL MATCH (u)-[:HAS_SESSION]->(s:Session)
+        OPTIONAL MATCH (s)-[:HAS_TURN]->(t:Turn)
+        OPTIONAL MATCH (s)-[:HAS_EPISODE]->(e:Episode)
         OPTIONAL MATCH ()-[r:FACT {user_id: $uid}]->()
-        DELETE r
-        // Sadece User node'unu sil, Entity'leri değil (başka kullanıcılar kullanıyor olabilir)
-        DELETE u
+        OPTIONAL MATCH (u)-[k:KNOWS]->(ent:Entity)
+        DETACH DELETE t, e, s, r, k, u
+        """
+        
+        try:
+            # Neo4j Silme
+            await self.query_graph(query, {"uid": user_id})
+            logger.info(f"Neo4j: Kullanıcı {user_id} için tüm hafıza ve konuşma geçmişi silindi.")
+            
+            # 2. Vektör Temizliği (Qdrant)
+            try:
+                from Atlas.memory.qdrant_manager import qdrant_manager
+                await qdrant_manager.delete_by_user(user_id)
+                logger.info(f"Qdrant: '{user_id}' için vektör kayıtları temizlendi.")
+            except Exception as qe:
+                logger.error(f"Qdrant temizleme hatası: {qe}")
+
+            # 3. RAM Temizliği (Identity Cache & State)
+            try:
+                from Atlas.memory.state import state_manager
+                state_manager.clear_user_cache(user_id)
+                logger.info(f"RAM: '{user_id}' için session state ve identity cache temizlendi.")
+            except Exception as se:
+                logger.error(f"RAM temizleme hatası: {se}")
+
+            # 4. Semantic Cache Temizliği (Redis)
+            try:
+                from Atlas.memory.semantic_cache import semantic_cache
+                await semantic_cache.clear_user(user_id)
+                logger.info(f"Redis: '{user_id}' için semantic cache temizlendi.")
+            except Exception as ce:
+                logger.error(f"Redis temizleme hatası: {ce}")
+
+            return True
+        except Exception as e:
+            logger.error(f"Global hafıza silme hatası ({user_id}): {e}")
+            return False
+
+    async def delete_session(self, user_id: str, session_id: str) -> bool:
+        """Belirli bir oturumu ve ona bağlı turları/episodları siler."""
+        query = """
+        MATCH (u:User {id: $uid})-[:HAS_SESSION]->(s:Session {id: $sid})
+        OPTIONAL MATCH (s)-[:HAS_TURN]->(t:Turn)
+        OPTIONAL MATCH (s)-[:HAS_EPISODE]->(e:Episode)
+        DETACH DELETE t, e, s
+        """
+        try:
+            await self.query_graph(query, {"uid": user_id, "sid": session_id})
+            logger.info(f"Session silindi: {session_id} (User: {user_id})")
+            return True
+        except Exception as e:
+            logger.error(f"delete_session hatası: {e}")
+            return False
+
+    async def delete_all_sessions(self, user_id: str) -> bool:
+        """Kullanıcının TÜM oturumlarını siler (User ve Fact düğümleri kalır)."""
+        query = """
+        MATCH (u:User {id: $uid})-[:HAS_SESSION]->(s:Session)
+        OPTIONAL MATCH (s)-[:HAS_TURN]->(t:Turn)
+        OPTIONAL MATCH (s)-[:HAS_EPISODE]->(e:Episode)
+        DETACH DELETE t, e, s
         """
         try:
             await self.query_graph(query, {"uid": user_id})
-            logger.info(f"Kullanıcı {user_id} için tüm hafıza silindi.")
+            logger.info(f"Tüm sessionlar silindi: {user_id}")
             return True
         except Exception as e:
-            logger.error(f"Hafıza silme hatası: {e}")
+            logger.error(f"delete_all_sessions hatası: {e}")
             return False
 
-    async def forget_fact(self, user_id: str, entity_name: str) -> int:
-        """Belirli bir varlık (Entity) ile ilgili kullanıcıya ait ilişkileri siler."""
-        query = """
-        MATCH (u:User {id: $uid})-[k:KNOWS]->(e:Entity {name: $ename})
-        OPTIONAL MATCH (e)-[r:FACT {user_id: $uid}]->()
-        DELETE r
-        OPTIONAL MATCH ()-[r2:FACT {user_id: $uid}]->(e)
-        DELETE r2
-        DELETE k
-        RETURN count(k) as deleted_count
+    async def forget_fact(self, user_id: str, entity_name: str, hard_delete: bool = False) -> int:
         """
+        Belirli bir varlık (Entity) ile ilgili kullanıcıya ait ilişkileri arşivler veya siler.
+        V4.3: Varsayılan olarak soft-delete (SUPERSEDED) yapar, hard_delete=True ise fiziksel siler.
+        """
+        if hard_delete:
+            query = """
+            MATCH (u:User {id: $uid})-[k:KNOWS]->(e:Entity)
+            WHERE toLower(e.name) = toLower($ename)
+            OPTIONAL MATCH (e)-[r:FACT {user_id: $uid}]->()
+            DELETE r
+            OPTIONAL MATCH ()-[r2:FACT {user_id: $uid}]->(e)
+            DELETE r2
+            DELETE k
+            RETURN count(k) as count
+            """
+        else:
+            query = """
+            MATCH (u:User {id: $uid})-[k:KNOWS]->(e:Entity)
+            WHERE toLower(e.name) = toLower($ename)
+            
+            // 1. Entity'nin ÖZNE olduğu durumlar
+            OPTIONAL MATCH (e)-[r1:FACT {user_id: $uid}]->()
+            WHERE (r1.status = 'ACTIVE' OR r1.status IS NULL)
+            SET r1.status = 'SUPERSEDED', r1.valid_until = datetime(), r1.updated_at = datetime()
+            WITH e, count(r1) as count1, $uid as uid
+            
+            // 2. Entity'nin NESNE olduğu durumlar
+            OPTIONAL MATCH ()-[r2:FACT {user_id: uid}]->(e)
+            WHERE (r2.status = 'ACTIVE' OR r2.status IS NULL)
+            SET r2.status = 'SUPERSEDED', r2.valid_until = datetime(), r2.updated_at = datetime()
+            WITH count1, count(r2) as count2
+            RETURN count1 + count2 as count
+            """
+            
         try:
             records = await self.query_graph(query, {"uid": user_id, "ename": entity_name})
-            count = records[0]['deleted_count'] if records else 0
-            logger.info(f"Kullanıcı {user_id} için '{entity_name}' bilgisi unutuldu ({count} ilişki).")
+            count = records[0]['count'] if records else 0
+            action = "silindi" if hard_delete else "arşivlendi"
+            
+            # FAZ-Y: RAM Cache senkronizasyonu
+            try:
+                from Atlas.memory.state import state_manager
+                state_manager.clear_user_cache(user_id)
+            except: pass
+
+            logger.info(f"Kullanıcı {user_id} için '{entity_name}' bilgisi {action} ({count} ilişki).")
             return count
         except Exception as e:
             logger.error(f"Bilgi unutma hatası: {e}")
@@ -348,9 +441,12 @@ class Neo4jManager:
                 logger.warning(f"Neo4j sorgu hatası (Deneme {attempt+1}/{max_retries}): {str(e)}")
                 self._connect()
                 await asyncio.sleep(1)
+                if attempt == max_retries - 1:
+                    logger.error(f"Neo4j critical failure after {max_retries} retries: {e}")
+                    raise e
             except Exception as e:
-                logger.error(f"Neo4j sorgu hatası: {str(e)}")
-                break
+                logger.error(f"Neo4j query error: {str(e)}")
+                raise e
         return []
 
     async def fact_exists(self, user_id: str, subject: str, predicate: str, obj: str) -> bool:
@@ -570,6 +666,58 @@ class Neo4jManager:
         """
         results = await self.query_graph(query, {"uid": user_id})
         return [r["name"] for r in results]
+
+    async def get_facts_by_date_range(self, user_id: str, start_date, end_date) -> List[Dict]:
+        """Belirli bir tarih aralığındaki tüm AKTİF veya SÜPERSEDED kayıtları getirir."""
+        query = """
+        MATCH (s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity)
+        WHERE (r.created_at >= $start AND r.created_at <= $end)
+           OR (r.valid_until >= $start AND r.valid_until <= $end)
+        RETURN s.name as subject, r.predicate as predicate, o.name as object, 
+               toString(r.created_at) as ts, r.status as status
+        ORDER BY r.created_at DESC
+        LIMIT 20
+        """
+        try:
+            return await self.query_graph(query, {
+                "uid": user_id,
+                "start": start_date,
+                "end": end_date
+            })
+        except Exception as e:
+            logger.error(f"Zamansal sorgu hatası: {e}")
+            return []
+
+    async def get_historical_facts(self, user_id: str, limit: int = 5) -> List[Dict]:
+        """Kullanıcının arşivlenmiş (SUPERSEDED) önemli bilgilerini getirir."""
+        query = """
+        MATCH (s:Entity)-[r:FACT {user_id: $uid, status: 'SUPERSEDED'}]->(o:Entity)
+        RETURN s.name as subject, r.predicate as predicate, o.name as object, 
+               toString(r.created_at) as valid_from, toString(r.valid_until) as valid_to
+        ORDER BY r.valid_until DESC
+        LIMIT $limit
+        """
+        try:
+            return await self.query_graph(query, {"uid": user_id, "limit": limit})
+        except Exception as e:
+            logger.error(f"Tarihsel hafıza çekme hatası: {e}")
+            return []
+
+    async def archive_expired_moods(self, days: int = 3) -> int:
+        """3 günü dolan AKTİF duyguları otomatik olarak SUPERSEDED statüsüne taşır."""
+        query = """
+        MATCH ()-[r:FACT {predicate: 'HİSSEDİYOR'}]->()
+        WHERE (r.status = 'ACTIVE' OR r.status IS NULL) 
+          AND r.created_at < datetime() - duration({days: $days})
+        SET r.status = 'SUPERSEDED', r.valid_until = datetime(), r.updated_at = datetime()
+        RETURN count(r) as count
+        """
+        try:
+            res = await self.query_graph(query, {"days": days})
+            return res[0]['count'] if res else 0
+        except Exception as e:
+            logger.error(f"Duygu arşivleme hatası: {e}")
+            return 0
 
     async def get_user_memory_mode(self, user_id: str) -> str:
         """Kullanıcının hafıza modunu getirir (OFF/STANDARD/FULL)."""
@@ -1141,6 +1289,24 @@ class Neo4jManager:
         DELETE task
         """
         await self.query_graph(query, {"days": retention_days})
+
+    async def get_last_user_mood(self, user_id: str) -> Optional[str]:
+        """
+        Kullanıcının son 3 gün içindeki en son duygu durumunu getirir. (FAZ-β.1)
+        """
+        query = """
+        MATCH (u:User {id: $uid})-[:KNOWS]->(:Entity)-[r:FACT]->(o:Entity)
+        WHERE r.predicate IN ['HİSSEDİYOR', 'FEELS'] 
+          AND r.created_at > datetime() - duration('P3D')
+        RETURN o.name as mood
+        ORDER BY r.created_at DESC LIMIT 1
+        """
+        try:
+            results = await self.query_graph(query, {"uid": user_id})
+            return results[0]["mood"] if results else None
+        except Exception as e:
+            logger.error(f"Mood retrieval error: {e}")
+            return None
 
     async def prune_low_importance_memory(self, importance_threshold: float = 0.4, age_days: int = 30) -> int:
         """

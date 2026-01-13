@@ -1,0 +1,40 @@
+
+--- V4.3 PROTOCOL FINAL VERIFICATION: test_user_v43_final ---
+
+INFO:Atlas.memory.neo4j_manager:Kullan²c² test_user_v43_final iin t³m haf²za ve konu■ma gemi■i silindi (Hard Reset).
+TEST 1: EXCLUSIVE Predicate Superseding (Low Conf -> High Conf)
+INFO:Atlas.memory.predicate_catalog:Predicate catalog loaded: 43 predicates, 68 mappings
+INFO:Atlas.memory.lifecycle_engine:Lifecycle EXCLUSIVE: New '__USER__' MESLEº¦ 'Stajyer'
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Normalized triplet: subject='__USER__', pred='MESLEº¦', object='Stajyer', status='ACTIVE'
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Executing query with user_id=test_user_v43_final, triplet_count=1
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Query completed. Wrote 1 FACT relationships
+INFO:Atlas.memory.neo4j_manager:Ba■ar²yla 1 bilgi (triplet) Neo4j'ye kaydedildi (Kullan²c²: test_user_v43_final)
+INFO:Atlas.memory.lifecycle_engine:Lifecycle EXCLUSIVE: '__USER__' MESLEº¦ 'Stajyer' \u2192 'M³hendis' - superseding (low confidence existing)
+INFO:Atlas.memory.lifecycle_engine:Lifecycle: 1 ili■ki SUPERSEDED olarak i■aretlendi
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Normalized triplet: subject='__USER__', pred='MESLEº¦', object='M³hendis', status='ACTIVE'
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Executing query with user_id=test_user_v43_final, triplet_count=1
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Query completed. Wrote 1 FACT relationships
+INFO:Atlas.memory.neo4j_manager:Ba■ar²yla 1 bilgi (triplet) Neo4j'ye kaydedildi (Kullan²c²: test_user_v43_final)
+   Row: {'status': 'SUPERSEDED', 'value': 'Stajyer', 'valid_until': '2026-01-13T13:49:48.215Z'}
+   Row: {'status': 'ACTIVE', 'value': 'M³hendis', 'valid_until': None}
+[OK] TEST 1 PASSED: Versioning over Erasure confirmed.
+
+TEST 2: Soft Retraction (forget_fact)
+INFO:Atlas.memory.lifecycle_engine:Lifecycle ADDITIVE: Accumulate '__USER__' SEVER 'Elma'
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Normalized triplet: subject='__USER__', pred='SEVER', object='Elma', status='ACTIVE'
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Executing query with user_id=test_user_v43_final, triplet_count=1
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Query completed. Wrote 1 FACT relationships
+INFO:Atlas.memory.neo4j_manager:Ba■ar²yla 1 bilgi (triplet) Neo4j'ye kaydedildi (Kullan²c²: test_user_v43_final)
+INFO:Atlas.memory.neo4j_manager:Kullan²c² test_user_v43_final iin 'Elma' bilgisi ar■ivlendi (1 ili■ki).
+   Forget result: [{'status': 'SUPERSEDED'}]
+[OK] TEST 2 PASSED: Soft retraction confirmed.
+
+TEST 3: Persistent Session Deletion
+INFO:Atlas.memory.neo4j_manager:Session silindi: temp_session_v43 (User: test_user_v43_final)
+   Check session: []
+[OK] TEST 3 PASSED: Session deletion persistence confirmed.
+
+
+--- ALL V4.3 TESTS PASSED SUCCESSFULLY! ---
+
+INFO:Atlas.memory.neo4j_manager:Neo4j ba­lant²s² kapat²ld².

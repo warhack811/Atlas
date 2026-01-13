@@ -77,6 +77,14 @@ def sanitize_triplets(triplets: List[Dict], user_id: str, raw_text: str, known_n
         if not subject or not predicate or not obj:
             logger.debug(f"DROP: Missing required field - {triplet}")
             continue
+
+        # KESİNLİKLE KOMUT/META FİLTRESİ
+        obj_clean = obj.lower()
+        if predicate == "İSTİYOR" or predicate == "PLANLIYOR":
+            COMMAND_KEYWORDS = ["unut", "sil", "temizle", "hafıza", "reset", "sıfırla", "geçmişi", "bilgileri"]
+            if any(kw in obj_clean for kw in COMMAND_KEYWORDS):
+                logger.info(f"DROP_COMMAND: Filtered out command triplet disguised as fact: '{obj}'")
+                continue
         
         # RC-11: Confidence Filter
         if confidence < 0.4: # Çok düşük güven, muhtemelen çok muallak

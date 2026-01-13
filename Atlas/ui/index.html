@@ -10,7 +10,8 @@
         href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&family=Inter:wght@300;400;600;800&display=swap"
         rel="stylesheet">
     <!-- Atlas Main Stylesheet -->
-    <link rel="stylesheet" href="css/atlas-main.css">
+    <!-- Atlas Main Stylesheet -->
+    <link rel="stylesheet" href="css/atlas-main.css?v=phase2">
     <!-- Atlas Utility Classes (Phase 2) -->
     <link rel="stylesheet" href="css/atlas-utilities.css">
     <!-- Atlas Component Styles (Phase 3 & 4) -->
@@ -62,6 +63,12 @@
 
         <!-- Right: User Dropdown (Claude Style) -->
         <div class="header-right">
+            <!-- Neural Monitor Toggle (Mobile) -->
+            <button class="action-btn mobile-only" onclick="toggleNeuralMonitor()" title="Toggle Monitor"
+                style="margin-right: 12px; display: none;">
+                <span class="icon" style="color:var(--text-dim)"><i class="fa-solid fa-microchip"></i></span>
+            </button>
+
             <!-- User Dropdown -->
             <div class="header-dropdown">
                 <div class="header-dropdown-trigger" onclick="toggleHeaderDropdown()" id="userDropdownTrigger">
@@ -196,7 +203,7 @@
                 <span><i class="fa-solid fa-microchip"></i> Neural Monitor</span>
                 <span style="font-size:0.6rem; opacity:0.5;">LIVE</span>
             </div>
-            
+
             <!-- Tabs -->
             <div class="monitor-tabs">
                 <div class="monitor-tab active" onclick="switchMonitorTab('state')">STATE</div>

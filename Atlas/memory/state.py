@@ -87,4 +87,15 @@ class StateManager:
         if session_id in cls._states:
             del cls._states[session_id]
 
+    @classmethod
+    def clear_user_cache(cls, user_id: str):
+        """Kullanıcıya ait (eğer session_id user_id'yi içeriyorsa) veya tüm cache'i temizler.
+        FAZ-Y: RAM Leak protection & Consistency.
+        """
+        to_delete = [sid for sid in cls._states.keys() if user_id in sid.lower()]
+        for sid in to_delete:
+            del cls._states[sid]
+        if to_delete:
+            print(f"[CACHE]: {len(to_delete)} session states cleared for {user_id}")
+
 state_manager = StateManager()

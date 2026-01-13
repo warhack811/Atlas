@@ -90,8 +90,8 @@ const fileInput = document.getElementById('fileInput');
 
 let isProcessing = false;
 let currentUser = null;
-let activeSessionId = localStorage.getItem('atlas_active_session') || `session-${Date.now()}`;
-let sessions = JSON.parse(localStorage.getItem('atlas_sessions') || '[]');
+let activeSessionId = localStorage.getItem('atlas_active_session') || null;
+let sessions = []; // Backend'den gelecek
 
 // --- Auth Logic ---
 async function checkAuthStatus() {
@@ -198,18 +198,40 @@ function showLoggedOut() {
 }
 
 // --- Chat Management Logic ---
-function initSessions() {
-    // Namespace sessions by user
-    const key = currentUser ? `atlas_sessions_v1::${currentUser.username}` : `atlas_sessions_v1::anon`;
-    sessions = JSON.parse(localStorage.getItem(key) || '[]');
-    activeSessionId = localStorage.getItem(`${key}::active`) || `session-${Date.now()}`;
-    renderSessions();
+async function initSessions() {
+    if (!currentUser) return;
+
+    try {
+        const res = await fetch(`${API_BASE}/api/sessions`);
+        const data = await res.json();
+        sessions = data.sessions || [];
+
+        if (sessions.length === 0) {
+            // Backend boş, local'deki aktif varsa koru yoksa yeni oluştur
+            if (!activeSessionId || !activeSessionId.startsWith('session-')) {
+                activeSessionId = `session-${Date.now()}`;
+            }
+            sessions.push({ id: activeSessionId, title: "Yeni Sohbet", date: new Date().toISOString() });
+        } else {
+            // Backend dolu
+            const currentExists = sessions.find(s => s.id === activeSessionId);
+
+            // Eğer aktif session backend'de yoksa ama local'de yeni oluşturulmuşsa (session-...) koru
+            const isLocalNew = activeSessionId && activeSessionId.startsWith('session-') && !currentExists;
+
+            if (!currentExists && !isLocalNew) {
+                activeSessionId = sessions[0].id; // En son aktif olanı seç
+            }
+        }
+        localStorage.setItem('atlas_active_session', activeSessionId);
+        renderSessions();
+    } catch (e) {
+        console.error("Session load error:", e);
+    }
 }
 
 function saveSessions() {
-    const key = currentUser ? `atlas_sessions_v1::${currentUser.username}` : `atlas_sessions_v1::anon`;
-    localStorage.setItem(key, JSON.stringify(sessions));
-    localStorage.setItem(`${key}::active`, activeSessionId);
+    // Backend synchronized
 }
 
 function renderSessions() {
@@ -247,7 +269,7 @@ function renderSessions() {
                 `;
     }).join('');
 
-    saveSessions();
+    // saveSessions(); // REMOVED
 }
 
 // Helper function for time ago display
@@ -270,6 +292,7 @@ function toggleSidebar() {
 function newChat() {
     activeSessionId = `session-${Date.now()}`;
     sessions.unshift({ id: activeSessionId, title: "Yeni Sohbet", date: new Date().toISOString() });
+    localStorage.setItem('atlas_active_session', activeSessionId);
     renderSessions();
     chatView.innerHTML = `
                 <div class="message-wrapper ai">
@@ -280,12 +303,20 @@ function newChat() {
                 </div>
             `;
     appendSystemNotification("✨ Yeni sohbet başlatıldı.");
+
+    // Reset monitor
+    if (window.updateNeuralMonitor) {
+        document.getElementById('mon-session-id').innerText = activeSessionId;
+        document.getElementById('mon-topic').innerText = "Genel";
+        document.getElementById('mon-intent').innerText = "--";
+    }
 }
 
 async function switchChat(id) {
     if (!id) return;
     activeSessionId = id;
-    saveSessions();
+    localStorage.setItem('atlas_active_session', activeSessionId);
+    // saveSessions(); // REMOVED
     chatView.innerHTML = '';
     appendSystemNotification(`🔄 Sohbet yükleniyor...`);
     await loadChatHistory(id);
@@ -331,29 +362,49 @@ function appendChatHistoryMessage(role, content) {
     chatView.scrollTop = chatView.scrollHeight;
 }
 
-function deleteChat(sessionId) {
+async function deleteChat(sessionId) {
     // PHASE 4: Accept session ID parameter for individual deletion
     const idToDelete = sessionId || activeSessionId;
-    sessions = sessions.filter(s => s.id !== idToDelete);
 
-    // If deleted active session, switch to first available or create new
-    if (idToDelete === activeSessionId) {
-        activeSessionId = sessions.length > 0 ? sessions[0].id : `session-${Date.now()}`;
-        if (sessions.length === 0) sessions.push({ id: activeSessionId, title: "Yeni Sohbet", date: new Date().toISOString() });
-        chatView.innerHTML = '';
+    // Backend Call
+    try {
+        const res = await fetch(`${API_BASE}/api/sessions/${idToDelete}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error("Backend delete failed");
+
+        sessions = sessions.filter(s => s.id !== idToDelete);
+
+        // If deleted active session, switch to first available or create new
+        if (idToDelete === activeSessionId) {
+            activeSessionId = sessions.length > 0 ? sessions[0].id : `session-${Date.now()}`;
+            if (sessions.length === 0) sessions.push({ id: activeSessionId, title: "Yeni Sohbet", date: new Date().toISOString() });
+            chatView.innerHTML = '';
+        }
+
+        renderSessions();
+        appendSystemNotification("🗑️ Sohbet silindi.");
+    } catch (e) {
+        console.error("Delete error:", e);
+        appendSystemNotification("❌ Sohbet silinemedi (Sunucu Hatası).");
     }
-
-    renderSessions();
-    appendSystemNotification("🗑️ Sohbet silindi.");
 }
 
-function clearAllChats() {
+async function clearAllChats() {
     if (!confirm("Tüm sohbetleri temizlemek istiyor musunuz?")) return;
-    sessions = [];
-    activeSessionId = `session-${Date.now()}`;
-    renderSessions();
-    chatView.innerHTML = '';
-    appendSystemNotification("🧹 Tüm geçmiş temizlendi.");
+
+    // Backend Call
+    try {
+        const res = await fetch(`${API_BASE}/api/sessions`, { method: 'DELETE' });
+        if (!res.ok) throw new Error("Backend clear all failed");
+
+        sessions = [];
+        activeSessionId = `session-${Date.now()}`;
+        renderSessions();
+        chatView.innerHTML = '';
+        appendSystemNotification("🧹 Tüm geçmiş temizlendi.");
+    } catch (e) {
+        console.error("Clear all error:", e);
+        appendSystemNotification("❌ Sohbetler temizlenemedi (Sunucu Hatası).");
+    }
 }
 
 function updateSessionTitle(msg) {
@@ -476,7 +527,11 @@ async function handleSend() {
     chatView.appendChild(wrapper);
     chatView.scrollTop = chatView.scrollHeight;
 
+    let thoughtResolved = false; // Moved to function scope
     let fullText = "";
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s Timeout safeguard
+
     try {
         const response = await fetch(`${API_BASE}/api/chat/stream`, {
             method: 'POST',
@@ -486,8 +541,10 @@ async function handleSend() {
                 mode: personaSelect.value,
                 session_id: activeSessionId,
                 user_id: currentUser ? currentUser.username : null
-            })
+            }),
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
 
         if (!response.body) throw new Error("Stream not supported");
 
@@ -508,7 +565,7 @@ async function handleSend() {
         const thoughtContent = document.getElementById(`thought-content-${aiMsgId}`);
         const answerContainer = document.getElementById(`answer-${aiMsgId}`);
         const thoughtContainer = document.getElementById(`thought-container-${aiMsgId}`);
-        let thoughtResolved = false;
+        // let thoughtResolved = false; // REMOVED (Defined at top)
 
         let buffer = "";
         while (true) {
@@ -557,11 +614,28 @@ async function handleSend() {
                             statusLabel.innerText = "SYNTHESIZING...";
                         } else if (data.type === 'done') {
                             console.log("RDR Received:", data.rdr);
+                            // Force resolve thinking if not yet done
+                            if (!thoughtResolved) {
+                                thoughtResolved = true;
+                                thoughtHeader.innerText = "Atlas (Tamamlandı)";
+                                const pulse = thoughtContainer.querySelector('.pulse-thinking');
+                                if (pulse) pulse.style.animation = 'none';
+                                if (pulse) pulse.style.opacity = '0.5';
+                            }
+
                             if (data.rdr) {
                                 appendRDRTrigger(aiMsgId, data.rdr);
+                                if (window.updateNeuralMonitor) {
+                                    window.updateNeuralMonitor(data.rdr);
+                                }
                             }
                         } else if (data.type === 'error') {
                             console.error("Stream error data:", data.content);
+                            // Force resolve thinking on error
+                            if (!thoughtResolved) {
+                                thoughtResolved = true;
+                                thoughtHeader.innerText = "Hata oluştu";
+                            }
                         }
                     } catch (e) {
                         console.error("JSON parse error in line:", line, e);
@@ -571,9 +645,24 @@ async function handleSend() {
         }
     } catch (err) {
         const bubble = document.getElementById(`bubble-${aiMsgId}`);
-        bubble.innerHTML = `<span style="color:var(--danger)">🚨 Sistem hatası: ${err.message}</span>`;
+        if (err.name === 'AbortError') {
+            bubble.innerHTML = `<span style="color:var(--danger)">⏱️ <b>Zaman Aşımı:</b> Sunucu 45 saniye içinde yanıt veremedi.</span>`;
+            appendSystemNotification("⚠️ Sunucu yanıt vermedi (Timeout).");
+        } else {
+            bubble.innerHTML = `<span style="color:var(--danger)">🚨 Sistem hatası: ${err.message}</span>`;
+        }
     } finally {
         setLoading(false);
+        // Final safety cleanup
+        if (!thoughtResolved && document.getElementById(`header-text-${aiMsgId}`)) {
+            const th = document.getElementById(`header-text-${aiMsgId}`);
+            th.innerText = "İşlem Sonlandı";
+            const tc = document.getElementById(`thought-container-${aiMsgId}`);
+            if (tc) {
+                const pulse = tc.querySelector('.pulse-thinking');
+                if (pulse) pulse.style.display = 'none';
+            }
+        }
     }
 }
 
@@ -981,4 +1070,188 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initPersonaUI);
 } else {
     initPersonaUI();
+}
+
+// --- NEURAL MONITOR FUNCTIONS ---
+
+// Sekme Geçişi
+window.switchMonitorTab = function (tabName) {
+    // 1. Tab butonlarını güncelle
+    document.querySelectorAll('.monitor-tab').forEach(t => t.classList.remove('active'));
+    // event.target güvenli olmayabilir (onclick inline çağrılıyor), bu yüzden querySelector kullanıyoruz
+    // Not: HTML'de onclick="switchMonitorTab('state')" şeklinde tanımlı.
+    // Basitlik için tüm tabları tarayıp text içeriği veya sırası ile eşleştirebiliriz ama
+    // en temizi active class'ını manuel yönetmek.
+
+    const tabs = document.querySelectorAll('.monitor-tab');
+    if (tabName === 'state') tabs[0].classList.add('active');
+    if (tabName === 'context') tabs[1].classList.add('active');
+    if (tabName === 'memory') tabs[2].classList.add('active');
+    if (tabName === 'exec') tabs[3].classList.add('active');
+
+    // 2. İçerik alanlarını güncelle
+    document.querySelectorAll('.monitor-content').forEach(c => c.classList.remove('active'));
+    document.getElementById(`mon-tab-${tabName}`).classList.add('active');
+}
+
+// Helper Functions for Memory Parsing
+function parseMemoryContext(contextText) {
+    if (!contextText) return { profile: [], facts: [], signals: [], episodes: [] };
+
+    const sections = {
+        profile: [],
+        facts: [],
+        signals: [],
+        episodes: []
+    };
+
+    const lines = contextText.split('\n');
+    let currentSection = null;
+
+    for (const line of lines) {
+        const cleanLine = line.trim();
+        if (!cleanLine) continue;
+
+        if (cleanLine.includes('Kullanıcı Profili')) currentSection = 'profile';
+        else if (cleanLine.includes('Sert Gerçekler')) currentSection = 'facts';
+        else if (cleanLine.includes('Yumuşak Sinyaller')) currentSection = 'signals';
+        else if (cleanLine.includes('İLGİLİ GEÇMİŞ BÖLÜMLER') || cleanLine.includes('Episodic')) currentSection = 'episodes';
+        else if (cleanLine.startsWith('-')) {
+            const content = cleanLine.substring(1).trim(); // Remove dash
+            if (currentSection && content !== "(Henüz bilgi yok)" && !content.includes("kapalı")) {
+                sections[currentSection].push(content);
+            }
+        }
+    }
+    return sections;
+}
+
+function renderMemoryList(items, emptyMsg) {
+    if (!items || items.length === 0) return `<div style="font-size:0.7rem; color:#64748b; font-style:italic;">${emptyMsg}</div>`;
+    return `<ul style="list-style-type: disc; padding-left: 1rem; font-size: 0.75rem; color: #94a3b8; line-height: 1.4;">` +
+        items.map(i => `<li style="margin-bottom:2px;">${i}</li>`).join('') +
+        `</ul>`;
+}
+
+// Paneli Güncelleme Motoru
+window.updateNeuralMonitor = function (rdr) {
+    if (!rdr) return;
+
+    console.log("[Neural Monitor] Güncelleniyor...", rdr);
+
+    // --- TAB 1: STATE ---
+    document.getElementById('mon-topic').innerText = rdr.metadata?.current_topic || "Genel";
+    document.getElementById('mon-intent').innerText = (rdr.intent || "unknown").toUpperCase();
+    document.getElementById('mon-mood').innerText = rdr.style_persona || "Standart";
+    document.getElementById('mon-session-id').innerText = typeof activeSessionId !== 'undefined' ? activeSessionId : "--";
+
+    // --- TAB 2: CONTEXT ---
+    // System Prompt'un sadece başını göster (çok uzun)
+    const sysPrompt = rdr.synthesizer_prompt || rdr.orchestrator_prompt || "";
+    document.getElementById('mon-system-prompt').innerText = sysPrompt.substring(0, 300) + (sysPrompt.length > 300 ? "..." : "");
+    document.getElementById('mon-last-msg').innerText = rdr.message || "--";
+
+    // --- TAB 3: MEMORY ---
+    const fullCtx = rdr.full_context_injection || "";
+    const parsedMem = parseMemoryContext(fullCtx);
+
+    // Profile
+    document.getElementById('mon-identity').innerHTML = renderMemoryList(parsedMem.profile, "Profil verisi yok.");
+
+    // Graph Facts (Hard + Soft)
+    const graphHtml = `
+        <div style="margin-bottom:8px;">
+            <div style="font-size:0.65rem; color:#0891b2; font-weight:700; text-transform:uppercase; margin-bottom:2px;">Kesin Bilgiler:</div>
+            ${renderMemoryList(parsedMem.facts, "-")}
+        </div>
+        <div>
+            <div style="font-size:0.65rem; color:#a855f7; font-weight:700; text-transform:uppercase; margin-bottom:2px;">Sinyaller:</div>
+            ${renderMemoryList(parsedMem.signals, "-")}
+        </div>
+    `;
+    document.getElementById('mon-graph-facts').innerHTML = graphHtml;
+
+    // Episodic
+    document.getElementById('mon-episodic').innerHTML = renderMemoryList(parsedMem.episodes, "Hatırlanan anı yok.");
+
+    // --- TAB 4: EXECUTION ---
+    // Plan
+    const planText = rdr.orchestrator_reasoning || "Planlama verisi yok.";
+    document.getElementById('mon-plan').innerText = planText;
+
+    // Tools
+    if (rdr.task_details && rdr.task_details.length > 0) {
+        document.getElementById('mon-tools').innerText = JSON.stringify(rdr.task_details, null, 2);
+    } else {
+        document.getElementById('mon-tools').innerText = "Herhangi bir araç çalıştırılmadı.";
+    }
+}
+
+async function checkBackendHealth() {
+    const start = Date.now();
+    try {
+        const res = await fetch(`${API_BASE}/api/health`);
+        const end = Date.now();
+        const latency = end - start;
+
+        if (res.ok) {
+            const data = await res.json();
+
+            // Sidebar Stats
+            const latEl = document.getElementById('sidebarLatency');
+            if (latEl) latEl.innerText = `${latency}ms`;
+
+            const reqEl = document.getElementById('sidebarRequests');
+            if (reqEl) reqEl.innerText = data.key_stats ? "Active" : "--";
+
+            // Header Status Dot
+            const dot = document.getElementById('statusDot');
+            const label = document.getElementById('statusLabel');
+            if (dot && label) {
+                dot.style.background = "var(--matrix-green)";
+                dot.style.boxShadow = "var(--glow)";
+                label.innerText = "ONLINE";
+                label.style.color = "var(--matrix-green)";
+            }
+
+            // Header Quick Stats
+            const latStat = document.getElementById('latencyStat');
+            if (latStat) latStat.innerText = latency;
+
+            const reqStat = document.getElementById('requestStat');
+            if (reqStat) reqStat.innerText = "OK";
+
+        } else {
+            throw new Error("API Error");
+        }
+    } catch (e) {
+        // Offline State
+        const latEl = document.getElementById('sidebarLatency');
+        if (latEl) {
+            latEl.innerText = "OFFLINE";
+            latEl.style.color = "var(--danger)";
+        }
+
+        const dot = document.getElementById('statusDot');
+        const label = document.getElementById('statusLabel');
+        if (dot && label) {
+            dot.style.background = "var(--danger)";
+            dot.style.boxShadow = "none";
+            label.innerText = "OFFLINE";
+            label.style.color = "var(--danger)";
+        }
+    }
+}
+
+// Init
+(function init() {
+    initSessions();
+    checkBackendHealth();
+    setInterval(checkBackendHealth, 30000);
+})();
+
+
+window.toggleNeuralMonitor = function () {
+    const mon = document.getElementById('neuralMonitor');
+    if (mon) mon.classList.toggle('open');
 }

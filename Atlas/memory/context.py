@@ -1009,8 +1009,29 @@ async def build_chat_context_v1(
     topic_block = f"[AKTİF OTURUM KONUSU]: {state.current_topic or 'Genel'}\n\n"
     
     # FAZ-β: Emotional continuity PREPEND (Highest priority for greeting)
+    emotional_continuity_note = ""
+    try:
+        turns = await neo4j_manager.count_turns(user_id, session_id)
+        if turns == 0:
+            last_mood = await neo4j_manager.get_last_user_mood(user_id)
+            if last_mood and last_mood not in ["Nötr", "Neutral", "Unknown"]:
+                emotional_continuity_note = f"[ÖNCEKİ DUYGU DURUMU]: Kullanıcı son görüşmenizde '{last_mood}' hissediyordu.\n\n"
+    except Exception as e:
+        logger.error(f"Emotional continuity injection failed: {e}")
+
+    # FAZ-V4.3: Historical Memory Injection (Opt-in based on intent/need)
+    historical_context = ""
+    if intent in ["general", "chat"] or "eskiden" in user_message.lower() or "önceden" in user_message.lower():
+        h_facts = await neo4j_manager.get_historical_facts(user_id, limit=5)
+        if h_facts:
+            historical_context = "\n[TARİHSEL BELLEK (Geçmiş Bilgiler)]:\n"
+            for f in h_facts:
+                v_to = f.get('valid_to', '').split('T')[0] if f.get('valid_to') else 'Bilinmiyor'
+                historical_context += f"- {f['subject']} eskiden {f['predicate']} {f['object']} idi. (Bitiş: {v_to})\n"
+            historical_context += "\n"
+
     # RC-12: user_profile_block is now part of memory_v3 (final_main) to avoid duplication.
-    final_output = emotional_continuity_note + conflict_block + dst_reference_note + topic_block + temporal_context + final_main
+    final_output = emotional_continuity_note + conflict_block + dst_reference_note + topic_block + temporal_context + historical_context + final_main
     
     if trace: 
         trace.timings_ms["build_total_ms"] = (perf_counter() - b_start) * 1000

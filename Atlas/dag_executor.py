@@ -109,7 +109,7 @@ class DAGExecutor:
         
         if task.type == "tool":
             res = await self._execute_tool(task)
-        elif task.type == "generation":
+        elif task.type == "generation" or task.type == "context_clarification":
             # Prompt enjeksiyonu yap
             processed_prompt = self._inject_dependencies(task.prompt or "", executed_tasks)
             
@@ -129,26 +129,35 @@ class DAGExecutor:
                 request_context=request_context
             )
         elif task.type == "memory_control":
-            res = await self._execute_memory_control(task, session_id)
+            res = await self._execute_memory_control(task, session_id, request_context=request_context)
         else:
             res = {"task_id": task_id, "error": f"Bilinmeyen görev tipi: {task.type}"}
             
         res["duration_ms"] = int((time.time() - start_t) * 1000)
         return res
 
-    async def _execute_memory_control(self, task: TaskSpec, session_id: str) -> Dict:
+    async def _execute_memory_control(self, task: TaskSpec, session_id: str, request_context=None) -> Dict:
         """Hafıza kontrol işlemlerini (silme, unutma) yürütür."""
         from Atlas.memory.neo4j_manager import neo4j_manager
         
+        # V4.3 Identity Lock: user_id önceliği
+        uid = session_id
+        if request_context and hasattr(request_context, "user_id") and request_context.user_id:
+            uid = request_context.user_id
+        elif isinstance(request_context, dict) and request_context.get("user_id"):
+            uid = request_context["user_id"]
+            
         action = task.params.get("action")
         try:
             if action == "forget_all":
-                success = await neo4j_manager.delete_all_memory(session_id)
+                success = await neo4j_manager.delete_all_memory(uid)
                 output = "Tüm hafıza başarıyla temizlendi." if success else "Hafıza temizleme başarısız oldu."
             elif action == "forget_entity":
                 entity = task.params.get("entity", "")
-                await neo4j_manager.forget_fact(session_id, entity)
-                output = f"'{entity}' bilgisi hafızamdan silindi."
+                # hard_delete parametresi (Opsiyonel: Eğer kullanıcı açıkça "tamamen sil" dediyse)
+                is_hard = task.params.get("hard_delete", False)
+                await neo4j_manager.forget_fact(uid, entity, hard_delete=is_hard)
+                output = f"'{entity}' bilgisi hafızamdan {'silindi' if is_hard else 'arşivlendi'}."
             else:
                 output = f"Bilinmeyen hafıza aksiyonu: {action}"
             

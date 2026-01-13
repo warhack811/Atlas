@@ -194,14 +194,17 @@ class Orchestrator:
 
                         client = genai.Client(api_key=gemini_key)
                         
-                        # Yeni SDK kullanarak asenkron çağrı
-                        response = await client.aio.models.generate_content(
-                            model=model,
-                            contents=prompt,
-                            config=types.GenerateContentConfig(
-                                response_mime_type="application/json",
-                                temperature=0.1
-                            )
+                        import asyncio
+                        # Yeni SDK kullanarak asenkron çağrı (Timeout Korumalı)
+                        response = await asyncio.wait_for(
+                            client.aio.models.generate_content(
+                                model=model,
+                                contents=prompt,
+                                config=types.GenerateContentConfig(
+                                    response_mime_type="application/json",
+                                    temperature=0.1
+                                )
+                            ), timeout=15.0
                         )
                         
                         raw_content = response.text

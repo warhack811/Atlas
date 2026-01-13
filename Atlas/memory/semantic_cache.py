@@ -144,6 +144,25 @@ class SemanticCache:
             logger.error(f"Semantic cache set failed: {e}")
             return False
 
+    async def clear_user(self, user_id: str) -> int:
+        """Kullanıcıya ait tüm cache kayıtlarını temizler."""
+        if not self.client:
+            return 0
+        try:
+            match_pattern = f"cache:{user_id}:*"
+            keys = []
+            async for key in self.client.scan_iter(match=match_pattern):
+                keys.append(key)
+            
+            if keys:
+                await self.client.delete(*keys)
+                logger.info(f"Semantic cache: {len(keys)} keys cleared for user {user_id}")
+                return len(keys)
+            return 0
+        except Exception as e:
+            logger.error(f"Semantic cache clear_user failed: {e}")
+            return 0
+
     @staticmethod
     def _cosine_similarity(v1: List[float], v2: List[float]) -> float:
         import numpy as np

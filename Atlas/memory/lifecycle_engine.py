@@ -157,7 +157,7 @@ async def _find_active_relationship(user_id: str, subject: str, predicate: str) 
     query = """
     MATCH (s:Entity {name: $subject})-[r:FACT {predicate: $predicate, user_id: $uid}]->(o:Entity)
     WHERE r.status IS NULL OR r.status = 'ACTIVE'
-    RETURN o.name as object, r.source_turn_id_last as turn_id
+    RETURN o.name as object, r.source_turn_id_last as turn_id, r.confidence as confidence
     LIMIT 1
     """
     
@@ -192,6 +192,7 @@ async def supersede_relationship(
     WHERE r.status IS NULL OR r.status = 'ACTIVE'
     SET r.status = $status,
         r.superseded_by_turn_id = $new_turn_id,
+        r.valid_until = datetime(),
         r.updated_at = datetime()
     RETURN count(r) as count
     """

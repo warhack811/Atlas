@@ -1,0 +1,38 @@
+
+--- TEST START: test_observer_43 ---
+
+INFO:Atlas.memory.neo4j_manager:Kullan²c² test_observer_43 iin t³m haf²za ve konu■ma gemi■i silindi (Hard Reset).
+0. Deleted all memory for test user.
+1. Writing: [{'subject': '__USER__', 'predicate': 'MESLEº¦', 'object': 'Yaz²l²m Geli■tirici', 'confidence': 1.0}]
+INFO:Atlas.memory.predicate_catalog:Predicate catalog loaded: 43 predicates, 68 mappings
+INFO:Atlas.memory.lifecycle_engine:Lifecycle EXCLUSIVE: New '__USER__' MESLEº¦ 'Yaz²l²m Geli■tirici'
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Normalized triplet: subject='__USER__', pred='MESLEº¦', object='Yaz²l²m Geli■tirici'
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Executing query with user_id=test_observer_43, triplet_count=1
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Query completed. Wrote 1 FACT relationships
+INFO:Atlas.memory.neo4j_manager:Ba■ar²yla 1 bilgi (triplet) Neo4j'ye kaydedildi (Kullan²c²: test_observer_43)
+   Result count: 1
+   Check 1: [{'status': 'ACTIVE', 'value': 'Yaz²l²m Geli■tirici', 'pred': 'MESLEº¦'}]
+
+2. Writing update: Proje Y÷neticisi
+WARNING:Atlas.memory.lifecycle_engine:Lifecycle CONFLICT: '__USER__' MESLEº¦: 'Yaz²l²m Geli■tirici' (conf: 1.0) VS 'Proje Y÷neticisi' (conf: 1.0)
+INFO:Atlas.memory.lifecycle_engine:Lifecycle: 1 ili■ki CONFLICTED olarak i■aretlendi
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Normalized triplet: subject='__USER__', pred='MESLEº¦', object='Proje Y÷neticisi'
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Executing query with user_id=test_observer_43, triplet_count=1
+INFO:Atlas.memory.neo4j_manager:[NEO4J WRITE DEBUG] Query completed. Wrote 1 FACT relationships
+INFO:Atlas.memory.neo4j_manager:Ba■ar²yla 1 bilgi (triplet) Neo4j'ye kaydedildi (Kullan²c²: test_observer_43)
+   Result count: 1
+   Check 2 (Everything for MESLEº¦):
+      - {'status': 'CONFLICTED', 'value': 'Yaz²l²m Geli■tirici', 'pred': 'MESLEº¦'}
+      - {'status': 'CONFLICTED', 'value': 'Proje Y÷neticisi', 'pred': 'MESLEº¦'}
+
+3. Testing Mood Archiving...
+   Archived mood count: 1
+
+--- TEST SUMMARY ---
+   {'sub': '__USER__', 'pred': 'MESLEº¦', 'obj': 'Yaz²l²m Geli■tirici', 'status': 'CONFLICTED'}
+   {'sub': '__USER__', 'pred': 'MESLEº¦', 'obj': 'Proje Y÷neticisi', 'status': 'CONFLICTED'}
+   {'sub': '__USER__', 'pred': 'H¦SSED¦YOR', 'obj': 'Mutlu', 'status': 'SUPERSEDED'}
+
+--- TEST END ---
+
+INFO:Atlas.memory.neo4j_manager:Neo4j ba­lant²s² kapat²ld².
