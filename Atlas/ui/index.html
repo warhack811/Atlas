@@ -189,6 +189,82 @@
                 </div>
             </div>
         </div>
+
+        <!-- Right Panel: Neural Monitor -->
+        <aside class="neural-monitor" id="neuralMonitor">
+            <div class="monitor-header">
+                <span><i class="fa-solid fa-microchip"></i> Neural Monitor</span>
+                <span style="font-size:0.6rem; opacity:0.5;">LIVE</span>
+            </div>
+            
+            <!-- Tabs -->
+            <div class="monitor-tabs">
+                <div class="monitor-tab active" onclick="switchMonitorTab('state')">STATE</div>
+                <div class="monitor-tab" onclick="switchMonitorTab('context')">CONTEXT</div>
+                <div class="monitor-tab" onclick="switchMonitorTab('memory')">MEMORY</div>
+                <div class="monitor-tab" onclick="switchMonitorTab('exec')">EXEC</div>
+            </div>
+
+            <!-- Tab 1: STATE (Kimlik, Mod, Konu) -->
+            <div id="mon-tab-state" class="monitor-content active">
+                <div class="mon-card">
+                    <div class="mon-label">Aktif Konu (Topic)</div>
+                    <div class="mon-value highlight" id="mon-topic">Genel</div>
+                </div>
+                <div class="mon-card">
+                    <div class="mon-label">Tespit Edilen Niyet (Intent)</div>
+                    <div class="mon-value" id="mon-intent">--</div>
+                </div>
+                <div class="mon-card">
+                    <div class="mon-label">Kullanıcı Modu</div>
+                    <div class="mon-value" id="mon-mood">--</div>
+                </div>
+                <div class="mon-card">
+                    <div class="mon-label">Session ID</div>
+                    <div class="mon-code" id="mon-session-id">--</div>
+                </div>
+            </div>
+
+            <!-- Tab 2: CONTEXT (Giden Prompt) -->
+            <div id="mon-tab-context" class="monitor-content">
+                <div class="mon-card">
+                    <div class="mon-label">System Prompt (Özet)</div>
+                    <div class="mon-code" id="mon-system-prompt">--</div>
+                </div>
+                <div class="mon-card">
+                    <div class="mon-label">Son Kullanıcı Mesajı</div>
+                    <div class="mon-value" id="mon-last-msg">--</div>
+                </div>
+            </div>
+
+            <!-- Tab 3: MEMORY (Çekilen Veri) -->
+            <div id="mon-tab-memory" class="monitor-content">
+                <div class="mon-card">
+                    <div class="mon-label">Identity Facts (Kimlik)</div>
+                    <div class="mon-code" id="mon-identity">--</div>
+                </div>
+                <div class="mon-card">
+                    <div class="mon-label">Retrieved Facts (Graph)</div>
+                    <div class="mon-code" id="mon-graph-facts">--</div>
+                </div>
+                <div class="mon-card">
+                    <div class="mon-label">Episodic Recall</div>
+                    <div class="mon-code" id="mon-episodic">--</div>
+                </div>
+            </div>
+
+            <!-- Tab 4: EXECUTION (Plan & Tools) -->
+            <div id="mon-tab-exec" class="monitor-content">
+                <div class="mon-card">
+                    <div class="mon-label">Orchestrator Plan</div>
+                    <div class="mon-code" id="mon-plan">--</div>
+                </div>
+                <div class="mon-card">
+                    <div class="mon-label">Tool Outputs</div>
+                    <div class="mon-code" id="mon-tools">--</div>
+                </div>
+            </div>
+        </aside>
     </div>
     <!-- End of main-container -->
 
