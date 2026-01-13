@@ -86,7 +86,7 @@ def compute_utility_score(catalog, predicate_key: str, category: str) -> float:
     Düşük utility:
     - Ephemeral state (NEREDE, HİSSEDİYOR)
     """
-    pred_category = catalog.get_category(predicate_key) if catalog else None
+    pred_category = catalog.get_graph_category(predicate_key) if catalog else None
     
     # Category-based utility
     if pred_category == "identity":

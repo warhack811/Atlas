@@ -13,6 +13,7 @@ Temel Sorumluluklar:
 5. Dayanıklılık (Resilience): Model hatalarında veya kota sınırlarında otomatik yedek modele geçiş.
 """
 
+import logging
 import json
 import time
 import os
@@ -24,6 +25,8 @@ from Atlas.config import API_CONFIG, MODEL_GOVERNANCE
 from Atlas.memory import MessageBuffer
 from Atlas.memory.state import state_manager
 from Atlas.time_context import time_context
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -39,13 +42,14 @@ class OrchestrationPlan:
     orchestrator_model: str = ""       # Karar veren modelin ID'si
     reasoning: str = ""                # Teknik karar mantığı (COT)
     user_thought: str = ""             # Kullanıcıya yönelik iş özeti
+    detected_topic: str = "SAME"       # Algılanan konuşma konusu
 
 from Atlas.prompts import ORCHESTRATOR_PROMPT
 
 class Orchestrator:
     """Niyet analizi ve görev planlamasından sorumlu sınıf."""
     @staticmethod
-    async def plan(session_id: str, message: str, use_mock: bool = False, context_builder: Any = None) -> OrchestrationPlan:
+    async def plan(session_id: str, message: str, user_id: str = "admin", use_mock: bool = False, context_builder: Any = None) -> OrchestrationPlan:
         """Kullanıcı mesajına göre bir yürütme planı (DAG) hazırlar."""
         if use_mock:
             return OrchestrationPlan(
@@ -62,9 +66,26 @@ class Orchestrator:
         # 2. Durum Bilgisi: Kullanıcının aktif alanı getirilir
         state = state_manager.get_state(session_id)
         
-        # 3. Bağlam İnşası: Zaman ve Graf Bellek verileri birleştirilir
-        time_info = time_context.get_system_prompt_addition(message)
+        # FAZ-α Final: State Hydration (Optimized)
+        # Sadece konu 'Genel' ise VE daha önce kontrol edilmemişse DB'ye sor.
+        if state.current_topic == "Genel" and not state._hydrated:
+            from Atlas.memory.neo4j_manager import neo4j_manager
+            try:
+                saved_topic = await neo4j_manager.get_session_topic(session_id)
+                if saved_topic:
+                    state.current_topic = saved_topic
+                    print(f"[STATE HYDRATION]: Konu '{saved_topic}' olarak geri yüklendi.")
+            except Exception as e:
+                print(f"[STATE HYDRATION ERROR]: {e}")
+            finally:
+                # Başarılı veya başarısız, bir daha sorma (Session boyunca RAM geçerli)
+                state._hydrated = True
         
+        # FAZ-γ: Identity Cache is now handled by build_chat_context_v1 for sync reliability
+        # But we still log its state for debugging consistency
+        logger.info(f"[ORCHESTRATOR] Identity cache state: {'Hydrated' if state._identity_hydrated else 'Pending'} ({len(state._identity_cache)} facts)")
+        
+        time_info = time_context.get_system_prompt_addition(message)
         full_context = time_info
         
         if context_builder and hasattr(context_builder, "_neo4j_context") and context_builder._neo4j_context:
@@ -81,8 +102,40 @@ class Orchestrator:
         if plan_data.get("is_follow_up") and plan_data.get("intent") == "general":
             plan_data["intent"] = state.active_domain
             
+        # FAZ-Y.5: Active Conflict Management
+        conflicts = []
+        if "status: CONFLICTED" in full_context:
+            import re
+            # Çelişkili tripletleri bul (Basit regex ile context içinden ayıkla)
+            conflict_matches = re.findall(r'(\[GRAF \| Skor:.*?status: CONFLICTED\])', full_context)
+            if conflict_matches:
+                conflicts = conflict_matches
+                conflict_note = "\n\n[DİKKAT]: Hafızada çelişkili (CONFLICTED) bilgiler tespit edildi. Kullanıcıya nazikçe bu durumu sorup netleştir."
+                if "user_thought" in plan_data:
+                    plan_data["user_thought"] += " (Not: Hafızandaki bir çelişkiyi de netleştireceğim.)"
+                
+                for task in plan_data.get("tasks", []):
+                    if task.get("type") == "generation":
+                        task["instruction"] = task.get("instruction", "") + conflict_note
+
         # Mevcut niyet durumunu güncelle (User State Persistence)
         state.update_domain(plan_data["intent"], 0.9)
+        
+        # Konu Takibi Güncellemesi
+        detected_topic = plan_data.get("detected_topic", "SAME")
+        old_topic = state.current_topic
+        state.update_topic(detected_topic)
+        
+        # Eğer konu değiştiyse Neo4j'ye asenkron (fire-and-forget) yaz
+        if state.current_topic != old_topic:
+            import asyncio
+            from Atlas.memory.neo4j_manager import neo4j_manager
+            # DÜZELTME: user_id'yi context_builder'dan veya history'den alabiliriz. 
+            # Genelde RDR veya context için session_id yeterli ama Neo4j user_id ister.
+            # Şimdilik context_builder objesinin user_id'si varsa kullanalım.
+            user_id = getattr(context_builder, "user_id", "anonymous")
+            asyncio.create_task(neo4j_manager.update_session_topic(user_id, session_id, state.current_topic))
+            print(f"[KONU DEĞİŞTİ]: {old_topic} -> {state.current_topic}")
         
         return OrchestrationPlan(
             tasks=plan_data.get("tasks", []),
@@ -94,7 +147,8 @@ class Orchestrator:
             orchestrator_prompt=used_prompt,
             orchestrator_model=used_model,
             reasoning=plan_data.get("reasoning", ""),
-            user_thought=plan_data.get("user_thought", "")
+            user_thought=plan_data.get("user_thought", ""),
+            detected_topic=plan_data.get("detected_topic", "SAME")
         )
 
     @staticmethod

@@ -167,6 +167,7 @@ function showLoggedIn() {
     if (loginMenuItem) loginMenuItem.style.display = 'none';
 
     initSessions();
+    loadChatHistory(activeSessionId);
 }
 
 function showLoggedOut() {
@@ -193,6 +194,7 @@ function showLoggedOut() {
     if (loginMenuItem) loginMenuItem.style.display = 'flex';
 
     initSessions();
+    chatView.innerHTML = '<div class="message-wrapper ai"><div class="bubble">Lütfen devam etmek için giriş yapın.</div></div>';
 }
 
 // --- Chat Management Logic ---
@@ -280,12 +282,53 @@ function newChat() {
     appendSystemNotification("✨ Yeni sohbet başlatıldı.");
 }
 
-function switchChat(id) {
-    if (!id || id === activeSessionId) return;
+async function switchChat(id) {
+    if (!id) return;
     activeSessionId = id;
     saveSessions();
     chatView.innerHTML = '';
-    appendSystemNotification(`🔄 Sohbet oturumu değiştirildi: ${sessions.find(s => s.id === id)?.title || id}`);
+    appendSystemNotification(`🔄 Sohbet yükleniyor...`);
+    await loadChatHistory(id);
+}
+
+async function loadChatHistory(sessionId) {
+    try {
+        const res = await fetch(`${API_BASE}/api/history/${sessionId}`);
+        if (!res.ok) {
+            if (res.status === 401) {
+                appendSystemNotification("🚨 Geçmişi görmek için giriş yapmalısınız.");
+            }
+            return;
+        }
+        const data = await res.json();
+        const history = data.history || [];
+
+        chatView.innerHTML = ''; // Reset view
+        if (history.length === 0) {
+            chatView.innerHTML = `
+                <div class="message-wrapper ai">
+                    <div class="bubble">
+                        <p>Bu oturumda henüz bir konuşma yok.</p>
+                    </div>
+                </div>
+            `;
+        } else {
+            history.forEach(msg => {
+                appendChatHistoryMessage(msg.role, msg.content);
+            });
+        }
+    } catch (e) {
+        console.error("History fetch error", e);
+        appendSystemNotification("❌ Sohbet geçmişi yüklenemedi.");
+    }
+}
+
+function appendChatHistoryMessage(role, content) {
+    const wrapper = document.createElement('div');
+    wrapper.className = `message-wrapper ${role === 'user' ? 'user' : 'ai'}`;
+    wrapper.innerHTML = `<div class="bubble">${marked.parse(content)}</div>`;
+    chatView.appendChild(wrapper);
+    chatView.scrollTop = chatView.scrollHeight;
 }
 
 function deleteChat(sessionId) {
@@ -441,7 +484,8 @@ async function handleSend() {
             body: JSON.stringify({
                 message: msg,
                 mode: personaSelect.value,
-                session_id: activeSessionId
+                session_id: activeSessionId,
+                user_id: currentUser ? currentUser.username : null
             })
         });
 

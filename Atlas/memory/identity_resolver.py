@@ -18,10 +18,12 @@ TR_NORMALIZE_MAP = str.maketrans(
     "IGSUOCigsüoc"
 )
 
-# 1. tekil şahıs zamirleri (BEN/BENIM/BANA vb.)
+# 1. tekil şahıs zamirleri ve iyelik ekli öz-referanslar (BEN / ADIM / MESLEĞİM vb.)
 FIRST_PERSON_PRONOUNS = {
     "BEN", "BENIM", "BANA", "BENDE", "BENDEN",
-    "KENDIM", "KENDIMI", "KENDIME", "KENDIMDEN", "KENDIMDE"
+    "KENDIM", "KENDIMI", "KENDIME", "KENDIMDEN", "KENDIMDE",
+    "ADIM", "ISMIM", "MESLEGIM", "YASIM", "LAKABIM", "MEMLEKETIM",
+    "KULLANICI"
 }
 
 # 2. tekil şahıs zamirleri (SEN/SENIN/SANA vb.)

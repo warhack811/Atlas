@@ -87,9 +87,16 @@ async def generate_response(
     session_id: str = None,
     api_key: Optional[str] = None,
     style_profile: Optional[dict] = None,
-    signal_only: bool = False
+    signal_only: bool = False,
+    request_context=None  # AtlasRequestContext instance
 ) -> GeneratorResult:
-    """Belirlenen model ve bağlamı kullanarak tekil (blok) yanıt oluşturur."""
+    """
+    Belirlenen model ve bağlamı kullanarak tekil (blok) yanıt oluşturur.
+    
+    Args:
+        request_context: If provided, use this pre-hydrated context for LLM messages.
+                         This ensures identity facts are properly injected.
+    """
     
     # Yerel model (Ollama vb.) kontrolü
     if "local" in model_id.lower():
@@ -115,12 +122,39 @@ async def generate_response(
     if "qwen" in model_id.lower() or "deepseek" in model_id.lower():
         system_prompt += "\n" + COT_SUPPRESSION_PROMPT
 
-    # Oturum geçmişi varsa bağlamı oluştur, yoksa sadece güncel mesajı kullan
-    if session_id:
+    # AtlasRequestContext varsa, onun build_llm_messages metodunu kullan
+    # Bu, identity facts dahil tam context sağlar
+    if request_context:
+        # Inject neo4j context into system prompt
+        full_system = system_prompt
+        if request_context.neo4j_context_str:
+            full_system += "\n\n[KULLANICI HAFIZA BAĞLAMI]\n" + request_context.neo4j_context_str
+        
+        messages = [{"role": "system", "content": full_system}]
+        # Add history (limited for specialists)
+        history_limit = 3 if signal_only else 5
+        history_subset = request_context.history[-history_limit:] if len(request_context.history) > history_limit else request_context.history
+        messages.extend(history_subset)
+        messages.append({"role": "user", "content": message})
+        
+        # Merge consecutive same-role messages
+        merged = []
+        for msg in messages:
+            if not merged or merged[-1]["role"] != msg["role"]:
+                merged.append(msg.copy())
+            else:
+                merged[-1]["content"] += "\n\n" + msg["content"]
+        messages = merged
+        
+        logger.info(f"[GENERATOR] Using AtlasRequestContext with {len(request_context.identity_facts)} identity facts")
+    elif session_id:
+        # Fallback: Legacy behavior (orphan ContextBuilder)
         from Atlas.memory import ContextBuilder
         messages = ContextBuilder(session_id).with_system_prompt(system_prompt).build(message, history_limit=5, signal_only=signal_only)
+        logger.warning(f"[GENERATOR] Fallback to legacy ContextBuilder (no request_context)")
     else:
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": message}]
+
     
     try:
         if "gemini" in model_id.lower():

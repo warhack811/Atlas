@@ -7,6 +7,12 @@ from typing import List, Dict, Any, Optional
 from neo4j import AsyncGraphDatabase
 from neo4j.exceptions import ServiceUnavailable, SessionExpired
 from Atlas.config import Config
+from datetime import datetime, timedelta
+import math
+
+# Professional Logging Configuration: Suppress noisy Neo4j notifications about missing properties/labels
+logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
+logging.getLogger("neo4j.io").setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
 
@@ -128,12 +134,26 @@ class Neo4jManager:
         Daha temiz bir hafıza için isimleri normalize eder.
         """
         # Python tarafında isimleri normalize et (Örn: muhammet -> Muhammet)
+        # CRITICAL FIX: Don't apply .title() to __USER__ anchors!
         normalized_triplets = []
+        importance_map = {
+            "İSİM": 1.0, "MESLEĞİ": 1.0, "YAŞI": 1.0, "YAŞAR_YER": 1.0,
+            "LAKABI": 0.8, "HOBİ": 0.5, "YEMEK_TERCİHİ": 0.4, "GÜNLÜK_AKTİVİTE": 0.3
+        }
         for t in triplets:
             nt = t.copy()
-            nt["subject"] = str(t.get("subject", "")).strip().title()
-            nt["object"] = str(t.get("object", "")).strip().title()
-            nt["predicate"] = str(t.get("predicate", "")).strip().upper() # İlişkileri büyük harf yap
+            # FAZ-γ FIX: Preserve __USER__ anchors, don't apply .title()
+            subject_str = str(t.get("subject", "")).strip()
+            object_str = str(t.get("object", "")).strip()
+            
+            nt["subject"] = subject_str if subject_str.startswith("__USER__") else subject_str.title()
+            nt["object"] = object_str if object_str.startswith("__USER__") else object_str.title()
+            pred = str(t.get("predicate", "")).strip().upper()
+            nt["predicate"] = pred
+            # FAZ-Y: Importance scoring (ADIM 3.2)
+            nt["importance_score"] = importance_map.get(pred, 0.5)
+            
+            logger.info(f"[NEO4J WRITE DEBUG] Normalized triplet: subject='{nt['subject']}', pred='{pred}', object='{nt['object']}'")
             normalized_triplets.append(nt)
 
         # KNOWS ilişkisi için User node'u oluştur
@@ -143,15 +163,29 @@ class Neo4jManager:
         UNWIND $triplets AS t
         MERGE (s:Entity {name: t.subject})
         MERGE (o:Entity {name: t.object})
+        WITH u, s, o, t
+        
+        
+        // FAZ-Y: Conflict Detection (ADIM 3.1)
+        // FAZ-Y: Conflict Detection (ADIM 3.1)
+        CALL {
+            WITH s, t, u
+            OPTIONAL MATCH (s)-[old_r:FACT {predicate: t.predicate, user_id: $user_id}]->(old_o:Entity)
+            WHERE t.is_exclusive = true 
+              AND old_o IS NOT NULL 
+              AND old_o.name <> t.object 
+              AND (old_r.status = 'ACTIVE' OR old_r.status IS NULL)
+            SET old_r.status = 'CONFLICTED', old_r.updated_at = datetime()
+        }
+
         // FAZ0.1-1: İlişkiyi hem predicate hem de user_id ile MERGE et (multi-user isolation)
-        // Bu sayede farklı kullanıcılar aynı entity'ler arasında farklı ilişkilere sahip olabilir
-        MERGE (s)-[r:FACT {predicate: t.predicate, user_id: $user_id}]->(o)
+        MERGE (s)-[r:FACT {predicate: t.predicate, user_id: $user_id, object_name_internal: t.object}]->(o)
         ON CREATE SET 
             r.confidence = COALESCE(t.confidence, 1.0),
+            r.importance_score = COALESCE(t.importance_score, 0.5),
             r.category = COALESCE(t.category, 'general'),
             r.created_at = datetime(),
             r.updated_at = datetime(),
-            // FAZ2: Provenance ve schema alanları (yeni relationship'ler için)
             r.schema_version = 2,
             r.status = COALESCE(t.status, 'ACTIVE'),
             r.source_turn_id_first = $source_turn_id,
@@ -162,22 +196,32 @@ class Neo4jManager:
             r.inferred = false
         ON MATCH SET
             r.confidence = COALESCE(t.confidence, r.confidence),
+            r.importance_score = COALESCE(t.importance_score, r.importance_score),
             r.category = COALESCE(t.category, r.category),
             r.status = COALESCE(t.status, r.status),
             r.updated_at = datetime(),
-            // FAZ2: Güncelleme sırasında source_turn_id_last ve schema_version'ı güncelle
             r.source_turn_id_last = $source_turn_id,
             r.schema_version = COALESCE(r.schema_version, 2)
+        
         // User'ın Entity'yi bildiğini işaretle
         MERGE (u)-[:KNOWS]->(s)
         MERGE (u)-[:KNOWS]->(o)
-        RETURN count(r)
+        RETURN count(r) as count
         """
         
-        # FAZ2: source_turn_id parametresini query'ye ekle
+        # EXCLUSIVE bilgisini triplet'lere enjekte et (catalog bazlı)
+        from Atlas.memory.predicate_catalog import get_catalog
+        catalog = get_catalog()
+        for nt in normalized_triplets:
+            entry = catalog.by_key.get(nt["predicate"], {})
+            nt["is_exclusive"] = entry.get("type") == "EXCLUSIVE" if entry else False
+
+        logger.info(f"[NEO4J WRITE DEBUG] Executing query with user_id={user_id}, triplet_count={len(normalized_triplets)}")
         result = await tx.run(query, {"user_id": user_id, "triplets": normalized_triplets, "source_turn_id": source_turn_id})
         records = await result.data()
-        return records[0]['count(r)'] if records else 0
+        write_count = records[0]['count'] if records else 0
+        logger.info(f"[NEO4J WRITE DEBUG] Query completed. Wrote {write_count} FACT relationships")
+        return write_count
 
     async def delete_all_memory(self, user_id: str) -> bool:
         """Kullanıcıya ait tüm graf hafızasını siler (Hard Reset).
@@ -391,10 +435,11 @@ class Neo4jManager:
         """
         where_clause = "WHERE n.read = false" if unread_only else ""
         query = f"""
-        MATCH (u:User {{id: $uid}})-[:HAS_NOTIFICATION]->(n:Notification)
+        MATCH (u:User {{id: $uid}})
+        OPTIONAL MATCH (u)-[:HAS_NOTIFICATION]->(n:Notification)
         {where_clause}
-        RETURN n.id as id, n.message as message, n.type as type, n.created_at as created_at, 
-               n.read as read, n.reason as reason
+        RETURN n.id as id, coalesce(n.message, '') as message, coalesce(n.type, 'system') as type, 
+               n.created_at as created_at, coalesce(n.read, false) as read, coalesce(n.reason, '') as reason
         ORDER BY n.created_at DESC
         LIMIT $limit
         """
@@ -460,7 +505,8 @@ class Neo4jManager:
         Kullanıcının bugün aldığı bildirim sayısını döndürür. (FAZ7)
         """
         query = """
-        MATCH (u:User {id: $uid})-[:HAS_NOTIFICATION]->(n:Notification)
+        MATCH (u:User {id: $uid})
+        OPTIONAL MATCH (u)-[:HAS_NOTIFICATION]->(n:Notification)
         WHERE n.created_at >= datetime({hour: 0, minute: 0, second: 0})
         RETURN count(n) as daily_count
         """
@@ -470,6 +516,60 @@ class Neo4jManager:
         except Exception as e:
             logger.error(f"Günlük bildirim sayma hatası: {e}")
             return 0
+
+    async def get_active_conflicts(self, user_id: str, limit: int = 3) -> List[Dict]:
+        """
+        FAZ-Y Final: Kullanıcıya ait aktif çelişkileri (CONFLICTED) getirir.
+        """
+        query = """
+        MATCH (s:Entity)-[r:FACT {user_id: $uid, status: 'CONFLICTED'}]->(o:Entity)
+        RETURN s.name as subject, r.predicate as predicate, o.name as value, r.updated_at as updated_at
+        ORDER BY r.updated_at DESC
+        LIMIT $limit
+        """
+        try:
+            return await self.query_graph(query, {"uid": user_id, "limit": limit})
+        except Exception as e:
+            logger.error(f"Aktif çelişki sorgu hatası: {e}")
+            return []
+
+    async def get_last_active_entity(self, user_id: str, session_id: str) -> Optional[str]:
+        """
+        FAZ-Y Final: Son turlarda geçen ve önemi yüksek olan son güncellenmiş Entity'yi bulur.
+        DST (Zamir Çözümleme) için referans sağlar.
+        """
+        query = """
+        MATCH (s:Session {id: $sid})-[:HAS_TURN]->(t:Turn)
+        MATCH (u:User {id: $uid})-[:KNOWS]->(e:Entity)
+        MATCH (e)-[r:FACT {user_id: $uid}]->()
+        WHERE t.turn_index >= (
+            MATCH (s)-[:HAS_TURN]->(total:Turn) 
+            RETURN max(total.turn_index) - 2
+        )
+        AND r.importance_score > 0.5
+        RETURN e.name as name, r.updated_at as updated_at
+        ORDER BY r.updated_at DESC
+        LIMIT 1
+        """
+        try:
+            results = await self.query_graph(query, {"uid": user_id, "sid": session_id})
+            return results[0]["name"] if results else None
+        except Exception as e:
+            logger.error(f"Son aktif varlık sorgu hatası: {e}")
+            return None
+
+    async def get_user_names(self, user_id: str) -> list:
+        """
+        Kullanıcının bilinen isimlerini döner.
+        Identity resolution için kullanılır. (FAZ-γ)
+        """
+        query = """
+        MATCH (s:Entity)-[r:FACT {user_id: $uid, predicate: 'İSİM'}]->(o:Entity)
+        WHERE (r.status IS NULL OR r.status = 'ACTIVE' OR r.status = 'CONFLICTED')
+        RETURN DISTINCT o.name as name
+        """
+        results = await self.query_graph(query, {"uid": user_id})
+        return [r["name"] for r in results]
 
     async def get_user_memory_mode(self, user_id: str) -> str:
         """Kullanıcının hafıza modunu getirir (OFF/STANDARD/FULL)."""
@@ -488,8 +588,16 @@ class Neo4jManager:
             u.created_at = datetime(), 
             u.notifications_enabled = false,
             u.memory_mode = COALESCE($default_mode, 'STANDARD')
-        MERGE (s:Session {id: $sid, user_id: $uid})
-        ON CREATE SET s.created_at = datetime()
+        
+        // RC-2.1 FIX: Session uniqueness should be based on ID alone to prevent duplicates
+        // during login/logout transitions for the same session.
+        MERGE (s:Session {id: $sid})
+        ON CREATE SET 
+            s.created_at = datetime(),
+            s.user_id = $uid
+        ON MATCH SET
+            s.user_id = $uid // Update ownership if changed
+        
         SET s.last_seen_at = datetime()
         MERGE (u)-[:HAS_SESSION]->(s)
         """
@@ -508,6 +616,60 @@ class Neo4jManager:
         if results and results[0].get("tz"):
             return results[0]["tz"]
         return "Europe/Istanbul"
+
+    async def get_last_user_mood(self, user_id: str) -> Optional[Dict[str, str]]:
+        """
+        FAZ-β: Kullanıcının en son kaydedilmiş duygu durumunu getirir.
+        
+        Args:
+            user_id: Kullanıcı kimliği
+            
+        Returns:
+            {"mood": str, "timestamp": str} dict veya None (veri yoksa)
+            timestamp ISO 8601 formatında (UTC)
+        """
+        query = """
+        MATCH (u:User {id: $uid})-[:KNOWS]->(:Entity)-[r:FACT]->(o:Entity)
+        WHERE r.predicate IN ['HİSSEDİYOR', 'FEELS'] 
+        RETURN o.name as mood, toString(r.created_at) as timestamp
+        ORDER BY r.created_at DESC LIMIT 1
+        """
+        try:
+            results = await self.query_graph(query, {"uid": user_id})
+            if results and results[0].get("mood"):
+                return {
+                    "mood": results[0]["mood"],
+                    "timestamp": results[0]["timestamp"]
+                }
+            return None
+        except Exception as e:
+            logger.error(f"FAZ-β: get_last_user_mood hatası: {e}")
+            return None
+
+    async def get_session_topic(self, session_id: str) -> Optional[str]:
+        """
+        FAZ-α Final: Oturumun veritabanındaki aktif konusunu getirir.
+        State hydration (yeniden başlatma sonrası kurtarma) için kullanılır.
+        
+        Args:
+            session_id: Session kimliği
+            
+        Returns:
+            str: Aktif topic adı veya None (topic yoksa)
+        """
+        query = """
+        MATCH (s:Session {id: $sid})-[r:HAS_TOPIC {status: 'ACTIVE'}]->(t:Topic)
+        RETURN t.name as topic
+        LIMIT 1
+        """
+        try:
+            results = await self.query_graph(query, {"sid": session_id})
+            if results and results[0].get("topic"):
+                return results[0]["topic"]
+            return None
+        except Exception as e:
+            logger.error(f"FAZ-α: Topic fetch hatası: {e}")
+            return None
 
     async def get_user_settings(self, user_id: str) -> dict:
         """
@@ -607,6 +769,29 @@ class Neo4jManager:
         # UI/LLM beklediği sıra için reverse et (Chronological order)
         return sorted(results, key=lambda x: x["turn_index"])
 
+    async def get_global_recent_turns(self, user_id: str, exclude_session_id: str = None, limit: int = 10) -> list:
+        """
+        Kullanıcının TÜM oturumlarındaki son N mesajı getirir. (Kademeli Hafıza - Tier 2 Bridge)
+        exclude_session_id: Mevcut session'ı tekrar etmemek için hariç tutar.
+        """
+        query = """
+        MATCH (u:User {id: $uid})-[:HAS_SESSION]->(s:Session)-[:HAS_TURN]->(t:Turn)
+        WHERE s.id <> $excluded_sid OR $excluded_sid IS NULL
+        RETURN t.role as role, t.content as content, t.turn_index as turn_index, s.id as session_id, t.created_at as created_at
+        ORDER BY t.created_at DESC
+        LIMIT $limit
+        """
+        results = await self.query_graph(query, {
+            "uid": user_id,
+            "excluded_sid": exclude_session_id,
+            "limit": limit
+        })
+        # Kronolojik sıra (En eski yukarıda)
+        try:
+            return sorted(results, key=lambda x: x["created_at"])
+        except:
+            return results
+
     async def count_turns(self, user_id: str, session_id: str) -> int:
         """Oturumdaki toplam tur (mesaj) sayısını döner. (RC-3)"""
         query = """
@@ -691,8 +876,29 @@ class Neo4jManager:
         results = await self.query_graph(query)
         return results[0] if results else None
 
-    async def mark_episode_ready(self, episode_id: str, summary: str, model: str, embedding: Optional[List[float]] = None, embedding_model: Optional[str] = None):
-        """Episode'u READY yapar ve varsa embedding'i kaydeder."""
+    async def mark_episode_ready(
+        self,
+        episode_id: str,
+        summary: str,
+        model: str,
+        embedding: Optional[List[float]] = None,
+        embedding_model: Optional[str] = None,
+        vector_status: str = "PENDING",
+        vector_updated_at: Optional[str] = None,
+        vector_error: Optional[str] = None
+    ):
+        """
+        Episode'u READY yapar ve vector metadata kaydeder.
+        
+        Y.4: vector_status, vector_updated_at, vector_error fields added.
+             STORE_EPISODE_EMBEDDING_IN_NEO4J flag support for future migration.
+        """
+        from Atlas.config import STORE_EPISODE_EMBEDDING_IN_NEO4J
+        
+        # Backward compat: Store embedding in Neo4j by default
+        # Future: Can migrate to Qdrant-only retrieval
+        final_embedding = embedding if STORE_EPISODE_EMBEDDING_IN_NEO4J else None
+        
         query = """
         MATCH (e:Episode {id: $id})
         SET e.status = "READY",
@@ -700,38 +906,126 @@ class Neo4jManager:
             e.model = $model,
             e.embedding = $embedding,
             e.embedding_model = $embedding_model,
+            e.vector_status = $vector_status,
+            e.vector_updated_at = $vector_updated_at,
+            e.vector_error = $vector_error,
             e.updated_at = datetime()
         """
         await self.query_graph(query, {
-            "id": episode_id, 
-            "summary": summary, 
+            "id": episode_id,
+            "summary": summary,
             "model": model,
-            "embedding": embedding,
-            "embedding_model": embedding_model
+            "embedding": final_embedding,
+            "embedding_model": embedding_model,
+            "vector_status": vector_status,
+            "vector_updated_at": vector_updated_at,
+            "vector_error": vector_error
         })
 
-    async def create_vector_index(self, dimension: int = 384):
+    async def create_vector_index(self, dimension: Optional[int] = None):
         """
-        Neo4j üzerinde vektör indeksi oluşturur (idempotent).
-        Her Neo4j sürümü desteklemeyebilir, bu yüzden try/except ile sarılmıştır.
+        Neo4j üzerinde vektör indeksi oluşturur (idempotent) - PRODUCTION-SAFE.
+        
+        Y.4: ATLAS_EMBED_DIM env support + dimension mismatch detection.
+             Prevents destructive drop/recreate on dimension change.
+        
+        Args:
+            dimension: Vector dimension (default: ATLAS_EMBED_DIM from config)
+        
+        Returns:
+            True if index created/validated, False on failure
         """
-        query = f"""
+        from Atlas.config import ATLAS_EMBED_DIM
+        
+        target_dimension = dimension or ATLAS_EMBED_DIM
+        
+        # Step 1: Check existing index
+        check_query = "SHOW INDEXES YIELD name, type, labelsOrTypes, properties, options WHERE name = 'episode_embeddings' RETURN name, options"
+        
+        try:
+            existing = await self.query_graph(check_query)
+            
+            if existing:
+                # Index exists - check dimension
+                options = existing[0].get("options", {})
+                current_dim = options.get("indexConfig", {}).get("vector.dimensions")
+                
+                if current_dim and current_dim != target_dimension:
+                    # PRODUCTION-SAFE: Don't auto-drop, warn + guide
+                    logger.warning(
+                        f"\n{'='*70}\n"
+                        f"NEO4J VECTOR INDEX DIMENSION MISMATCH!\n"
+                        f"{'='*70}\n"
+                        f"Existing index: {current_dim} dimensions\n"
+                        f"Target index: {target_dimension} dimensions\n\n"
+                        f"MANUAL MIGRATION REQUIRED:\n"
+                        f"1. Check Oracle prod for existing embeddings:\n"
+                        f"   MATCH (e:Episode) WHERE e.embedding IS NOT NULL RETURN count(e)\n\n"
+                        f"2. If count > 0, plan migration:\n"
+                        f"   - Option A: Create second index 'episode_embeddings_{target_dimension}'\n"
+                        f"   - Option B: Drop old + recreate (data loss if embeddings exist)\n\n"
+                        f"3. If count = 0 (fresh install):\n"
+                        f"   DROP INDEX episode_embeddings;\n"
+                        f"   (then restart to auto-create {target_dimension}-dim index)\n\n"
+                        f"4. Update ATLAS_EMBED_DIM={target_dimension} in environment\n"
+                        f"{'='*70}"
+                    )
+                    
+                    # Try to create alternative index name
+                    alt_index_name = f"episode_embeddings_{target_dimension}"
+                    alt_query = f"""
+                    CREATE VECTOR INDEX {alt_index_name} IF NOT EXISTS
+                    FOR (e:Episode)
+                    ON (e.embedding)
+                    OPTIONS {{
+                      indexConfig: {{
+                        `vector.dimensions`: {target_dimension},
+                        `vector.similarity_function`: 'cosine'
+                      }}
+                    }}
+                    """
+                    
+                    try:
+                        await self.query_graph(alt_query)
+                        logger.info(
+                            f"✅ Created alternative index '{alt_index_name}' "
+                            f"({target_dimension} dim) for gradual migration"
+                        )
+                        return True
+                    except Exception as alt_e:
+                        logger.warning(f"Could not create alternative index: {alt_e}")
+                        return False
+                
+                else:
+                    # Dimension matches or no dimension info
+                    logger.info(f"Neo4j Vektör İndeksi mevcut (Boyut: {current_dim or 'unknown'})")
+                    return True
+        
+        except Exception as check_e:
+            # SHOW INDEXES may not be supported in older Neo4j versions
+            logger.debug(f"Index check failed (proceeding with creation): {check_e}")
+        
+        # Step 2: Create index (if doesn't exist or check failed)
+        create_query = f"""
         CREATE VECTOR INDEX episode_embeddings IF NOT EXISTS
         FOR (e:Episode)
         ON (e.embedding)
         OPTIONS {{
           indexConfig: {{
-            `vector.dimensions`: {dimension},
+            `vector.dimensions`: {target_dimension},
             `vector.similarity_function`: 'cosine'
           }}
         }}
         """
+        
         try:
-            await self.query_graph(query)
-            logger.info(f"Neo4j Vektör İndeksi oluşturuldu/doğrulandı (Boyut: {dimension})")
+            await self.query_graph(create_query)
+            logger.info(f"Neo4j Vektör İndeksi oluşturuldu/doğrulandı (Boyut: {target_dimension})")
             return True
         except Exception as e:
-            logger.warning(f"Neo4j Vektör İndeksi oluşturulamadı (Gelişmiş arama devre dışı kalabilir): {e}")
+            logger.warning(
+                f"Neo4j Vektör İndeksi oluşturulamadı (Gelişmiş arama devre dışı kalabilir): {e}"
+            )
             return False
 
     async def mark_episode_failed(self, episode_id: str, error: str):
@@ -848,6 +1142,29 @@ class Neo4jManager:
         """
         await self.query_graph(query, {"days": retention_days})
 
+    async def prune_low_importance_memory(self, importance_threshold: float = 0.4, age_days: int = 30) -> int:
+        """
+        Düşük öncelikli ve eski hafıza kayıtlarını temizler (Pruning).
+        Y.6 gereksinimi.
+        """
+        query = """
+        MATCH (u:User)-[r:FACT]->(o:Entity)
+        WHERE r.importance_score < $threshold
+          AND r.created_at < datetime() - duration('P' + toString($days) + 'D')
+          AND r.status <> 'ACTIVE'  // Sadece aktif olmayanları veya conflict olanları sil (Güvenli mod)
+        DELETE r
+        RETURN count(r) as deleted_count
+        """
+        try:
+            results = await self.query_graph(query, {"threshold": importance_threshold, "days": age_days})
+            count = results[0]["deleted_count"] if results else 0
+            if count > 0:
+                logger.info(f"Memory Pruning: {count} önemsiz kayıt silindi.")
+            return count
+        except Exception as e:
+            logger.error(f"Memory pruning hatası: {e}")
+            return 0
+
     async def create_consolidation_pending(self, session_id: str, window: int, min_age_days: int):
         """Çok sayıdaki REGULAR episoddan konsolide bir episod tetikler."""
         query = """
@@ -893,6 +1210,47 @@ class Neo4jManager:
         """ID listesine göre episodları getirir."""
         query = "MATCH (e:Episode) WHERE e.id IN $ids RETURN e.summary as summary, e.id as id"
         return await self.query_graph(query, {"ids": episode_ids})
+
+    async def get_facts_by_date_range(self, user_id: str, start_date: datetime, end_date: datetime) -> List[Dict]:
+        """
+        Belirli bir tarih aralığındaki gerçekleri getirir.
+        """
+        query = """
+        MATCH (s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity)
+        WHERE (r.created_at >= datetime($start) AND r.created_at <= datetime($end))
+           OR (r.updated_at >= datetime($start) AND r.updated_at <= datetime($end))
+        RETURN s.name as subject, r.predicate as predicate, o.name as object,
+               toString(r.updated_at) as ts
+        ORDER BY r.updated_at DESC
+        LIMIT 20
+        """
+        params = {
+            "uid": user_id,
+            "start": start_date.isoformat(),
+            "end": end_date.isoformat()
+        }
+        return await self.query_graph(query, params)
+
+    async def update_session_topic(self, user_id: str, session_id: str, new_topic: str):
+        """
+        Oturumun aktif konusunu günceller. Eski konuyu STALE yapar.
+        """
+        if not new_topic or new_topic in ["SAME", "CHITCHAT"]:
+            return
+
+        query = """
+        MATCH (s:Session {id: $sid})
+        OPTIONAL MATCH (s)-[r:HAS_TOPIC {status: 'ACTIVE'}]->(t:Topic)
+        SET r.status = 'STALE', r.end_time = datetime()
+        
+        MERGE (nt:Topic {name: $topic})
+        MERGE (s)-[nr:HAS_TOPIC]->(nt)
+        SET nr.status = 'ACTIVE', nr.start_time = datetime(), nr.user_id = $uid
+        """
+        try:
+            await self.query_graph(query, {"sid": session_id, "topic": new_topic.title(), "uid": user_id})
+        except Exception as e:
+            logger.error(f"Neo4j Topic update hatası: {e}")
 
 # Tekil örnek
 neo4j_manager = Neo4jManager()

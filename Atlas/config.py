@@ -236,11 +236,69 @@ ARENA_CATEGORY_TEMPERATURE = {
 # API Settings
 API_CONFIG = {
     "groq_api_base": "https://api.groq.com/openai/v1",
+    "gemini_api_base": "https://generativelanguage.googleapis.com/v1beta",  # FAZ-Y
     "default_temperature": 0.7,
     "max_tokens": 2048,
     "frequency_penalty": 0.1,
     "presence_penalty": 0.1
 }
+
+# --- FAZ-Y: GraphRAG & Advanced Memory Settings ---
+# Bypass flags for gradual rollout
+BYPASS_GEMINI_EMBEDDINGS = getenv("BYPASS_GEMINI_EMBEDDINGS", "false").lower() == "true"
+BYPASS_SEMANTIC_CACHE = getenv("BYPASS_SEMANTIC_CACHE", "false").lower() == "true"
+BYPASS_VECTOR_SEARCH = getenv("BYPASS_VECTOR_SEARCH", "false").lower() == "true"
+BYPASS_GRAPH_SEARCH = getenv("BYPASS_GRAPH_SEARCH", "false").lower() == "true"
+
+# Y.5: Semantic Cache Feature Flag (default: enabled, additive)
+ENABLE_SEMANTIC_CACHE = getenv("ENABLE_SEMANTIC_CACHE", "true").lower() == "true"
+
+# Y.6: Hybrid Retrieval Feature Flag (default: disabled, opt-in)
+ENABLE_HYBRID_RETRIEVAL = getenv("ENABLE_HYBRID_RETRIEVAL", "false").lower() == "true"
+
+# Faz-Y: Contextual Bridge Feature Flag (default: disabled)
+ENABLE_CONTEXT_BRIDGE = getenv("ENABLE_CONTEXT_BRIDGE", "false").lower() == "true"
+
+# Y.6: Hybrid Retrieval Configuration
+HYBRID_VECTOR_TOP_K = int(getenv("HYBRID_VECTOR_TOP_K", "15"))
+HYBRID_VECTOR_THRESHOLD = float(getenv("HYBRID_VECTOR_THRESHOLD", "0.65"))
+HYBRID_GRAPH_TOP_K = int(getenv("HYBRID_GRAPH_TOP_K", "15"))
+
+# Y.6: Scoring Weights (Default: 0.4 Vector, 0.4 Graph, 0.2 Recency)
+HYBRID_WEIGHT_VECTOR = float(getenv("HYBRID_WEIGHT_VECTOR", "0.4"))
+HYBRID_WEIGHT_GRAPH = float(getenv("HYBRID_WEIGHT_GRAPH", "0.4"))
+HYBRID_WEIGHT_RECENCY = float(getenv("HYBRID_WEIGHT_RECENCY", "0.2"))
+
+# Y.6: Recency Half-life (days)
+HYBRID_RECENCY_HALFLIFE_DAYS = float(getenv("HYBRID_RECENCY_HALFLIFE_DAYS", "7.0"))
+
+# Y.4: Episode Embedding Pipeline Configuration
+ATLAS_EMBED_DIM = int(getenv("ATLAS_EMBED_DIM", "768"))  # Gemini text-embedding-004 dimension
+STORE_EPISODE_EMBEDDING_IN_NEO4J = getenv("STORE_EPISODE_EMBEDDING_IN_NEO4J", "true").lower() == "true"
+EPISODE_MIN_SUMMARY_LENGTH = int(getenv("EPISODE_MIN_SUMMARY_LENGTH", "10"))
+
+# Y.4: Retry/Backoff Settings
+EPISODE_RETRY_MAX_ATTEMPTS = int(getenv("EPISODE_RETRY_MAX_ATTEMPTS", "3"))
+EPISODE_RETRY_BASE_DELAY = float(getenv("EPISODE_RETRY_BASE_DELAY", "1.0"))  # seconds
+EPISODE_RETRY_JITTER = float(getenv("EPISODE_RETRY_JITTER", "0.5"))  # seconds
+
+# Qdrant Settings
+QDRANT_URL = getenv("QDRANT_URL", None)
+QDRANT_API_KEY = getenv("QDRANT_API_KEY", None)
+
+# Redis (Upstash) Settings
+REDIS_URL = getenv("REDIS_URL", None)
+
+# Helper method to get random Gemini key
+@classmethod
+def get_random_gemini_key(cls) -> str:
+    """Gemini API anahtarları arasından rastgele birini seçer."""
+    import random
+    keys = get_gemini_api_keys()
+    return random.choice(keys) if keys else ""
+
+# Add to Config class
+Config.get_random_gemini_key = get_random_gemini_key
 
 # Style Profile → Temperature Mapping (Optimized for persona consistency)
 STYLE_TEMPERATURE_MAP = {

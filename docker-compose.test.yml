@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  qdrant-test:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-test
+    ports:
+      - "6333:6333"  # REST API
+      - "6334:6334"  # gRPC API
+    environment:
+      - QDRANT__LOG_LEVEL=INFO
+    volumes:
+      - qdrant_test_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  qdrant_test_data:
+    driver: local
+
+# Usage:
+# Start:  docker-compose -f docker-compose.test.yml up -d
+# Stop:   docker-compose -f docker-compose.test.yml down
+# Clean:  docker-compose -f docker-compose.test.yml down -v
+#
+# Test:   QDRANT_TEST_MODE=local pytest tests/test_qdrant_manager.py

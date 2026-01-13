@@ -1,0 +1,15 @@
+--- Testing Context Retrieval for 'admin' ---
+CONTEXT OUTPUT:
+### Kullanýcý Profili
+- ÝSÝM: Muhammet
+- YAÞI: 32
+- MESLEÐÝ: Yazýlýmcý
+
+### Sert Gerçekler (Hard Facts)
+(Henüz sert gerçek bilgisi yok)
+
+### Yumuþak Sinyaller (Soft Signals)
+(Henüz yumuþak sinyal bilgisi yok)
+
+### Açýk Sorular (Open Questions)
+- Kullanýcýnýn yaþadýðý yer bilinmiyor

@@ -22,20 +22,31 @@ from Atlas.prompts import SYNTHESIZER_PROMPT
 class Synthesizer:
     """Uzman çıktılarını nihai yanıta dönüştüren sentez katmanı."""
     @staticmethod
-    async def synthesize(raw_results: List[Dict[str, Any]], session_id: str, intent: str = "general", user_message: str = "", mode: str = "standard") -> tuple[str, str, str, dict]:
+    async def synthesize(raw_results: List[Dict[str, Any]], session_id: str, intent: str = "general", user_message: str = "", mode: str = "standard", current_topic: str = None, request_context=None) -> tuple[str, str, str, dict]:
         """
         Çoklu uzman sonuçlarını birleştirir ve tekil (blok) bir yanıt oluşturur.
         Dönüş: (yanıt_metni, model_id, prompt, metadata)
+        
+        Args:
+            request_context: AtlasRequestContext with identity facts from API layer
         """
         # 1. Ham verileri sentez için hazırla
         formatted_data = ""
+        
+        # Memory Voice System: Identity facts'i doğal dil talimatı olarak enjekte et
+        if request_context:
+            memory_instruction = request_context.get_human_memory_instruction()
+            if memory_instruction:
+                formatted_data = memory_instruction + "\n\n"
+        
         if not raw_results:
-            formatted_data = f"[DİKKAT: Uzman raporu bulunamadı. Lütfen kullanıcının şu mesajına nazikçe cevap ver.]\nKullanıcı Mesajı: {user_message}"
+            formatted_data += f"[DİKKAT: Uzman raporu bulunamadı. Lütfen kullanıcının şu mesajına nazikçe cevap ver.]\nKullanıcı Mesajı: {user_message}"
         else:
             for res in raw_results:
                 # DÜZELTME: Hem 'output' hem 'response' kontrolü (Uyumluluk için)
                 content = res.get('output') or res.get('response') or "[Veri Yok]"
                 formatted_data += f"--- Uzman ({res.get('model')}): ---\n{content}\n\n"
+
 
         print(f"[HATA AYIKLAMA] Sentezleyici {len(raw_results)} uzman sonucunu işliyor")
         
@@ -56,8 +67,64 @@ class Synthesizer:
             
         history_text = "\n".join([f"{m['role']}: {m['content']}" for m in history_to_show])
 
+        # FAZ-Y.5: Mirroring & Memory Voice Logic
+        mirroring_instruction = ""
+        if mode == "standard":
+            # 1. Check for FEELS in experts/history context
+            context_str = formatted_data.lower() + " " + user_message.lower()
+            if any(w in context_str for w in ["yorgun", "gergin", "üzgün", "stres", "yoğun"]):
+                mirroring_instruction = "\n[MIRRORING]: Kullanıcı yorgun veya gergin görünüyor. Cevabını daha kısa, empatik ve çözüm odaklı tut. Teknik detaylara boğma."
+            elif any(w in context_str for w in ["mutlu", "neşeli", "süper", "harika", "enerjik"]):
+                mirroring_instruction = "\n[MIRRORING]: Kullanıcı enerjik ve neşeli. Cevabını daha canlı, detaylı ve eşlikçi bir tonla hazırla."
+
+            # 2. Memory Voice Injection
+            if "GRAF | Skor:" in formatted_data or "HIB_GRAF" in formatted_data:
+                mirroring_instruction += "\n[MEMORY_VOICE]: Hafızadan gelen bilgileri kullanırken 'Hatırladığım kadarıyla...', 'Daha önce belirttiğin gibi...' gibi doğal girişler yap. Teknik etiketleri (skor vb.) asla kullanıcıya gösterme."
+                # FAZ-Y.Plus Meta-Cognition rules
+                mirroring_instruction += "\n- Eğer kullanılan bilginin tarihi 6 aydan eskiyse, cümleye 'Bir süre önceki kayıtlara göre...' diye başla."
+                mirroring_instruction += "\n- Eğer bilginin güven skoru (confidence) 0.6'dan düşükse, cümleye 'Yanlış hatırlamıyorsam...' veya 'Emin olmamakla birlikte...' diye başla."
+
+        # FAZ-Y Final: Conflict Resolution Rule
+        conflict_instruction = ""
+        if "[ÇÖZÜLMESİ GEREKEN DURUM]" in formatted_data or "[ÇÖZÜLMESİ GEREKEN DURUM]" in history_text:
+            conflict_instruction = "\n[CONFLICT_RESOLUTION]: Bağlamda bir çelişki (Conflict) tespit edildi. Lütfen cevabını verdikten sonra, nazikçe ve meraklı bir tonla bu durumu netleştirecek bir soru sor. Asla suçlayıcı olma, sadece anlamaya çalış."
+
+        # FAZ-α.2: Topic Transition Logic
+        topic_transition_instruction = ""
+        if current_topic and current_topic not in ["SAME", "CHITCHAT"]:
+            topic_transition_instruction = f"\n[KONU DEĞİŞİMİ]: Konuşmanın ana konusu '{current_topic}' olarak güncellendi. Eğer önceki konudan keskin bir geçiş varsa, cevabına doğal bir geçiş cümlesiyle (Örn: 'O konudan buna geçersek...') başla."
+
+        # FAZ-β: Emotional Continuity Rules
+        emotional_instruction = ""
+        if "[ÖNCEKİ DUYGU DURUMU]" in formatted_data or "[ÖNCEKİ DUYGU DURUMU]" in history_text:
+            # Mood extraction from context
+            import re
+            mood_match = re.search(r"ÖNCEKİ DUYGU DURUMU.*?'([^']+)'", formatted_data + history_text)
+            if mood_match:
+                mood = mood_match.group(1).lower()
+                
+                # Negatif duygular
+                negative_moods = ["üzgün", "kızgın", "sinirli", "depresif", "mutsuz", "hasta", "yorgun", "stresli", "gergin"]
+                # Pozitif duygular
+                positive_moods = ["mutlu", "neşeli", "heyecanlı", "enerjik", "motive", "rahat", "iyi"]
+                
+                if any(neg in mood for neg in negative_moods):
+                    emotional_instruction = (
+                        "\n[EMOTIONAL_CONTINUITY]: Kullanıcının önceki duygu durumu negatif idi. "
+                        "Selamlaşırken çok nazik ol, ısrarcı sorular sorma. "
+                        "'Umarım daha iyisindir' veya 'Nasıl gidiyor?' gibi empatik bir giriş yap. "
+                        "Ana cevabı bu durum etkilememeli, sadece selamlaşma kısmında kullan."
+                    )
+                elif any(pos in mood for pos in positive_moods):
+                    emotional_instruction = (
+                        "\n[EMOTIONAL_CONTINUITY]: Kullanıcının önceki duygu durumu pozitif idi. "
+                        "Enerjik ve destekleyici ol. "
+                        "'Enerjin harika görünüyordu!' veya 'Harika, o ruh halini koruyorsun!' gibi olumlu bir giriş yap. "
+                        "Ana cevabı bu durum etkilememeli, sadece selamlaşma kısmında kullan."
+                    )
+
         messages = [
-            {"role": "system", "content": style_instruction},
+            {"role": "system", "content": style_instruction + mirroring_instruction + conflict_instruction + topic_transition_instruction + emotional_instruction},
             {"role": "user", "content": SYNTHESIZER_PROMPT.format(
                 history=history_text if history_text else "[Henüz konuşma geçmişi yok]",
                 raw_data=formatted_data,
@@ -121,17 +188,27 @@ class Synthesizer:
         metadata = {"mode": mode, "fallback": True}
         # DÜZELTME: List comprehension içinde güvenli .get() kullanımı
     @staticmethod
-    async def synthesize_stream(raw_results: List[Dict[str, Any]], session_id: str, intent: str = "general", user_message: str = "", mode: str = "standard"):
+    async def synthesize_stream(raw_results: List[Dict[str, Any]], session_id: str, intent: str = "general", user_message: str = "", mode: str = "standard", current_topic: str = None, request_context=None):
         """
         Expert sonuçlarını birleştirir ve final yanıtı stream (akış) olarak üretir.
+        
+        Args:
+            request_context: AtlasRequestContext with identity facts from API layer
         """
         from Atlas.generator import generate_stream
         from Atlas.style_injector import get_system_instruction
         
         # 1. Uzman verilerini hazırla
         formatted_data = ""
+        
+        # Memory Voice System: Identity facts'i doğal dil talimatı olarak enjekte et
+        if request_context:
+            memory_instruction = request_context.get_human_memory_instruction()
+            if memory_instruction:
+                formatted_data = memory_instruction + "\n\n"
+        
         if not raw_results:
-            formatted_data = f"[DİKKAT: Uzman raporu bulunamadı.]\nKullanıcı: {user_message}"
+            formatted_data += f"[DİKKAT: Uzman raporu bulunamadı.]\nKullanıcı: {user_message}"
         else:
             for res in raw_results:
                 content = res.get('output') or res.get('response') or "[Veri Yok]"
@@ -150,6 +227,44 @@ class Synthesizer:
             user_message=user_message
         )
 
+
+        # FAZ-Y.5: Mirroring for stream
+        mirroring_instruction = ""
+        if mode == "standard":
+            context_str = formatted_data.lower() + " " + user_message.lower()
+            if any(w in context_str for w in ["yorgun", "gergin", "üzgün", "stres", "yoğun"]):
+                mirroring_instruction = "\n[MIRRORING]: Kullanıcı yorgun/gergin. Kısa, empatik ve çözüm odaklı ol."
+            elif any(w in context_str for w in ["mutlu", "neşeli", "enerjik"]):
+                mirroring_instruction = "\n[MIRRORING]: Kullanıcı enerjik. Canlı ve detaylı ol."
+            
+            if "GRAF | Skor:" in formatted_data or "HIB_GRAF" in formatted_data:
+                 mirroring_instruction += "\n[MEMORY_VOICE]: 'Hatırladığım kadarıyla...' gibi ifadeler kullan. Bilgi 6 aydan eskiyse 'Bir süre önce...', confidence < 0.6 ise 'Emin olmamakla birlikte...' diyerek başla. Etiketleri gizle."
+
+        # FAZ-Y Final: Conflict Resolution for stream
+        conflict_instruction = ""
+        if "[ÇÖZÜLMESİ GEREKEN DURUM]" in formatted_data or "[ÇÖZÜLMESİ GEREKEN DURUM]" in history_text:
+            conflict_instruction = "\n[CONFLICT_RESOLUTION]: Hafızada çelişki var. Cevap sonrası nazikçe netleştir."
+
+        # FAZ-α.2: Topic Transition for stream
+        topic_transition_instruction = ""
+        if current_topic and current_topic not in ["SAME", "CHITCHAT"]:
+            topic_transition_instruction = f"\n[KONU DEĞİŞİMİ]: Konu '{current_topic}' oldu. Gerekiyorsa geçiş cümlesi kur."
+
+        # FAZ-β: Emotional Continuity for stream
+        emotional_instruction = ""
+        if "[ÖNCEKİ DUYGU DURUMU]" in formatted_data or "[ÖNCEKİ DUYGU DURUMU]" in history_text:
+            import re
+            mood_match = re.search(r"ÖNCEKİ DUYGU DURUMU.*?'([^']+)'", formatted_data + history_text)
+            if mood_match:
+                mood = mood_match.group(1).lower()
+                negative_moods = ["üzgün", "kızgın", "sinirli", "depresif", "mutsuz", "hasta", "yorgun", "stresli", "gergin"]
+                positive_moods = ["mutlu", "neşeli", "heyecanlı", "enerjik", "motive", "rahat", "iyi"]
+                
+                if any(neg in mood for neg in negative_moods):
+                    emotional_instruction = "\n[EMOTIONAL_CONTINUITY]: Önceki duygu negatif. Empatik selamlaşma yap."
+                elif any(pos in mood for pos in positive_moods):
+                    emotional_instruction = "\n[EMOTIONAL_CONTINUITY]: Önceki duygu pozitif. Enerjik ve destekleyici ol."
+
         # 3. Sırayla modelleri dene (Stream versiyonu)
         synth_models = MODEL_GOVERNANCE.get("synthesizer", ["llama-3.3-70b-versatile"])
         
@@ -163,7 +278,8 @@ class Synthesizer:
                 yield {"type": "metadata", "model": model_id, "prompt": prompt, "mode": mode, "persona": mode} # Persona mode ile aynı şimdilik
                 
                 # generate_stream asenkron jeneratör döner
-                async for chunk in generate_stream(prompt, model_id, intent, api_key=api_key, override_system_prompt=style_instruction):
+                actual_style = style_instruction + mirroring_instruction + conflict_instruction + topic_transition_instruction + emotional_instruction
+                async for chunk in generate_stream(prompt, model_id, intent, api_key=api_key, override_system_prompt=actual_style):
                     yield {"type": "chunk", "content": chunk}
                 return # Başarılı akış bitti
             except Exception as e:
@@ -187,6 +303,13 @@ class Synthesizer:
         ]
         for pattern in meta_patterns:
             sanitized = re.sub(pattern, '', sanitized, flags=re.DOTALL | re.IGNORECASE)
+        
+        # FAZ-Y.5: Graph/Hybrid tags cleanup
+        sanitized = re.sub(r'\[GRAF \| Skor: \d+\.\d+\][:\s]*', '', sanitized)
+        sanitized = re.sub(r'\[HIB_GRAF \| Skor: \d+\.\d+\][:\s]*', '', sanitized)
+        sanitized = re.sub(r'\[VECTOR \| Skor: \d+\.\d+\][:\s]*', '', sanitized)
+        sanitized = re.sub(r'\[(GRAPH|VECTOR|HIB_GRAF|GRAF)\][:\s]*', '', sanitized)
+        sanitized = re.sub(r'\[ZAMAN FİLTRESİ\].*?\n', '', sanitized, flags=re.DOTALL)
             
         return sanitized.strip()
 

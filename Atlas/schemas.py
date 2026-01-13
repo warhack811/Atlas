@@ -21,5 +21,6 @@ class TaskSpec(BaseModel):
 class OrchestrationPlan(BaseModel):
     """Orchestrator'dan gelen tam plan."""
     intent: str
+    detected_topic: Optional[str] = Field(default="SAME", description="Algılanan konuşma konusu")
     rewritten_query: Optional[str] = None
     tasks: List[TaskSpec]

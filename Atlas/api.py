@@ -27,12 +27,39 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from Atlas.auth import create_session_token, decode_session_token, verify_credentials
+import hashlib
+import asyncio
+from Atlas.memory.semantic_cache import semantic_cache
+from Atlas.memory.text_normalize import normalize_text_for_dedupe
+from Atlas.config import ENABLE_SEMANTIC_CACHE
+
+# --- FAZ-Y: Single-flight protection for cache stampede mitigation ---
+# Bounded lock map to prevent memory leaks
+_cache_locks = {}  # {lock_key: asyncio.Lock}
+_cache_lock_manager = asyncio.Lock()
+MAX_LOCK_MAP_SIZE = 1000  # Staff: Prevent unconstrained growth
+
+async def get_cache_lock(user_id: str, query: str) -> asyncio.Lock:
+    """Gets a lock for a specific user+query pattern. Cleans up old locks if full."""
+    normalized = normalize_text_for_dedupe(query)
+    lock_key = f"{user_id}:{hashlib.md5(normalized.encode()).hexdigest()[:16]}"
+    
+    async with _cache_lock_manager:
+        if lock_key not in _cache_locks:
+            # Memory leak protection: if map is too big, clear it
+            # Staff: Fixed-size buffer approach for MVP
+            if len(_cache_locks) >= MAX_LOCK_MAP_SIZE:
+                _cache_locks.clear() 
+                logger.info("Cache lock map cleared to prevent memory leak.")
+            
+            _cache_locks[lock_key] = asyncio.Lock()
+        return _cache_locks[lock_key]
 
 logger = logging.getLogger("api")
 
 # Döngüsel içe aktarmayı (circular import) önlemek için burada tanımlanmıştır
 from Atlas import rdr
+from Atlas.auth import create_session_token, decode_session_token, verify_credentials
 
 app = FastAPI(
     title="ATLAS Router Sandbox",
@@ -65,9 +92,7 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
-class LoginRequest(BaseModel):
-    username: str
-    password: str
+
 
 
 class ChatResponse(BaseModel):
@@ -129,30 +154,22 @@ class MemoryCorrectionRequest(BaseModel):
     reason: Optional[str] = None
 
 
-async def keep_alive_pulse():
-    """
-    Neo4j Bağlantı Canlılığı (Heartbeat).
-    Ücretsiz veritabanı oturumlarının (AuraDB) uykuya dalmasını önlemek için 
-    düzenli aralıklarla (9 dakika) hafif bir sorgu gönderir.
-    """
-    from Atlas.memory.neo4j_manager import neo4j_manager
-    while True:
-        try:
-            await asyncio.sleep(540) # 9 dakikalık bekleme süresi
-            await neo4j_manager.query_graph("RETURN 1 AS heartbeat")
-            logger.info("Neo4j Kalp Atışı Sinyali gönderildi.")
-        except Exception as e:
-            logger.error(f"Kalp atışı başarısız: {e}")
-
 
 @app.on_event("startup")
 async def startup_event():
     """Uygulama başladığında çalışacak görevler."""
+    # STARTUP LOGGING FIX: Ensure logs are visible in terminal
+    import sys
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        stream=sys.stdout,
+        force=True
+    )
+    logger.info("ATLAS API Starting up... logging configured.")
+    
     from Atlas.scheduler import start_scheduler
     await start_scheduler()
-    
-    # Arka plan görevlerini ve veritabanı canlılık sinyalini başlat
-    asyncio.create_task(keep_alive_pulse())
 
 
 # --- AUTH & SESSION ---
@@ -211,7 +228,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Dep
     # 0. ERİŞİM KONTROLÜ: INTERNAL_ONLY modunda whitelist kontrolü
     # Öncelik: login > body > session_id
     logged_in_username = user["username"] if user else None
-    user_id = logged_in_username or request.user_id or request.session_id
+    user_id = (logged_in_username or request.user_id or request.session_id).lower()
     
     from Atlas.config import is_user_whitelisted, INTERNAL_ONLY
     if not is_user_whitelisted(user_id):
@@ -254,7 +271,7 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Dep
         # user_id yukarıda erişim kontrolünde zaten belirlenmişti (priority: login > body > session_id)
         # Ancak burada tekrar atanması gerekebilir eğer yerel kapsamda kullanılıyorsa
         logged_in_username = user["username"] if user else None
-        user_id = logged_in_username or request.user_id or session_id
+        user_id = (logged_in_username or request.user_id or session_id).lower()
         
         # RC-2: Kullanıcı-Session eşleşmesini sağla
         from Atlas.memory.neo4j_manager import neo4j_manager
@@ -265,29 +282,79 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Dep
         
         MessageBuffer.add_user_message(session_id, user_message)
         
-        # RC-1/RC-2/RC-9: Full hybrid context with tracing
-        from Atlas.memory.context import ContextBuilder, build_chat_context_v1
+        # RC-1/RC-2/RC-9: AtlasRequestContext Pattern
+        from Atlas.memory.request_context import AtlasRequestContext
         from Atlas.memory.trace import ContextTrace
         from Atlas.config import DEBUG
         
-        cb = ContextBuilder(session_id)
+        # Persona seçimi (Default: friendly)
+        persona_name = (request.style.get("persona") if request.style else None) or "friendly"
+        
         trace = None
         if DEBUG and request.debug_trace:
             trace = ContextTrace(request_id=f"trace_{int(time.time())}", user_id=user_id, session_id=session_id)
-            
-        neo4j_context = await build_chat_context_v1(user_id, session_id, user_message, trace=trace)
-        cb.with_neo4j_context(neo4j_context)
+        
+        # Create unified request context (fetches identity from Neo4j ONCE)
+        request_context = await AtlasRequestContext.create(
+            request_id=f"req_{int(time.time())}",
+            user_id=user_id,
+            session_id=session_id,
+            user_message=user_message,
+            persona=persona_name,
+            trace=trace
+        )
+        
+        # Legacy ContextBuilder bridge (for backward compatibility with orchestrator)
+        from Atlas.memory.context import ContextBuilder
+        cb = ContextBuilder(session_id, user_id=user_id).with_system_prompt(request_context.system_prompt)
+        cb.with_neo4j_context(request_context.neo4j_context_str)
+        
+        # --- PHASE 0.5: Y.5 SEMANTIC CACHE CHECK (Staff Refined) ---
+        cache_hit = False
+        cache_metadata = {"hit": False, "latency_ms": 0, "similarity": 0.0}
+        
+        if ENABLE_SEMANTIC_CACHE:
+            cache_lock = await get_cache_lock(user_id, user_message)
+            async with cache_lock:
+                try:
+                    cache_res = await semantic_cache.get_with_meta(user_id, user_message)
+                    if cache_res["response"]:
+                        cache_hit = True
+                        cache_metadata["hit"] = True
+                        cache_metadata["latency_ms"] = cache_res["latency_ms"]
+                        cache_metadata["similarity"] = cache_res["similarity"]
+                        
+                        # Staff: Persist turn even on hit to keep history coherent
+                        await neo4j_manager.append_turn(user_id, session_id, "assistant", cache_res["response"])
+                        
+                        # Assembler for cached response
+                        record_cached = rdr.RDR.create(user_message)
+                        record_cached.metadata["cache"] = cache_metadata
+                        record_cached.metadata["llm_skipped"] = True
+                        record_cached.metadata["orchestrator_skipped"] = True
+                        rdr.save_rdr(record_cached)
+                        
+                        logger.info(f"CACHE HIT: user={user_id}, sim={cache_metadata['similarity']:.3f}, ms={cache_metadata['latency_ms']}")
+                        return ChatResponse(
+                            response=cache_res["response"],
+                            session_id=session_id,
+                            rdr=record_cached.to_dict()
+                        )
+                except Exception as e:
+                    logger.warning(f"Semantic cache failure (degrading): {e}")
+            cache_metadata["latency_ms"] = cache_metadata.get("latency_ms", 0)
         
         record = rdr.RDR.create(user_message)
-        if neo4j_context:
-            record.full_context_injection = f"[MEMORY V3]: {neo4j_context}"
+        if request_context.neo4j_context_str:
+            record.full_context_injection = f"[MEMORY V3]: {request_context.neo4j_context_str}"
         
         # 1. PLANLAMA (ORKESTRASYON): Kullanıcı niyetini anlar ve bir iş planı oluşturur
         from Atlas import orchestrator
         classify_start = time.time()
         plan = await orchestrator.orchestrator.plan(
             session_id, 
-            user_message, 
+            user_message,
+            user_id=user_id,
             use_mock=request.use_mock,
             context_builder=cb
         )
@@ -313,16 +380,26 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Dep
         # 2. YÜRÜTME (EXECUTION): Planlanan görevleri (araç kullanımı, LLM çağrıları) çalıştırır
         from Atlas import dag_executor
         exec_start = time.time()
-        raw_results = await dag_executor.dag_executor.execute_plan(plan, session_id, user_message)
+        # Pass request_context for identity propagation
+        raw_results = await dag_executor.dag_executor.execute_plan(plan, session_id, user_message, request_context=request_context)
         exec_ms = int((time.time() - exec_start) * 1000)
         
         # 3. HARMANLAMA (SENTEZ): Uzmanlardan gelen ham çıktıları tutarlı bir yanıta dönüştürür
         from Atlas import synthesizer
         synth_start = time.time()
+        # Pass request_context for identity injection in synthesis
         response_text, synth_model, synth_prompt, synth_metadata = await synthesizer.synthesizer.synthesize(
-            raw_results, session_id, plan.active_intent, user_message, mode=request.mode
+            raw_results, session_id, plan.active_intent, user_message, mode=request.mode, current_topic=plan.detected_topic, request_context=request_context
         )
+
         synth_ms = int((time.time() - synth_start) * 1000)
+        
+        # --- PHASE 3.5: Y.5 CACHE SET ---
+        if ENABLE_SEMANTIC_CACHE and not cache_hit:
+            try:
+                await semantic_cache.set(user_id, user_message, response_text)
+            except Exception as e:
+                logger.warning(f"Cache set failed: {e}")
         
         record.synthesizer_model = synth_model
         record.synthesizer_prompt = synth_prompt
@@ -352,6 +429,13 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Dep
         record.dag_execution_ms = exec_ms
         record.synthesis_ms = synth_ms
         record.quality_ms = quality_ms
+        
+        if trace:
+            record.metadata["memory_tiers"] = trace.active_tiers
+
+        # Metadata Injection
+        record.metadata["cache"] = cache_metadata
+        record.metadata["retrieval_ms"] = int((time.time() - start_time) * 1000) # Simplified
         record.total_ms = int((time.time() - start_time) * 1000)
         record.generation_ms = record.total_ms # Geriye dönük uyumluluk için
         record.safety_passed = safety_info["passed"]
@@ -362,9 +446,13 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Dep
         rdr.save_rdr(record)
         
         # Arka planda bilgi çıkarımı yaparak graf veritabanını günceller
-        # FAZ2: source_turn_id (request_id) iz sürme için extractor'a gönderiliyor
+        # FAZ-Y: background_tasks None kontrolü (test ortamı resilience)
         from Atlas.memory.extractor import extract_and_save as extract_and_save_task
-        background_tasks.add_task(extract_and_save_task, user_message, user_id, record.request_id)
+        if background_tasks:
+            background_tasks.add_task(extract_and_save_task, user_message, user_id, record.request_id)
+        else:
+            # Fallback for tests/environments without FastAPI BackgroundTasks
+            asyncio.create_task(extract_and_save_task(user_message, user_id, record.request_id))
 
         return ChatResponse(
             response=response_text,
@@ -386,7 +474,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks, u
     # 0. ERİŞİM KONTROLÜ: INTERNAL_ONLY modunda whitelist kontrolü
     # Öncelik: login > body > session_id
     logged_in_username = user["username"] if user else None
-    user_id = logged_in_username or request.user_id or request.session_id
+    user_id = (logged_in_username or request.user_id or request.session_id).lower()
     
     from Atlas.config import is_user_whitelisted
     if not is_user_whitelisted(user_id):
@@ -395,6 +483,33 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks, u
             status_code=403, 
             detail="Bu API şu anda sadece yetkili kullanıcılara açıktır. (INTERNAL_ONLY mode)"
         )
+
+    # --- PHASE 0.5: Y.5 CACHE HIT CHECK FOR STREAM ---
+    if ENABLE_SEMANTIC_CACHE:
+        cache_lock = await get_cache_lock(user_id, request.message)
+        async with cache_lock:
+            try:
+                cache_res = await semantic_cache.get_with_meta(user_id, request.message)
+                if cache_res["response"]:
+                    # Simulated stream for cache hit
+                    async def cached_event_generator():
+                        yield json.dumps({"type": "thought", "content": "Hafızadan getiriliyor..."}) + "\n"
+                        yield json.dumps({"type": "chunk", "content": cache_res["response"]}) + "\n"
+                        yield json.dumps({"type": "done", "status": "success"}) + "\n"
+                    # Staff: Explicit turn persistence on hit (Y.5)
+                    await neo4j_manager.append_turn(user_id, request.session_id, "assistant", cache_res["response"])
+
+                    # Background extraction even on cache hit (optional but good for graph consistency)
+                    from Atlas.memory.extractor import extract_and_save as extract_and_save_task
+                    if background_tasks:
+                        background_tasks.add_task(extract_and_save_task, request.message, user_id, f"cached_{int(time.time())}")
+                    else:
+                        asyncio.create_task(extract_and_save_task(request.message, user_id, f"cached_{int(time.time())}"))
+                    
+                    logger.info(f"STREAM CACHE HIT: user={user_id}")
+                    return StreamingResponse(cached_event_generator(), media_type="text/event-stream")
+            except Exception as e:
+                logger.warning(f"Stream cache hit check failed: {e}")
 
     async def event_generator():
         """Süreç adımlarını ve metin parçalarını ileten jeneratör."""
@@ -408,7 +523,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks, u
             
             session_id = request.session_id
             logged_in_username = user["username"] if user else None
-            user_id = logged_in_username or request.user_id or session_id
+            user_id = (logged_in_username or request.user_id or session_id).lower()
             
             # RC-2: Kullanıcı-Session eşleşmesini sağla
             from Atlas.memory.neo4j_manager import neo4j_manager
@@ -436,23 +551,34 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks, u
                 return
 
             classify_start = time.time()
-            # 1. Bellek ve Bağlam Hazırlığı - RC-1: v3 context packaging
-            from Atlas.memory.context import ContextBuilder, build_memory_context_v3
+            # 1. Bellek ve Bağlam Hazırlığı - AtlasRequestContext Pattern
+            from Atlas.memory.request_context import AtlasRequestContext
             from Atlas.memory.trace import ContextTrace
-            cb = ContextBuilder(session_id)
+            
+            persona_name = (request.style.get("persona") if request.style else None) or "friendly"
             
             trace = None
             from Atlas.config import DEBUG
             if DEBUG and request.debug_trace:
                 trace = ContextTrace(request_id=f"trace_{int(time.time())}", user_id=user_id, session_id=session_id)
             
-            # RC-1/RC-2/RC-9: Full hybrid context with tracing
-            from Atlas.memory.context import build_chat_context_v1
-            graph_context = await build_chat_context_v1(user_id, session_id, request.message, trace=trace)
-            cb.with_neo4j_context(graph_context)
+            # Create unified request context (fetches identity from Neo4j ONCE)
+            request_context = await AtlasRequestContext.create(
+                request_id=f"req_{int(time.time())}",
+                user_id=user_id,
+                session_id=session_id,
+                user_message=request.message,
+                persona=persona_name,
+                trace=trace
+            )
+            
+            # Legacy ContextBuilder bridge (for backward compatibility with orchestrator)
+            from Atlas.memory.context import ContextBuilder
+            cb = ContextBuilder(session_id, user_id=user_id).with_system_prompt(request_context.system_prompt)
+            cb.with_neo4j_context(request_context.neo4j_context_str)
             
             # 2. Orkestrasyon: Niyet analizi ve DAG planı oluşturma
-            plan = await orchestrator.orchestrator.plan(session_id, request.message, use_mock=request.use_mock, context_builder=cb)
+            plan = await orchestrator.orchestrator.plan(session_id, request.message, user_id=user_id, use_mock=request.use_mock, context_builder=cb)
             classify_ms = int((time.time() - classify_start) * 1000)
             
             record.intent = plan.active_intent
@@ -466,14 +592,16 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks, u
             record.reasoning_steps.append(orchestrator_thought)
             yield f"data: {json.dumps({'type': 'thought', 'step': orchestrator_thought}, default=str)}\n\n"
             
-            if graph_context:
-                record.full_context_injection = f"[NEO4J MEMORY]: {graph_context}"
+            if request_context.neo4j_context_str:
+                record.full_context_injection = f"[NEO4J MEMORY]: {request_context.neo4j_context_str}"
             
             yield f"data: {json.dumps({'type': 'plan', 'intent': plan.active_intent, 'model': plan.orchestrator_model}, default=str)}\n\n"
 
             exec_start = time.time()
             raw_results = []
-            async for event in dag_executor.dag_executor.execute_plan_stream(plan, session_id, request.message):
+            # Pass request_context to dag_executor for downstream propagation
+            async for event in dag_executor.dag_executor.execute_plan_stream(plan, session_id, request.message, request_context=request_context):
+
                 if event["type"] == "thought":
                     # Dinamik başlık belirle (Task ID veya tipinden)
                     task_id = event.get("task_id", "")
@@ -512,7 +640,7 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks, u
             full_response = ""
             synth_start = time.time()
             async for data in synthesizer.synthesizer.synthesize_stream(
-                raw_results, session_id, plan.active_intent, request.message, mode=request.mode
+                raw_results, session_id, plan.active_intent, request.message, mode=request.mode, current_topic=plan.detected_topic, request_context=request_context
             ):
                 if data["type"] == "metadata":
                     record.synthesizer_model = data["model"]
@@ -529,6 +657,9 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks, u
 
             MessageBuffer.add_assistant_message(session_id, full_response)
             
+            if trace:
+                record.metadata["memory_tiers"] = trace.active_tiers
+            
             # RC-3: Transcript Persistence (Assistant Turn)
             from Atlas.memory.neo4j_manager import neo4j_manager
             await neo4j_manager.append_turn(user_id, session_id, "assistant", full_response)
@@ -544,10 +675,14 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks, u
 
             record.total_ms = int((time.time() - start_time) * 1000)
             record.generation_ms = record.total_ms
+
             # Arka planda bilgi çıkarımı yaparak graf veritabanını günceller
-            # FAZ2: source_turn_id (request_id) iz sürme için extractor'a gönderiliyor
+            # FAZ-Y: background_tasks None kontrolü
             from Atlas.memory.extractor import extract_and_save as extract_and_save_task
-            background_tasks.add_task(extract_and_save_task, request.message, user_id, record.request_id)
+            if background_tasks:
+                background_tasks.add_task(extract_and_save_task, request.message, user_id, record.request_id)
+            else:
+                asyncio.create_task(extract_and_save_task(request.message, user_id, record.request_id))
 
             rdr.save_rdr(record)
             yield f"data: {json.dumps({'type': 'done', 'rdr': record.to_dict(), 'debug_trace': serialize_neo4j_value(trace.to_dict()) if trace else None}, default=str)}\n\n"
@@ -726,6 +861,19 @@ async def get_memory_status(session_id: str, user_id: Optional[str] = None):
         "settings": settings
     }
 
+@app.get("/api/history/{session_id}")
+async def get_chat_history(session_id: str, user=Depends(get_current_user)):
+    """Oturumun tüm konuşma geçmişini döner (UI desteği için)."""
+    if not user:
+        raise HTTPException(status_code=401, detail="Oturum geçmişi için giriş yapmalısınız.")
+    
+    uid = user["username"]
+    from Atlas.memory.neo4j_manager import neo4j_manager
+    
+    # Session sahipliğini doğrula
+    turns = await neo4j_manager.get_recent_turns(uid, session_id, limit=100)
+    return {"session_id": session_id, "history": serialize_neo4j_value(turns)}
+
 @app.post("/api/memory/forget")
 async def forget_memory(request: MemoryForgetRequest):
     """
@@ -887,13 +1035,15 @@ if UI_PATH.exists():
 
 async def _maybe_trigger_episodic_memory(user_id: str, session_id: str):
     """
-    Her 20 konuşma turunda bir PENDING episod oluşturur. (RC-4 Refactor)
+    Her 10 konuşma turunda bir PENDING episod oluşturur. (Kademeli Hafıza Optimizasyonu)
     """
     from Atlas.memory.neo4j_manager import neo4j_manager
     count = await neo4j_manager.count_turns(user_id, session_id)
-    if count > 0 and count % 20 == 0:
-        logger.info(f"RC-4: Episodic PENDING trigger for session {session_id} (count: {count})")
+    if count > 0 and count % 10 == 0:
+        logger.info(f"TieredMemory: Episodic PENDING trigger for session {session_id} (count: {count})")
+        # Son 10 mesajı kapsayan bir episode oluştur
+        # 0-tabanlı index uyumu (Turn 0-9 için start=0, end=9)
         await neo4j_manager.create_episode_pending(
             user_id, session_id, 
-            count-19, count
+            count-10, count-1
         )

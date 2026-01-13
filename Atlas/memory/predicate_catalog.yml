@@ -112,13 +112,13 @@ OGRENMEK_ISTIYOR:
 
 HISSEDIYOR:
   canonical: "HİSSEDİYOR"
-  aliases: ["HİSSETTİĞİ_DUYGU", "HİS"]
+  aliases: ["HİSSETTİĞİ_DUYGU", "HİS", "FEELS", "DUYGU"]
   type: "TEMPORAL"
   category: "emotional"
   durability: "EPHEMERAL"
   enabled: true
   example: "Mutlu hissediyorum."
-  note: "Current emotion - should be EPHEMERAL or DISCARD"
+  note: "Current emotion - FAZ-Y.5 Mirroring support"
 
 # ==============================================================================
 # RELATIONSHIPS & SOCIAL (Additive/Exclusive)

@@ -15,3 +15,7 @@ pyyaml
 apscheduler
 dateparser
 numpy
+
+# FAZ-Y: Vector Database & Cache
+qdrant-client>=1.7.0,<2.0.0  # Vector database - search() API required
+redis[asyncio]>=5.0.0,<6.0.0  # Semantic cache

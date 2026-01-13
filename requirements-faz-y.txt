@@ -1,0 +1,26 @@
+# ATLAS FAZ-Y Dependencies
+# Production-ready version pinning for hybrid memory system
+
+# Vector Database
+qdrant-client>=1.7.0,<2.0.0  # Minimum 1.7.0 for search() API
+
+# Redis Cache
+redis[asyncio]>=5.0.0,<6.0.0
+
+# Embeddings (already in main requirements)
+# google-generativeai>=0.3.0  # Gemini API
+
+# Testing
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+python-dotenv>=1.0.0
+
+# WHY THESE VERSIONS:
+# - qdrant-client 1.7.0+: Introduces search() API (replaces query_points)
+# - redis[asyncio] 5.0+: Stable async support
+# - pytest-asyncio 0.21+: Proper async fixture support
+
+# RISK MITIGATION:
+# - Upper bounds prevent breaking changes
+# - Lower bounds ensure API compatibility
+# - Explicit version ranges for reproducible builds

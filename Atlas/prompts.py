@@ -39,6 +39,11 @@ ANALİZ KURALLARI:
 5. KRİTİK: Eğer geçmişte [CONTEXT - VISION_ERROR] notu varsa, görsel kota/hata nedeniyle işlenememiştir. Arama yapma, kullanıcıya dürüstçe görselin şu an işlenemediğini (kota doluluğu vb.) belirt.
 6. PARALEL PLANLAMA: Birbiriyle ilgisiz görevleri (örn: hem arama, hem resim çizme) aynı anda başlatmak için `dependencies` alanını boş bırak. Sadece bir görevin çıktısı diğerine lazımsa bağımlılık ekle.
 7. DÜŞÜNCE ZİNCİRİ: Her bir 'generation' görevinin 'instruction' alanına şu talimatı mutlaka ekle: "Yanıtının asıl kısmından önce, kullanıcıya yönelik profesyonel bir iş özetini mutlaka SADECE TÜRKÇE olarak <thought>...</thought> etiketleri içine yaz. Kesinlikle 'Merhaba', 'Tabii', 'Size yardımcı olacağım' gibi selamlaşmalar kullanma. Sadece neyi analiz ettiğini ve neyi başarmayı hedeflediğini anlat."
+8. KONU TAKİBİ (TOPIC TRACKING):
+   - Kullanıcının aktif olarak konuştuğu ana konuyu 1-3 kelime ile özetle (Örn: "Python Kodlama", "Tatil Planı", "Hava Durumu").
+   - Eğer konu bir öncekiyle aynıysa veya belirsizse "SAME" döndür.
+   - Eğer sadece selamlaşma, onaylama veya geyik muhabbetiyse "CHITCHAT" döndür.
+   - Konu değiştiyse YENİ konu başlığını yaz.
 
 BAĞLAM BİLGİSİ:
 [CONTEXT_DATA]
@@ -56,6 +61,7 @@ KULLANICI MESAJI:
 {{
   "intent": "coding" | "general" | "search" | "creative",
   "is_follow_up": false,
+  "detected_topic": "SAME" | "CHITCHAT" | "Konu Başlığı",
   "context_focus": "...",
   "reasoning": "Planın seçilme nedeni (Stratejik analiz).",
   "user_thought": "Kullanıcıya yönelik STRATEJİK İŞ PLANI. Kesinlikle 'Merhaba', 'Nasılsınız' gibi asistan selamlaşmaları kullanma. Doğrudan operasyonel süreci anlat. (Örn: 'Sorgunuzdaki karmaşıklık analizi yapıldı. Güncel verileri doğrulamak için internet kaynaklarını tarayıp mantıksal sentez aşamasına geçeceğim.') SADECE TÜRKÇE.",
@@ -116,6 +122,14 @@ SYNTHESIZER_PROMPT = """
 Aşağıdaki uzman raporlarını (Tasks Outputs) ve konuşma geçmişini (History) kullanarak kullanıcıya nihai yanıtı ver.
 Verilen Persona ve Stil talimatlarına KESİNLİKLE uy.
 
+[HAFIZA SESİ DİREKTİFİ]
+<system_memory> etiketleri arasındaki bilgiler SENİN HATIRLADIKLARIN. Bu bilgileri kullanırken:
+- ASLA "profil", "kayıt", "veritabanı", "veri" gibi teknik terimler kullanma
+- ASLA "gördüğüm kadarıyla", "profiline göre", "kayıtlarıma göre" gibi meta-referanslar yapma
+- Bu bilgileri zaten BİLİYORMUŞ gibi doğal kullan
+- İsim sorulursa sadece ismi söyle, "Profiline göre Muhammet" DEME - sadece "Muhammet" de
+- Yaş sorulursa "32 yaşındasın" de, "Kayıtlarıma göre 32 yaşındasın" DEME
+
 [KONUŞMA_GEÇMİŞİ]
 {history}
 
@@ -143,6 +157,10 @@ TONE_DIRECTIVES = {
     "casual": "Rahat ve günlük bir dil kullan. Kasmaya gerek yok.",
     "kanka": "Aşırı samimi ol. Espriler yap."
 }
+
+def get_persona_prompt(persona_name: str) -> str:
+    """Persona adına göre ilgili promptu döner."""
+    return PERSONA_PROMPTS.get(persona_name.lower(), PERSONA_PROMPTS["professional"])
 
 LENGTH_DIRECTIVES = {
     "short": "Cevabın çok kısa ve net olsun. Lafı uzatma.",
@@ -231,12 +249,12 @@ Sen bir Bilgi Çıkarım (Information Extraction) uzmanısın.
 Kullanıcının mesajından kalıcı, önemli ve ileride hatırlanması gereken bilgileri özne-yüklem-nesne (subject-predicate-object) şeklinde çıkar.
 
 KURALLAR:
-1. Sadece kalıcı gerçekleri çıkar (Örn: Ad, meslek, ikamet, aile bireyleri, sevdiği/sevmediği şeyler).
-2. Geçici durumları (yorgunluk, anlık açlık) ve selamlaşmaları atla.
-3. "Ben", "Sen", "O", "Onlar", "Biz", "Hocam" gibi zamirleri subject veya object olarak kullanma. Gerçek isim veya varlık varsa onu kullan, yoksa o triplet'i üretme.
-4. Çıktıyı SADECE ve SADECE şu JSON formatında bir liste olarak ver: [{{"subject": "...", "predicate": "...", "object": "...", "category": "personal" | "general"}}]
+1. Sadece kalıcı gerçekleri (Ad, meslek vb.) VE kullanıcının o anki bariz DUYGU durumunu (yorgun, mutlu, gergin) çıkar.
+2. Selamlaşmaları ve çok önemsiz detayları atla. Anlık duygular Mirroring için önemlidir, 'HİSSEDİYOR' olarak çıkar.
+3. ÖZNEL BİLGİ: Kullanıcı kendisi hakkında bilgi veriyorsa (örn: 'Adım Ali', '32 yaşındayım'), OZNE (subject) olarak KESİNLİKLE 'KULLANICI' yaz. Üçüncü şahıslar için gerçek isimlerini kullan.
+4. Çıktıyı SADECE ve SADECE şu JSON formatında bir liste olarak ver: [{"subject": "...", "predicate": "...", "object": "...", "category": "personal" | "general"}]
 5. Açıklama yapma, sadece JSON döndür.
-6. Bilgi yoksa [] döndür.
+6. ÖNEMLİ: Eğer kullanıcı bilgi vermiyor, sadece soru soruyorsa (örn: 'Adım ne?', 'Yaşımı biliyor musun?') veya bilgi belirsizse (örn: 'Bilmiyorum', 'Hatırlamıyorum') BOŞ LİSTE [] döndür. Kesinlikle 'Bilgi Yok', 'Bilinmiyor' gibi tripletler üretme.
 
 İZİN VERİLEN PREDICATE'LER (sadece bunları kullan):
 - İSİM, LAKABI, YAŞI, MESLEĞİ, YAŞAR_YER, GELDİĞİ_YER

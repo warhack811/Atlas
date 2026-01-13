@@ -33,15 +33,15 @@ class DAGExecutor:
         definitions_path = os.path.join(base_dir, "tools", "definitions")
         self.tool_registry.load_tools(definitions_path)
 
-    async def execute_plan(self, plan: Union[OrchestrationPlan, Dict[str, Any]], session_id: str, original_message: str) -> List[Dict[str, Any]]:
+    async def execute_plan(self, plan: Union[OrchestrationPlan, Dict[str, Any]], session_id: str, original_message: str, request_context=None) -> List[Dict[str, Any]]:
         """Geriye dönük uyumluluk için: Tüm sonuçları liste olarak döner."""
         results = []
-        async for event in self.execute_plan_stream(plan, session_id, original_message):
+        async for event in self.execute_plan_stream(plan, session_id, original_message, request_context=request_context):
             if event["type"] == "task_result":
                 results.append(event["result"])
         return results
 
-    async def execute_plan_stream(self, plan: Union[OrchestrationPlan, Dict[str, Any]], session_id: str, original_message: str):
+    async def execute_plan_stream(self, plan: Union[OrchestrationPlan, Dict[str, Any]], session_id: str, original_message: str, request_context=None):
         """Görev akışını yürütür ve her adımda thought/result olaylarını yield eder."""
         if isinstance(plan, dict):
             plan = OrchestrationPlan(**plan)
@@ -70,7 +70,7 @@ class DAGExecutor:
                 
                 layer_coroutines = []
                 for task_spec in ready_tasks:
-                    layer_coroutines.append(self._execute_single_task(task_spec, plan, executed_tasks, session_id, original_message))
+                    layer_coroutines.append(self._execute_single_task(task_spec, plan, executed_tasks, session_id, original_message, request_context=request_context))
                 
                 layer_results = await asyncio.gather(*layer_coroutines)
                 
@@ -100,7 +100,7 @@ class DAGExecutor:
             logger.error(f"DAG Stream Hatası: {e}")
             raise e
 
-    async def _execute_single_task(self, task: TaskSpec, plan: OrchestrationPlan, executed_tasks: Dict, session_id: str, original_message: str) -> Dict:
+    async def _execute_single_task(self, task: TaskSpec, plan: OrchestrationPlan, executed_tasks: Dict, session_id: str, original_message: str, request_context=None) -> Dict:
         """Bir görevi tipine göre çalıştırır."""
         
         task_id = task.id
@@ -125,7 +125,8 @@ class DAGExecutor:
                 instruction=task.instruction or "",
                 session_id=session_id,
                 intent=plan.active_intent,
-                signal_only=True
+                signal_only=True,
+                request_context=request_context
             )
         elif task.type == "memory_control":
             res = await self._execute_memory_control(task, session_id)
@@ -201,7 +202,7 @@ class DAGExecutor:
             return match.group(0)
         return re.sub(pattern, replace_match, prompt)
 
-    async def _run_generation(self, task_id: str, role_key: str, prompt: str, instruction: str, session_id: str, intent: str = "general", signal_only: bool = False) -> Dict:
+    async def _run_generation(self, task_id: str, role_key: str, prompt: str, instruction: str, session_id: str, intent: str = "general", signal_only: bool = False, request_context=None) -> Dict:
         """Özel bir uzman model (expert) çağrısı yapar ve hata durumunda yedeklere geçer."""
         from Atlas.generator import generate_response, GeneratorResult
         from Atlas.key_manager import KeyManager
@@ -220,7 +221,8 @@ class DAGExecutor:
                         model_id=model_id,
                         intent=intent,
                         session_id=session_id,
-                        signal_only=signal_only
+                        signal_only=signal_only,
+                        request_context=request_context
                     )
                     
                     if isinstance(result, GeneratorResult):

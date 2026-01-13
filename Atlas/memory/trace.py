@@ -60,6 +60,9 @@ class ContextTrace:
     # Karar Gerekçeleri
     reasons: List[str] = field(default_factory=list)
     
+    # Faz-Y: Aktif kullanılan hafıza katmanları
+    active_tiers: List[str] = field(default_factory=list) # ["Active", "Bridge", "Episodic", "Profile"]
+    
     # Zamanlama (ms)
     timings_ms: Dict[str, float] = field(default_factory=lambda: {
         "build_total_ms": 0.0,

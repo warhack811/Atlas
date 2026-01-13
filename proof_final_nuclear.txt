@@ -1,0 +1,16 @@
+--- Starting Final Memory Verification ---
+Session ID: final-test-7aeb20ed
+
+1. Logging in as 'admin'...
+
+2. Asserting Identity: 'Benim adım Muhammet, 32 yaşındayım.'
+Waiting for extraction...
+
+3. New Session Recall Test: final-test-recall-8b15a059
+AI Response: Selam! 😊  
+Evet, seninle daha önce konuştuğumuzu biliyorum ama adın ve yaşın konusunda küçük bir karışıklık var. Bir yerde adın “Muhammet” diye geçiyor, bir yerde de “Kullanıcı” olarak kayıtlı. Yaşınla ilgili ise herhangi bir bilgiye ulaşamadım.
+
+Yani şu an elimde net bir bilgi yok. Adın neydi, kaç yaşındasın? Bir güncelleyeyim de bir daha unutmayayım.
+
+RECALL RESULT: ❌ FAIL
+Refining extraction logic may be needed or checking logs.

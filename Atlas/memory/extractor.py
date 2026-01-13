@@ -28,10 +28,11 @@ EXTRACTION_MODEL = "llama-3.3-70b-versatile"
 # PRONOUN_FILTER kaldırıldı - is_first_person, is_second_person, is_other_pronoun kullan
 
 
-def sanitize_triplets(triplets: List[Dict], user_id: str, raw_text: str) -> List[Dict]:
+def sanitize_triplets(triplets: List[Dict], user_id: str, raw_text: str, known_names: List[str] = None) -> List[Dict]:
     """
     Faz 1: Triplets post-processor - enforces predicate catalog rules.
     Faz 3: 1. şahıs zamirlerini (BEN/BENIM) user anchor'a map eder.
+    FAZ-γ: Bilinen kullanıcı isimlerini anchor'a map eder.
     
     Filters:
     1. Required fields check (subject, predicate, object)
@@ -65,11 +66,13 @@ def sanitize_triplets(triplets: List[Dict], user_id: str, raw_text: str) -> List
     threshold = settings.get("UNCERTAINTY_THRESHOLD", 0.5)
     
     for triplet in triplets:
-        # 1. Required fields
-        subject = triplet.get("subject", "").strip()
-        predicate = triplet.get("predicate", "").strip()
-        obj = triplet.get("object", "").strip()
-        confidence = triplet.get("confidence", 0.8)
+        # Professional Null-Coalescing to prevent NoneType.strip()
+        # triplet.get(x, "") only works if key is missing. If key is None, it returns None.
+        subject = str(triplet.get("subject") or "").strip()
+        predicate = str(triplet.get("predicate") or "").strip()
+        obj = str(triplet.get("object") or "").strip()
+        confidence = triplet.get("confidence")
+        if confidence is None: confidence = 0.8
         
         if not subject or not predicate or not obj:
             logger.debug(f"DROP: Missing required field - {triplet}")
@@ -114,8 +117,57 @@ def sanitize_triplets(triplets: List[Dict], user_id: str, raw_text: str) -> List
             logger.info(f"EPHEMERAL_DROPPED: '{canonical}' (durability={durability})")
             continue
         
+        
         # 7. Category and Confidence mapping
         graph_category = catalog.get_graph_category(predicate_key)
+        
+        # FAZ-γ: Identity predicate self-reference mapping [REFINED BATCH-WIDE]
+        if graph_category in ["identity", "personal"]:
+            obj_lower = obj.lower()
+            subj_lower = subject.lower()
+            
+            # FAZ-γ: Placeholder values check (e.g., "Bilgi Yok", "Bilinmiyor") - Skip extraction if placeholder
+            PLACEHOLDERS = ["bilinmiyor", "bilgi yok", "verilmemis", "verilmemiş", "tanimsiz", "tanımlı değil", "belirsiz", "none", "null", "bilgim yok"]
+            if any(placeholder in obj_lower for placeholder in PLACEHOLDERS):
+                logger.info(f"PLACEHOLDER_DROPPED: Filtered out placeholder object '{obj}' for predicate '{canonical}'")
+                continue
+            
+            # 1. Discover names in this batch (Multi-pass approach)
+            batch_user_names = set()
+            for t in triplets:
+                t_subj = str(t.get("subject") or "").strip()
+                t_pred = str(t.get("predicate") or "").strip()
+                t_obj = str(t.get("object") or "").strip()
+                # Case 1: "Benim adım X"
+                if is_first_person(t_subj) and catalog.resolve_predicate(t_pred) == "İSİM":
+                    if t_obj and t_obj.lower() not in ["bilinmiyor", "bilgi yok", "verilmemiş"]:
+                        batch_user_names.add(t_obj.lower())
+                # Case 2: "Muhammet İSİM Muhammet"
+                if t_subj.lower() == t_obj.lower() and catalog.resolve_predicate(t_pred) == "İSİM":
+                     if t_obj and t_obj.lower() not in ["bilinmiyor", "bilgi yok", "verilmemiş"]:
+                        batch_user_names.add(t_obj.lower())
+
+            # Heuristic A: Explicit self-ref (this triplet)
+            is_self_ref = subj_lower in obj_lower or obj_lower in subj_lower
+            
+            # Heuristic B: Known name reference (DB)
+            is_known_name = False
+            if known_names:
+                for kn in known_names:
+                    if subj_lower == kn.lower() or subj_lower == kn.lower().split()[0]:
+                        is_known_name = True
+                        break
+            
+            # Heuristic C: Batch name discovery (this batch)
+            is_batch_name = any(subj_lower == bn or subj_lower == bn.split()[0] for bn in batch_user_names)
+
+            if is_self_ref or is_known_name or is_batch_name:
+                if not subject.startswith("__USER__"):
+                    self_ref_original_subject = subject
+                    subject = get_user_anchor(user_id)
+                    logger.info(f"IDENTITY_ANCHOR_MAPPED: '{self_ref_original_subject}' → '{subject}' (Type: {'SELF-REF' if is_self_ref else 'KNOWN' if is_known_name else 'BATCH'})")
+            else:
+                logger.info(f"[FAZ-γ DEBUG] No identity match for '{subj_lower}' (category: {graph_category})")
         
         # RC-11: Uncertainty mapping
         drop_thresh = settings.get("DROP_THRESHOLD", 0.4)
@@ -153,7 +205,20 @@ async def extract_and_save(text: str, user_id: str, source_turn_id: str | None =
         user_id: Kullanıcı kimliği (session_id)
         source_turn_id: Bu bilginin geldiği konuşma turn'ünün ID'si (RDR request_id) - FAZ2 provenance
     """
-    if not text or len(text.strip()) < 5:
+    # Professional Null Check
+    if text is None:
+        logger.warning(f"extract_and_save: 'text' is None for user {user_id}")
+        return []
+    
+    if not isinstance(text, str):
+        logger.warning(f"extract_and_save: 'text' is {type(text)}, expected str. user={user_id}")
+        # Try to convert to str if possible, otherwise return
+        try:
+            text = str(text)
+        except:
+            return []
+
+    if not text.strip() or len(text.strip()) < 5:
         return []
 
     # Groq API üzerinden model çağrısı için rastgele bir anahtar seç
@@ -202,8 +267,11 @@ async def extract_and_save(text: str, user_id: str, source_turn_id: str | None =
                         triplets = [parsed]
 
             if triplets:
+                # FAZ-γ: Fetch known identities for anchor mapping
+                known_names = await neo4j_manager.get_user_names(user_id)
+                
                 # FAZ1-2: Apply predicate catalog enforcement before Neo4j write
-                cleaned_triplets = sanitize_triplets(triplets, user_id, text)
+                cleaned_triplets = sanitize_triplets(triplets, user_id, text, known_names=known_names)
                 
                 if cleaned_triplets:
                     # FAZ4: MWG karar motoru
@@ -240,5 +308,6 @@ async def extract_and_save(text: str, user_id: str, source_turn_id: str | None =
                 return []
 
     except Exception as e:
-        logger.error(f"extract_and_save metodunda hata: {str(e)}")
+        import traceback
+        logger.error(f"extract_and_save metodunda kritik hata: {str(e)}\n{traceback.format_exc()}")
         return []

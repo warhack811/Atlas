@@ -18,6 +18,15 @@ import re
 from typing import Optional, List, Dict, Any
 from Atlas.memory.buffer import MessageBuffer
 from Atlas.memory.neo4j_manager import neo4j_manager
+from Atlas.memory.intent import classify_intent_tr
+import dateparser
+import dateparser.search
+from datetime import datetime, timedelta
+from Atlas.memory.state import state_manager
+
+# Professional Logging Configuration: Suppress noisy Neo4j notifications about missing properties/labels
+logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
+logging.getLogger("neo4j.io").setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
 
@@ -50,17 +59,7 @@ class ContextBudgeter:
     def get_layer_budget(self, layer_name: str) -> int:
         return int(self.max_total * self.weights.get(layer_name, 0))
 
-def normalize_text_for_dedupe(text: str) -> str:
-    """Dedupe için metni normalize eder."""
-    text = text.lower().strip()
-    text = re.sub(r'\s+', ' ', text)
-    # Turn bazlı rol eklerini temizle (Kullanıcı:, Atlas:)
-    text = re.sub(r'^(kullanıcı|atlas|asistan):\s*', '', text)
-    # Predicate temizle (örn. 'YAŞAR_YER: Ankara' -> 'Ankara')
-    text = re.sub(r'^[a-z_şığüçö]+:\s*', '', text)
-    # Baştaki tire ve noktaları temizle
-    text = text.lstrip("- ").rstrip(".")
-    return text
+from Atlas.memory.text_normalize import normalize_text_for_dedupe
 
 def is_duplicate(new_text: str, existing_texts: List[str], threshold: float = 0.85) -> bool:
     """Basit prefix ve exact match ile dublike kontrolü."""
@@ -112,12 +111,13 @@ TOKENS_PER_MESSAGE = 100  # Ortalama mesaj başına tahmin edilen token
 class ContextBuilder:
     """LLM için kapsamlı bağlam (context) hazırlayan sınıf."""
     
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, user_id: str = "anonymous"):
         self.session_id = session_id
+        self.user_id = user_id
         self._system_prompt: Optional[str] = None
-        self._user_facts: dict = {}  # MVP-3'te doldurulacak
-        self._semantic_results: list = []  # MVP-4'te doldurulacak
-        self._neo4j_context: str = "" # Faz 3
+        self._user_facts: dict = {}  
+        self._semantic_results: list = []  
+        self._neo4j_context: str = "" 
     
     def with_system_prompt(self, prompt: str) -> "ContextBuilder":
         """System prompt ayarla."""
@@ -330,6 +330,19 @@ async def build_memory_context_v3(
     user_anchor = get_user_anchor(user_id)
     identity_facts = await _retrieve_identity_facts(user_id, user_anchor)
     
+    # FAZ-γ Side-effect: Hydrate SessionState identity cache for cross-component awareness
+    if session_id and identity_facts:
+        state = state_manager.get_state(session_id)
+        if not state._identity_hydrated:
+            # En güncel bilgileri (DESC order'dan dolayı ilk gelenler) cache'e yaz
+            for fact in reversed(identity_facts): # Eskiden yeniye ki yeni olan overwritre etsin
+                pred = fact.get("predicate")
+                obj = fact.get("object")
+                if pred and obj:
+                    state._identity_cache[pred] = obj
+            state._identity_hydrated = True
+            logger.info(f"IDENTITY_RAM_HYDRATED: session_id={session_id}, facts={len(state._identity_cache)}")
+    
     # Hard & Soft Facts (RC-3/RC-8)
     from time import perf_counter
     t_start = perf_counter()
@@ -426,20 +439,37 @@ async def _retrieve_identity_facts(user_id: str, user_anchor: str) -> list:
     Returns:
         List of {predicate, object} dicts
     """
-    # Global neo4j_manager kullanılıyor (test mocking için)
+    # FAZ-M: Catalog'dan dinamik predicate listesi al
+    from Atlas.memory.predicate_catalog import get_catalog
     
-    # Sadece identity category predicates
+    catalog = get_catalog()
+    if catalog:
+        identity_preds = catalog.get_predicates_by_category("identity")
+    else:
+        identity_preds = []
+    
+    # Fallback: Catalog yoksa ASCII predicates kullan (DB ile uyumlu)
+    if not identity_preds:
+        identity_preds = ['ISIM', 'YASI', 'MESLEGI', 'YASAR_YER', 'LAKABI', 'GELDIGI_YER']
+    
+    logger.info(f"[IDENTITY RETRIEVAL DEBUG] user_id={user_id}, user_anchor={user_anchor}")
+    logger.info(f"[IDENTITY RETRIEVAL DEBUG] identity_preds={identity_preds}")
+    
     query = """
     MATCH (s:Entity {name: $anchor})-[r:FACT {user_id: $uid}]->(o:Entity)
-    WHERE (r.status IS NULL OR r.status = 'ACTIVE')
-      AND r.predicate IN ['İSİM', 'YAŞI', 'MESLEĞİ', 'YAŞAR_YER', 'LAKABI', 'GELDİĞİ_YER']
+    WHERE (r.status IS NULL OR r.status = 'ACTIVE' OR r.status = 'CONFLICTED')
+      AND r.predicate IN $predicates
     RETURN r.predicate as predicate, o.name as object, r.updated_at as updated_at
     ORDER BY r.updated_at DESC
     LIMIT 10
     """
     
     try:
-        result = await neo4j_manager.query_graph(query, {"anchor": user_anchor, "uid": user_id})
+        result = await neo4j_manager.query_graph(query, {
+            "anchor": user_anchor, 
+            "uid": user_id,
+            "predicates": identity_preds
+        })
         return result if result else []
     except Exception as e:
         logger.warning(f"FAZ6 identity retrieval hatası: {e}")
@@ -461,14 +491,15 @@ async def _retrieve_hard_facts(user_id: str, user_anchor: str, catalog) -> list:
     """
     # Global neo4j_manager kullanılıyor (test mocking için)
     
-    # Catalog'dan EXCLUSIVE predicates al
-    exclusive_preds = []
-    for key, entry in catalog.by_key.items():
-        if entry.get("type") == "EXCLUSIVE" and entry.get("enabled", True):
-            canonical = entry.get("canonical", key)
-            # Identity predicates'leri hariç tut (zaten identity_facts'te)
-            if canonical not in ['İSİM', 'YAŞI', 'MESLEĞİ', 'YAŞAR_YER', 'LAKABI', 'GELDİĞİ_YER']:
-                exclusive_preds.append(canonical)
+    # FAZ-M: Catalog'dan EXCLUSIVE predicates al (dinamik)
+    if catalog:
+        exclusive_preds = catalog.get_predicates_by_category("hard_facts")
+    else:
+        exclusive_preds = []
+    
+    # Fallback: Manual EXCLUSIVE predicates (ASCII, identity hariç)
+    if not exclusive_preds:
+        exclusive_preds = ['SEVER', 'NEFRET_EDER', 'BILIR', 'YAPABILDIGI']
     
     if not exclusive_preds:
         return []
@@ -504,13 +535,15 @@ async def _retrieve_soft_signals(user_id: str, catalog) -> list:
     """
     # Global neo4j_manager kullanılıyor (test mocking için)
     
-    # Catalog'dan ADDITIVE/TEMPORAL predicates al
-    soft_preds = []
-    for key, entry in catalog.by_key.items():
-        pred_type = entry.get("type")
-        if pred_type in ["ADDITIVE", "TEMPORAL"] and entry.get("enabled", True):
-            canonical = entry.get("canonical", key)
-            soft_preds.append(canonical)
+    # FAZ-M: Catalog'dan ADDITIVE/TEMPORAL predicates al (dinamik)
+    if catalog:
+        soft_preds = catalog.get_predicates_by_category("soft_signals")
+    else:
+        soft_preds = []
+    
+    # Fallback: Manual ADDITIVE/TEMPORAL predicates (ASCII)
+    if not soft_preds:
+        soft_preds = ['HISSEDIYOR', 'ILGILENIYOR', 'DUSUYOR', 'PLANLADI']
     
     if not soft_preds:
         return []
@@ -591,17 +624,10 @@ def _generate_open_questions(identity_facts: list, hard_facts: list, catalog) ->
     for fact in hard_facts:
         known_predicates.add(fact.get("predicate"))
     
-    # Temel identity predicates'leri kontrol et
-    essential_identity = {
-        'İSİM': 'Kullanıcının adı bilinmiyor',
-        'YAŞI': 'Kullanıcının yaşı bilinmiyor',
-        'MESLEĞİ': 'Kullanıcının mesleği bilinmiyor',
-        'YAŞAR_YER': 'Kullanıcının yaşadığı yer bilinmiyor'
-    }
-    
-    for pred, question in essential_identity.items():
-        if pred not in known_predicates:
-            questions.append(question)
+    # NOT: Placeholder soru ekleme kaldırıldı
+    # "Kullanıcının adı bilinmiyor" gibi ifadeler LLM'e sızıyor ve
+    # robotik yanıtlara neden oluyordu.
+    # Bilgi yoksa hiç bir şey ekleme - sessiz kal.
     
     # Max 10 soru
     return questions[:10]
@@ -668,240 +694,443 @@ def _format_context_v3(
     
     return "\n".join(parts)
 
+def is_reference_needed(text: str) -> bool:
+    """
+    FAZ-Y Final: Türkçe zamirleri (DST) yakalayan Regex kontrolü.
+    'o', 'bu', 'şu', 'ora', 'bura', 'şura', 'diğer', 'öbür', 'öteki' ve türevlerini yakalar.
+    """
+    pattern = r"\b(o|onu|ona|onda|ondan|onlar|onun|bu|bunu|buna|bunda|bundan|bunlar|bunun|şu|şunu|şuna|şunda|şundan|şunlar|şunun|orası|oraya|orada|oradan|burası|buraya|burada|buradan|şurası|şuraya|şurada|şuradan|diğer|diğeri|öbür|öbürü|öteki|ötekisi|ötekinin|öbeğindeki)\b"
+    return bool(re.search(pattern, text, re.IGNORECASE))
+
+def extract_date_range(query: str) -> Optional[tuple[datetime, datetime]]:
+    """
+    Sorgudaki zaman ifadelerini yakalar ve (başlangıç, bitiş) aralığı döner.
+    dateparser kullanarak 'dün', 'geçen hafta', '2023 yılında' gibi ifadeleri destekler.
+    """
+    # dateparser.search.search_dates metni parçalar ve tarihleri bulur
+    settings = {
+        'PREFER_DATES_FROM': 'past',
+        'DATE_ORDER': 'DMY',
+        'RETURN_AS_TIMEZONE_AWARE': False
+    }
+    
+    found_dates = dateparser.search.search_dates(query, languages=['tr'], settings=settings)
+    
+    if not found_dates:
+        return None
+    
+    # En kapsamlı aralığı bulmaya çalış (basit yaklaşım)
+    dates = [d[1] for d in found_dates]
+    
+    if not dates:
+        return None
+        
+    start_date = min(dates)
+    end_date = max(dates)
+    
+    # Eğer tek bir tarih varsa (örneğin 'dün'), o günün başlangıcı ve sonunu al
+    if len(dates) == 1 or (end_date - start_date).total_seconds() < 60:
+        start_date = start_date.replace(hour=0, minute=0, second=0)
+        end_date = end_date.replace(hour=23, minute=59, second=59)
+    else:
+        # Eğer bir aralık yakalandıysa (örn: 2023 ile 2024 arası), sınırları geniş tut
+        start_date = start_date.replace(hour=0, minute=0, second=0)
+        end_date = end_date.replace(hour=23, minute=59, second=59)
+
+    return (start_date, end_date)
+
 async def build_chat_context_v1(
     user_id: str,
     session_id: str,
     user_message: str,
     stats: Optional[dict] = None,
-    trace: Optional[Any] = None
+    trace: Optional[Any] = None,
+    embedder: Optional[Any] = None  # Staff: Added for deterministic testing strategy
 ) -> str:
     """
-    Atlas Hibrit Bağlam Paketleyicisi (V3 - RC-8).
+    Atlas Hibrit Bağlam Paketleyicisi (V4 - Staff RC-12).
     -------------------------------------------
     1. İntent Sınıflandırma
     2. Niyete Göre Adaptive Bütçeleme
     3. Skorlama & Hassas Filtreleme
+    4. Y.6: Hybrid Retrieval (Vector + Graph Fusion) - Opt-in
+    5. FAZ-Y Final: Turkish DST & Conflict Injection
     """
-    from Atlas.memory.neo4j_manager import neo4j_manager
-    from Atlas.memory.intent import classify_intent_tr
-    
-    # 0. Stats Hazırlığı
-    if stats is not None:
-        stats["layer_usage"] = {"transcript": 0, "episodic": 0, "semantic": 0}
-        stats["dedupe_count"] = 0
-        stats["semantic_filtered_out_count"] = 0
-        stats["episode_filtered_out_count"] = 0
-        stats["intent"] = None  # Sınıflandırma sonrası dolacak
-
-    # 1. Niyet ve Bütçe (RC-8)
-    from Atlas.config import BYPASS_MEMORY_INJECTION, BYPASS_ADAPTIVE_BUDGET
+    from Atlas.config import (
+        ENABLE_HYBRID_RETRIEVAL, BYPASS_VECTOR_SEARCH, BYPASS_GRAPH_SEARCH,
+        HYBRID_WEIGHT_VECTOR, HYBRID_WEIGHT_GRAPH, HYBRID_WEIGHT_RECENCY,
+        HYBRID_RECENCY_HALFLIFE_DAYS, HYBRID_VECTOR_TOP_K, HYBRID_VECTOR_THRESHOLD,
+        HYBRID_GRAPH_TOP_K, BYPASS_MEMORY_INJECTION, BYPASS_ADAPTIVE_BUDGET
+    )
     from time import perf_counter
     from Atlas.memory.trace import ContextTrace
-    
+    import re
+
     b_start = perf_counter()
+    all_context_texts = [] # Dedupe havuzu
+    
+    if embedder is None:
+        from Atlas.memory.gemini_embedder import GeminiEmbedder
+        embedder = GeminiEmbedder()
+
+    # 0. FAZ-γ: Identity Hydration (Freshness check)
+    # Stale identity_cache'i build_memory_context_v3 içinde taze olarak çektiğimiz için 
+    # burada redundant hydration yapmıyoruz. Sadece state nesnesini alıyoruz.
+    state = state_manager.get_state(session_id)
+
+    # 0. FAZ-β: Emotional Continuity (Turn 0 Only)
+    emotional_continuity_note = ""
+    try:
+        turn_count = await neo4j_manager.count_turns(user_id, session_id)
+        if turn_count == 0:  # Sadece yeni session başlangıcında
+            last_mood_data = await neo4j_manager.get_last_user_mood(user_id)
+            if last_mood_data and last_mood_data.get("mood") and last_mood_data.get("timestamp"):
+                # Zaman delta hesaplama (UTC-aware)
+                from datetime import datetime, timezone
+                
+                # ISO timestamp parsing (Neo4j datetime format)
+                ts_str = last_mood_data["timestamp"]
+                # Neo4j datetime format: "2024-01-13T00:00:00Z" veya "2024-01-13T00:00:00.000000000Z"
+                if ts_str.endswith("Z"):
+                    ts_str = ts_str.replace("Z", "+00:00")
+                
+                mood_timestamp = datetime.fromisoformat(ts_str)
+                # Timezone-unaware ise UTC olarak kabul et
+                if mood_timestamp.tzinfo is None:
+                    mood_timestamp = mood_timestamp.replace(tzinfo=timezone.utc)
+                
+                now = datetime.now(timezone.utc)
+                delta = now - mood_timestamp
+                
+                # KURAL 1: 3 günden eski -> EKLEME (Unut)
+                if delta.days > 3:
+                    if trace: trace.add_reason(f"FAZ-β: Mood expired ({delta.days} days old)")
+                    pass  # Context'e ekleme
+                
+                # KURAL 2: 10 dakikadan yeni -> EKLEME (Aktif sohbet devam ediyor)
+                elif delta.total_seconds() < 600:
+                    if trace: trace.add_reason(f"FAZ-β: Mood too recent ({int(delta.total_seconds())}s ago, active chat)")
+                    pass  # Context'e ekleme
+                
+                else:
+                    # Geçerli aralık: 10 dk - 3 gün arası
+                    # Türkçe zaman ifadesi oluştur
+                    if delta.total_seconds() < 3600:  # 1 saatten az
+                        time_expr = "birkaç saat önce"
+                    elif delta.days == 0:  # Bugün (1 saatten fazla ama aynı gün)
+                        time_expr = "bugün"
+                    elif delta.days == 1:  # Dün
+                        time_expr = "dün"
+                    else:  # 2-3 gün arası
+                        time_expr = "birkaç gün önce"
+                    
+                    mood_value = last_mood_data["mood"]
+                    emotional_continuity_note = (
+                        f"[ÖNCEKİ DUYGU DURUMU]: Kullanıcı {time_expr} '{mood_value}' hissediyordu. "
+                        f"Selamlamada buna değin.\n\n"
+                    )
+                    if trace: 
+                        trace.add_reason(f"FAZ-β: Emotional continuity injected (mood={mood_value}, {time_expr})")
+                    logger.info(f"FAZ-β: Emotional continuity activated for {user_id}: {mood_value} ({time_expr})")
+    except Exception as e:
+        logger.error(f"FAZ-β: Emotional continuity injection failed: {e}")
+
+    # 0.5: USER PROFILE INJECTION (Handled in build_memory_context_v3)
+    user_profile_block = ""
+
+    # 1. FAZ-Y Final: Conflicts Injection (Highest Priority)
+    conflict_block = ""
+    try:
+        active_conflicts = await neo4j_manager.get_active_conflicts(user_id, limit=3)
+        if active_conflicts:
+            conflict_block = "[ÇÖZÜLMESİ GEREKEN DURUM]: Aşağıdaki bilgilerde çelişki var, lütfen kullanıcıyla netleştir:\n"
+            for c in active_conflicts:
+                conflict_block += f"- {c['subject']} {c['predicate']} bilgisi hem '{c['value']}' hem de başka bir değer olarak görünüyor.\n"
+            conflict_block += "\n"
+    except Exception as e:
+        logger.error(f"Conflict injection failed: {e}")
+
+    # 2. FAZ-Y Final: DST (Dialogue State Tracking) Reference Resolution
+    dst_reference_note = ""
+    if is_reference_needed(user_message):
+        potential_entity = None
+        try:
+            # a) MessageBuffer'dan (RAM) bulmaya çalış
+            recent_history = MessageBuffer.get_llm_messages(session_id, limit=2)
+            for msg in reversed(recent_history):
+                # Basit büyük harfle başlayan kelime yakalama (isim/nesne tahmini)
+                proper_nouns = re.findall(r'\b[A-ZÇĞİÖŞÜ][a-zçğıöşü]+\b', msg["content"])
+                if proper_nouns:
+                    potential_entity = proper_nouns[0]
+                    break
+            
+            # b) RAM'de yoksa Neo4j'den sor
+            if not potential_entity:
+                potential_entity = await neo4j_manager.get_last_active_entity(user_id, session_id)
+                
+            if potential_entity:
+                dst_reference_note = f"[DST_REFERENCE]: Kullanıcı '{potential_entity}' hakkında konuşuyor olabilir.\n\n"
+        except Exception as e:
+            logger.error(f"DST resolution failed: {e}")
+
+    # --- Phase 2.5: Temporal Awareness ---
+    temporal_context = ""
+    date_range = extract_date_range(user_message)
+    if date_range:
+        start_dt, end_dt = date_range
+        logger.info(f"Temporal Match: {start_dt} - {end_dt}")
+        temporal_facts = await neo4j_manager.get_facts_by_date_range(user_id, start_dt, end_dt)
+        if temporal_facts:
+            temporal_context = f"\n[ZAMAN FİLTRESİ]: Kullanıcının belirttiği tarih aralığındaki ({start_dt.date()} - {end_dt.date()}) kayıtlar:\n"
+            for f in temporal_facts[:10]:
+                temporal_context += f"- {f['subject']} {f['predicate']} {f['object']} (Tarih: {f.get('ts','')})\n"
+            temporal_context += "\n"
+
+    # 3. Niyet ve Bütçe (RC-8)
     if trace is None:
         trace = ContextTrace(request_id=f"trace_{int(perf_counter())}", user_id=user_id, session_id=session_id)
     
     intent = classify_intent_tr(user_message)
-    if stats is not None:
-        stats["intent"] = intent
+    if stats is not None: stats["intent"] = intent
     trace.intent = intent
 
     mode = await neo4j_manager.get_user_memory_mode(user_id)
     trace.memory_mode = mode
     
-    # Kill-switch: Adaptive budget bypass
-    effective_intent = intent if not BYPASS_ADAPTIVE_BUDGET else "MIXED"
-    if BYPASS_ADAPTIVE_BUDGET: trace.add_reason("BYPASS_ADAPTIVE_BUDGET=true")
+    budgeter = ContextBudgeter(mode=mode, intent=intent if not BYPASS_ADAPTIVE_BUDGET else "MIXED")
     
-    budgeter = ContextBudgeter(mode=mode, intent=effective_intent)
-    
-    # Trace budgets
-    trace.budgets = {
-        "transcript": budgeter.get_layer_budget("transcript"),
-        "episodic": budgeter.get_layer_budget("episodic"),
-        "semantic": budgeter.get_layer_budget("semantic"),
-        "total": budgeter.max_total
-    }
-    
-    # Kill-switch: Memory injection bypass
-    if BYPASS_MEMORY_INJECTION:
-        turns = await neo4j_manager.get_recent_turns(user_id, session_id, limit=20)
-        lines = []
-        if turns:
-            for t in turns:
-                role = "Kullanıcı" if t["role"] == "user" else "Atlas"
-                lines.append(f"{role}: {t['content']}")
-        
-        msg = f"[BİLGİ]: Bellek enjeksiyonu devre dışı bırakıldı.\n\nSON KONUŞMALAR:\n" + ("\n".join(lines) if lines else "(Henüz bu oturumda konuşma yapılmadı)")
-        if trace:
-            trace.add_reason("BYPASS_MEMORY_INJECTION=true")
-            trace.timings_ms["build_total_ms"] = (perf_counter() - b_start) * 1000
-            if stats is not None: 
-                stats["context_build_ms"] = trace.timings_ms["build_total_ms"]
-        return msg
-
-    all_context_texts = [] # Dedupe havuzu
-
-    # 2. Katmanlar (Transcript -> Semantic -> Episodic önceliği)
-    
-    # A. Transcript (Son konuşmalar)
+    # 4. Layers Retrieval
+    # A. Transcript (Tiered Retrieval)
     transcript_budget = budgeter.get_layer_budget("transcript")
-    turns = await neo4j_manager.get_recent_turns(user_id, session_id, limit=20)
+    
+    # Tier 1: Active Session (Current chat)
+    active_turns = await neo4j_manager.get_recent_turns(user_id, session_id, limit=20)
+    
+    # Tier 2: Contextual Bridge (Global Recency for cross-session continuity)
+    # If active session is very new (< 5 turns), fetch last 10 turns globally
+    bridge_turns = []
+    from Atlas.config import ENABLE_CONTEXT_BRIDGE
+    if ENABLE_CONTEXT_BRIDGE and len(active_turns) < 5:
+        bridge_turns = await neo4j_manager.get_global_recent_turns(user_id, exclude_session_id=session_id, limit=10)
     
     transcript_lines = []
-    current_transcript_size = 0
-    if turns:
-        for t in turns:
-            role = "Kullanıcı" if t["role"] == "user" else "Atlas"
-            line = f"{role}: {t['content']}"
-            if current_transcript_size + len(line) + 1 <= transcript_budget:
-                transcript_lines.append(line)
-                current_transcript_size += len(line) + 1
-                all_context_texts.append(line)
-                if trace: trace.selected["turn_ids"].append(str(t.get('id', 'turn')))
-            else:
-                break
-        
-        if stats is not None:
-            stats["layer_usage"]["transcript"] = current_transcript_size
-        if trace: trace.usage["transcript_chars"] = current_transcript_size
-            
-        transcript_text = "\n".join(transcript_lines)
+    
+    # Prepend Bridge turns if they exist
+    if bridge_turns:
+        if trace: trace.active_tiers.append("Bridge")
+        transcript_lines.append("[ÖNCEKİ YAKIN KONUŞMALAR (Diğer Oturumlardan)]:")
+        for t in bridge_turns:
+            line = f"- {'Kullanıcı' if t['role'] == 'user' else 'Atlas'}: {t['content']}"
+            transcript_lines.append(line)
+        transcript_lines.append("") # Spacer
+        transcript_lines.append("[BU OTURUMDAKİ KONUŞMALAR]:")
+
+    if active_turns:
+        if trace: trace.active_tiers.append("Active")
+        for t in active_turns:
+            line = f"{'Kullanıcı' if t['role'] == 'user' else 'Atlas'}: {t['content']}"
+            all_context_texts.append(line) # Dedupe havuzuna ekle (Episode tekrarını önlemek için)
+            transcript_lines.append(line)
+    
+    if not active_turns and not bridge_turns:
+        transcript_text = "(Henüz konuşma yok)"
     else:
-        transcript_text = "(Henüz bu oturumda konuşma yapılmadı)"
+        transcript_text = "\n".join(transcript_lines)
 
-    # B. Semantic Memory (RC-3/RC-8 Context V3 with Filter)
-    semantic_budget = budgeter.get_layer_budget("semantic")
-    memory_v3 = ""
-    # OFF modunda bütçe 0 olsa bile uyarıyı almak için içeri giriyoruz 
-    # veya doğrudan build_memory_context_v3 çağırıyoruz.
-    if mode == "OFF" or semantic_budget > 0:
-        memory_v3_raw = await build_memory_context_v3(user_id, user_message, session_id=session_id, stats=stats, intent=intent, trace=trace)
-        v3_lines = memory_v3_raw.split("\n")
-        final_v3_lines = []
-        current_v3_size = 0
-        
-        for line in v3_lines:
-            if line.startswith("###") or not line.strip():
-                final_v3_lines.append(line)
-                continue
-            if "[BİLGİ]" in line: # OFF modu uyarısı bütçeye takılmamalı veya bütçesiz eklenmeli
-                final_v3_lines.append(line)
-                continue
-            if is_duplicate(line, all_context_texts):
-                if stats is not None: stats["dedupe_count"] += 1
-                continue
-            if current_v3_size + len(line) + 1 <= semantic_budget:
-                final_v3_lines.append(line)
-                current_v3_size += len(line) + 1
-                all_context_texts.append(line)
-                
-        if stats is not None:
-            stats["layer_usage"]["semantic"] = current_v3_size
-        memory_v3 = "\n".join(final_v3_lines)
-
-    # C. Episodic (RC-8/RC-10 Scoring V3: Overlap + Semantic + Recency)
+    # B. Episodic Memory (RC-3/RC-8/RC-10)
     episodic_budget = budgeter.get_layer_budget("episodic")
     episodic_text = ""
-    if episodic_budget > 0:
+    if mode != "OFF" and episodic_budget > 0:
         query = """
-        MATCH (s:Session {id: $sid})-[:HAS_EPISODE]->(e:Episode {status: 'READY'})
-        RETURN e.summary as summary, e.start_turn_index as start, e.end_turn_index as end, 
-               e.updated_at as updated_at, COALESCE(e.kind, 'REGULAR') as kind,
-               e.embedding as embedding, e.id as id
-        ORDER BY e.updated_at DESC
-        LIMIT 15
+        MATCH (u:User {id: $uid})-[:HAS_SESSION]->(s:Session)-[:HAS_EPISODE]->(e:Episode {status: "READY"})
+        WHERE s.id <> $sid
+        RETURN e.summary as summary, e.embedding as embedding, e.kind as kind, 
+               e.start_turn_index as start, e.end_turn_index as end, e.id as id
+        LIMIT 10
         """
-        ep_results = await neo4j_manager.query_graph(query, {"sid": session_id})
-        
-        # RC-10: Query embedding üretimi
-        query_vector = None
-        from Atlas.config import EMBEDDING_SETTINGS
-        if ep_results and any(ep.get('embedding') for ep in ep_results):
-            from Atlas.memory.embeddings import get_embedder
-            query_vector = get_embedder().embed(user_message)
-            
+        results = await neo4j_manager.query_graph(query, {"uid": user_id, "sid": session_id})
         scored_episodes = []
-        for i, ep in enumerate(ep_results):
-            # RC-8 Overlap
-            overlap = get_token_overlap(ep['summary'], user_message)
-            
-            # RC-10 Semantic Similarity
-            semantic_sim = 0.0
-            if query_vector and ep.get('embedding'):
-                semantic_sim = calculate_cosine_similarity(query_vector, ep['embedding'])
-            
-            # RC-8 Recency: En yeni 3'e 1.0, sonrakilere 0.5 gibi bir bonus (ağırlıklandırılacak)
-            recency_bonus = 1.0 if i < 3 else 0.5
-            
-            # RC-10 Weighted Score
-            w = EMBEDDING_SETTINGS["SCORING_WEIGHTS"]
-            score = (w["overlap"] * overlap) + (w["semantic"] * semantic_sim) + (w["recency"] * recency_bonus)
-            
-            if score >= 0.15: # Min threshold
-                # Trace için ek verileri sakla (ham metin değil sadece skorlar)
-                ep_meta = ep.copy()
-                ep_meta["_scores"] = {
-                    "overlap": round(overlap, 3),
-                    "semantic_sim": round(semantic_sim, 3),
-                    "recency": round(recency_bonus, 3),
-                    "total": round(score, 3)
-                }
-                scored_episodes.append((score, ep_meta))
-            elif stats is not None:
-                stats["episode_filtered_out_count"] += 1
-        
+        query_emb = await embedder.embed(user_message)
+        for res in results:
+            score = 0.0
+            if res.get("embedding"):
+                score = calculate_cosine_similarity(query_emb, res.get("embedding"))
+            if res.get("kind") == "CONSOLIDATED": score *= 1.1 
+            scored_episodes.append((score, res))
         scored_episodes.sort(key=lambda x: x[0], reverse=True)
-        
         selected_ep_lines = []
         curr_ep_size = 0
-        reg_count = 0
-        cons_count = 0
-        
         for score, ep in scored_episodes:
-            if ep['kind'] == 'REGULAR' and reg_count >= 2: continue
-            if ep['kind'] == 'CONSOLIDATED' and cons_count >= 1: continue
-            
             line = f"- {ep['summary']} (Turn {ep.get('start', 0)}-{ep.get('end', 0)})"
-            if is_duplicate(line, all_context_texts):
-                if stats is not None: stats["dedupe_count"] += 1
-                continue
-            
+            if is_duplicate(line, all_context_texts): continue
             if curr_ep_size + len(line) + 1 <= episodic_budget:
                 selected_ep_lines.append(line)
                 curr_ep_size += len(line) + 1
                 all_context_texts.append(line)
-                ep_id = str(ep.get('id', 'episode'))
-                if trace: 
-                    trace.selected["episode_ids"].append(ep_id)
-                    if "_scores" in ep:
-                        trace.scoring_details["episodes"][ep_id] = ep["_scores"]
-                
-                if ep['kind'] == 'REGULAR': reg_count += 1
-                else: cons_count += 1
-        
-        if stats is not None:
-            stats["layer_usage"]["episodic"] = curr_ep_size
-        
         episodic_text = "\n".join(selected_ep_lines)
+        if episodic_text and trace:
+            trace.active_tiers.append("Episodic")
 
-    # 3. Nihai Birleştirme
+    # C. Semantic V3
+    memory_v3 = await build_memory_context_v3(user_id, user_message, session_id=session_id, stats=stats, intent=intent, trace=trace)
+
+    # D. Hybrid Retrieval (V4)
+    hybrid_context = ""
+    if ENABLE_HYBRID_RETRIEVAL:
+        try:
+            v_candidates = await _build_hybrid_candidates_vector(user_id, user_message, embedder)
+            g_candidates = await _build_hybrid_candidates_graph(user_id)
+            fused = _score_fuse_candidates(v_candidates + g_candidates)
+            unique_hybrid = _dedupe_top_k(fused, all_context_texts)
+            if unique_hybrid:
+                h_lines = [f"- [{u['source'].upper()} | Skor: {u['final_score']:.2f}]: {u['text'][:200]}" for u in unique_hybrid]
+                hybrid_context = "\n### Hibrit Hafıza (Vector+Graph)\n" + "\n".join(h_lines)
+        except Exception as e:
+            logger.error(f"Hybrid retrieval breakdown: {e}")
+    
+    # 0.5: USER PROFILE INJECTION (Handled in build_memory_context_v3 for freshness)
+    # We rely on memory_v3 for the Profile block to avoid redundant DB queries and sync issues.
+
+    # 5. Final Assembly (PREPEND Conflicts & DST)
     final_parts = []
     if transcript_text:
         final_parts.append(f"SON KONUŞMALAR:\n{transcript_text}")
     if episodic_text:
-        final_parts.append(f"İLGİLİ GEÇMİŞ BÖLÜMLER:\n{episodic_text}")
+         final_parts.append(f"İLGİLİ GEÇMİŞ BÖLÜMLER:\n{episodic_text}")
     if memory_v3:
         final_parts.append(memory_v3)
+    if hybrid_context:
+        final_parts.append(hybrid_context)
         
-    final_output = "\n\n".join(final_parts).strip()
+    final_main = "\n\n".join(final_parts).strip()
     
-    if trace:
-        trace.usage["total_chars"] = trace.usage["transcript_chars"] + trace.usage["episode_chars"] + trace.usage["semantic_chars"]
+    # FAZ-α.2: Topic Injection
+    state = state_manager.get_state(session_id)
+    topic_block = f"[AKTİF OTURUM KONUSU]: {state.current_topic or 'Genel'}\n\n"
+    
+    # FAZ-β: Emotional continuity PREPEND (Highest priority for greeting)
+    # RC-12: user_profile_block is now part of memory_v3 (final_main) to avoid duplication.
+    final_output = emotional_continuity_note + conflict_block + dst_reference_note + topic_block + temporal_context + final_main
+    
+    if trace: 
         trace.timings_ms["build_total_ms"] = (perf_counter() - b_start) * 1000
-        if stats is not None:
+        if stats is not None: 
             stats["context_build_ms"] = trace.timings_ms["build_total_ms"]
             stats["total_chars"] = len(final_output)
             
     return final_output
+
+# --- Hybrid Retrieval Helper Functions [RC-12] ---
+
+async def _build_hybrid_candidates_vector(user_id: str, query: str, embedder: Any) -> List[Dict]:
+    """Fetches candidates from Qdrant vector database."""
+    from Atlas.config import BYPASS_VECTOR_SEARCH, HYBRID_VECTOR_TOP_K, HYBRID_VECTOR_THRESHOLD
+    if BYPASS_VECTOR_SEARCH: return []
+    
+    try:
+        from Atlas.memory.qdrant_manager import QdrantManager
+        q_manager = QdrantManager()
+        query_emb = await embedder.embed(query)
+        v_results = await q_manager.vector_search(
+            query_embedding=query_emb,
+            user_id=user_id,
+            top_k=HYBRID_VECTOR_TOP_K,
+            score_threshold=HYBRID_VECTOR_THRESHOLD
+        )
+        return [{
+            "id": vr.get("episode_id"),
+            "text": vr.get("text", ""),
+            "vector_score": vr.get("score", 0.0),
+            "graph_score": 0.0,
+            "timestamp": vr.get("timestamp", ""),
+            "source": "vector"
+        } for vr in v_results]
+    except Exception as e:
+        logger.warning(f"Vector retrieval failed: {e}")
+        return []
+
+async def _build_hybrid_candidates_graph(user_id: str) -> List[Dict]:
+    """Fetches facts from Neo4j graph database."""
+    from Atlas.config import BYPASS_GRAPH_SEARCH, HYBRID_GRAPH_TOP_K
+    if BYPASS_GRAPH_SEARCH: return []
+    
+    try:
+        from Atlas.memory.neo4j_manager import neo4j_manager
+        graph_query = """
+        // 1-Hop Facts
+        MATCH (s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity)
+        WHERE (r.status IS NULL OR r.status = 'ACTIVE')
+        WITH s, r, o
+        RETURN s.name as subject, r.predicate as predicate, o.name as object,
+               coalesce(r.confidence, 0.5) as confidence, coalesce(r.updated_at, '') as ts, 1 as hop
+        ORDER BY ts DESC LIMIT $limit
+        
+        UNION
+        
+        // 2-Hop Facts (Limitli ve kontrollü)
+        MATCH (s:Entity)-[r:FACT {user_id: $uid}]->(m:Entity)-[r2:FACT {user_id: $uid}]->(o:Entity)
+        WHERE (r.status IS NULL OR r.status = 'ACTIVE') AND (r2.status IS NULL OR r2.status = 'ACTIVE')
+        WITH s, r, m, r2, o
+        RETURN s.name + ' (' + r.predicate + ') -> ' + m.name as subject, 
+               r2.predicate as predicate, o.name as object,
+               coalesce(r2.confidence, 0.4) as confidence, coalesce(r2.updated_at, '') as ts, 2 as hop
+        ORDER BY ts DESC LIMIT 5
+        """
+        g_results = await neo4j_manager.query_graph(graph_query, {"uid": user_id, "limit": HYBRID_GRAPH_TOP_K})
+        return [{
+            "id": None,
+            "text": f"{gr['subject']} {gr['predicate']} {gr['object']}",
+            "vector_score": 0.0,
+            "graph_score": gr.get("confidence", 0.5),
+            "timestamp": gr.get("ts", ""),
+            "source": "graph"
+        } for gr in g_results]
+    except Exception as e:
+        logger.warning(f"Graph retrieval failed: {e}")
+        return []
+
+def _score_fuse_candidates(candidates: List[Dict]) -> List[Dict]:
+    """Applies weight fusion and recency decay to candidates."""
+    from Atlas.config import (
+        HYBRID_WEIGHT_VECTOR, HYBRID_WEIGHT_GRAPH, HYBRID_WEIGHT_RECENCY,
+        HYBRID_RECENCY_HALFLIFE_DAYS
+    )
+    import math
+    from datetime import datetime
+    
+    def get_recency(ts_str):
+        if not ts_str: return 0.0
+        try:
+            delta = datetime.utcnow() - datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+            days = delta.total_seconds() / 86400
+            # FAZ-Y: math.exp tabanlı exponential decay (halflife=7 gün)
+            halflife = 7.0 # ROADMAP ADIM 2.1
+            decay_constant = math.log(2) / halflife
+            return math.exp(-decay_constant * days)
+        except: return 0.0
+
+    for c in candidates:
+        r_score = get_recency(c.get("timestamp"))
+        c["final_score"] = (HYBRID_WEIGHT_VECTOR * c["vector_score"] + 
+                            HYBRID_WEIGHT_GRAPH * c["graph_score"] + 
+                            HYBRID_WEIGHT_RECENCY * r_score)
+    return candidates
+
+def _dedupe_top_k(candidates: List[Dict], existing_texts: List[str], top_k: int = 10) -> List[Dict]:
+    """Deduplicates candidates and returns top_k."""
+    import hashlib
+    # Modüler text_normalize import'u fonksiyon içinde yapılır (circular import riskini azaltmak için)
+    from Atlas.memory.text_normalize import normalize_text_for_dedupe
+    
+    candidates.sort(key=lambda x: x["final_score"], reverse=True)
+    seen_hashes = set()
+    unique_results = []
+    
+    for c in candidates:
+        h = hashlib.md5(normalize_text_for_dedupe(c["text"]).encode()).hexdigest()
+        if h not in seen_hashes and not is_duplicate(c["text"], existing_texts):
+            seen_hashes.add(h)
+            unique_results.append(c)
+            if len(unique_results) >= top_k: break
+            
+    return unique_results

@@ -147,6 +147,42 @@ class PredicateCatalog:
                 enabled.append(canonical)
         return sorted(enabled)
     
+    def get_predicates_by_category(self, target_category: str) -> List[str]:
+        """
+        Belirtilen kategorideki (örn: 'identity', 'preferences') tüm predicate'lerin
+        CANONICAL anahtarlarını döndürür.
+        
+        Kategori eşleşmesi yaparken:
+        - catalog entry içindeki 'category' alanına bakar.
+        - Eğer enabled=False ise dahil etmez.
+        
+        Args:
+            target_category: Hedef kategori (identity, hard_facts, soft_signals)
+            
+        Returns:
+            List of canonical predicate names (sorted, unique)
+        """
+        result = []
+        target = target_category.lower()
+        
+        for key, entry in self.by_key.items():
+            if not entry.get("enabled", True):
+                continue
+                
+            # Entry kategorisini kontrol et
+            cat = entry.get("category", "general").lower()
+            pred_type = entry.get("type", "ADDITIVE")
+            
+            # Bazı özel maplemeler (Faz 1 bridge ile uyumlu)
+            if target == "identity" and cat == "identity":
+                result.append(entry.get("canonical", key))
+            elif target == "hard_facts" and pred_type == "EXCLUSIVE" and cat != "identity":
+                result.append(entry.get("canonical", key))
+            elif target == "soft_signals" and pred_type in ["ADDITIVE", "TEMPORAL"]:
+                result.append(entry.get("canonical", key))
+                
+        return sorted(list(set(result)))  # Unique ve sıralı
+    
     @classmethod
     def from_yaml(cls, yaml_path: Path) -> Optional['PredicateCatalog']:
         """Load catalog from YAML file.

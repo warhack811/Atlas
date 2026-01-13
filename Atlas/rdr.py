@@ -113,6 +113,7 @@ class RDR:
     synthesizer_prompt: str = ""
     orchestrator_reasoning: str = ""   # Teknik Karar Gerekçesi
     reasoning_steps: list = field(default_factory=list) # [{"title": "...", "content": "..."}] Kullanıcıya yönelik
+    metadata: dict = field(default_factory=dict) # Y.5/Y.6 ve diğer metrikler için esnek paket
     
     def to_dict(self) -> dict:
         return asdict(self)
