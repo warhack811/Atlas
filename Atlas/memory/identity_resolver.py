@@ -66,21 +66,29 @@ def is_first_person(token: str) -> bool:
     Bu zamirler FAZ3'te drop edilmeyip user anchor'a map edilir.
     
     Args:
-        token: Kontrol edilecek kelime/token
+        token: Kontrol edilecek kelime/token (veya phrase)
     
     Returns:
-        True ise 1. şahıs zamiri, False değilse
+        True ise 1. şahıs zamiri (veya ile başlıyorsa), False değilse
     
     Örnek:
         >>> is_first_person("BEN")
         True
-        >>> is_first_person("benim")
+        >>> is_first_person("benim adım")
         True
         >>> is_first_person("Ali")
         False
     """
     normalized = normalize_text_for_match(token)
-    return normalized in FIRST_PERSON_PRONOUNS
+    if normalized in FIRST_PERSON_PRONOUNS:
+        return True
+
+    # Check if phrase starts with a first person pronoun
+    parts = normalized.split()
+    if len(parts) > 1 and parts[0] in FIRST_PERSON_PRONOUNS:
+        return True
+
+    return False
 
 
 def is_second_person(token: str) -> bool:
@@ -97,7 +105,14 @@ def is_second_person(token: str) -> bool:
         True ise 2. şahıs zamiri, False değilse
     """
     normalized = normalize_text_for_match(token)
-    return normalized in SECOND_PERSON_PRONOUNS
+    if normalized in SECOND_PERSON_PRONOUNS:
+        return True
+
+    parts = normalized.split()
+    if len(parts) > 1 and parts[0] in SECOND_PERSON_PRONOUNS:
+        return True
+
+    return False
 
 
 def is_other_pronoun(token: str) -> bool:
@@ -113,7 +128,14 @@ def is_other_pronoun(token: str) -> bool:
         True ise diğer zamirlerden biri, False değilse
     """
     normalized = normalize_text_for_match(token)
-    return normalized in OTHER_PRONOUNS
+    if normalized in OTHER_PRONOUNS:
+        return True
+
+    parts = normalized.split()
+    if len(parts) > 1 and parts[0] in OTHER_PRONOUNS:
+        return True
+
+    return False
 
 
 def normalize_text_for_match(text: str) -> str:

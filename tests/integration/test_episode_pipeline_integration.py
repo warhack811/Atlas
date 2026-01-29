@@ -207,6 +207,7 @@ async def test_retry_backoff_real_failure():
 
 @pytest.mark.slow
 @pytest.mark.integration
+@pytest.mark.skip(reason="Integration test requiring real Gemini API")
 @pytest.mark.asyncio
 async def test_finalize_episode_real_gemini_nightly():
     """

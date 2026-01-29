@@ -18,8 +18,11 @@ async def test_semantic_cache_user_isolation_deterministic(monkeypatch):
          patch("Atlas.safety.safety_gate.check_input_safety", AsyncMock(return_value=(True, "merhaba", [], "m"))), \
          patch("Atlas.memory.neo4j_manager.neo4j_manager.ensure_user_session", AsyncMock()), \
          patch("Atlas.memory.neo4j_manager.neo4j_manager.append_turn", AsyncMock()), \
+         patch("Atlas.memory.neo4j_manager.neo4j_manager.count_turns", new_callable=AsyncMock) as mock_count, \
          patch("Atlas.memory.extractor.extract_and_save", AsyncMock()): # Mock background task itself
         
+        mock_count.return_value = 0
+
         async def mock_get_with_meta(uid, q):
             if uid == "user_a":
                 return {"response": "A's cached response", "similarity": 0.99, "latency_ms": 5}
@@ -48,7 +51,10 @@ async def test_cache_hit_metadata_and_skip_refined(monkeypatch):
     with patch("Atlas.api.semantic_cache") as mock_cache, \
          patch("Atlas.safety.safety_gate.check_input_safety", AsyncMock(return_value=(True, "test", [], "m"))), \
          patch("Atlas.memory.neo4j_manager.neo4j_manager.ensure_user_session", AsyncMock()), \
-         patch("Atlas.memory.neo4j_manager.neo4j_manager.append_turn", AsyncMock()):
+         patch("Atlas.memory.neo4j_manager.neo4j_manager.append_turn", AsyncMock()), \
+         patch("Atlas.memory.neo4j_manager.neo4j_manager.count_turns", new_callable=AsyncMock) as mock_count:
+
+        mock_count.return_value = 0
         
         mock_cache.get_with_meta = AsyncMock(return_value={
             "response": "cached answer", "similarity": 0.95, "latency_ms": 10
