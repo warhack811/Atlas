@@ -253,28 +253,6 @@ class ContextBuilder:
         }
 
 
-# Future extensions interfaces
-class UserFactsStore:
-    """MVP-3: PostgreSQL user facts - placeholder."""
-    
-    @staticmethod
-    def get_facts(user_id: str) -> dict:
-        # TODO: PostgreSQL'den oku
-        return {}
-    
-    @staticmethod
-    def save_fact(user_id: str, key: str, value: str) -> None:
-        # TODO: PostgreSQL'e yaz
-        pass
-
-
-class SemanticSearch:
-    """MVP-4: pgvector semantic search - placeholder."""
-    
-    @staticmethod
-    def search(query: str, session_id: str, top_k: int = 3) -> list[str]:
-        # İleride: pgvector benzerlik araması eklenebilir
-        return []
 
 
 # ==============================================================================

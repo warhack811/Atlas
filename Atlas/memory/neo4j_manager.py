@@ -81,19 +81,6 @@ class Neo4jManager:
         if not new_triplets:
             return 0
         
-        # Use the specialized logic which was originally _execute_triplet_merge but now we inline or adapt
-        # Ideally, we should move the complex merge logic to GraphWriter, but for now we keep it here using execute_write
-        # or implement a specific method in writer.
-
-        # We'll use the _execute_triplet_merge static method pattern but via the new writer's session mechanism
-        # Actually, writer.execute_write takes a cypher string. We need to pass the complex function.
-        # The new Writer class is simple. Let's extend it or just use the connector directly for complex transactions if needed.
-        # But wait, store_triplets was using session.execute_write(self._execute_triplet_merge, ...)
-
-        # Let's adapt _execute_triplet_merge to run via our new infrastructure
-        # We will reimplement the logic here but call writer for the actual query execution if possible,
-        # OR just use the connector to get a session for this complex transaction.
-
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -514,9 +501,6 @@ class Neo4jManager:
         return await self.get_user_settings(user_id)
 
     async def append_turn(self, user_id: str, session_id: str, role: str, content: str) -> int:
-        return await self._reader.connector.get_session() # Just a placeholder call? No wait.
-        # Reader has get_recent_turns but not append_turn. Append is a write.
-        # We can implement append_turn via _writer if we add it there, or just execute query here.
         query = """
         MATCH (s:Session {id: $sid}) WHERE s.user_id = $uid OR $uid IS NULL
         OPTIONAL MATCH (s)-[:HAS_TURN]->(t:Turn) WITH s, count(t) as turn_count

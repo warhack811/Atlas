@@ -202,8 +202,8 @@ class QdrantManager:
             True if successful, False otherwise
         """
         # Check bypass flag
-        from Atlas.config import BYPASS_VECTOR_SEARCH
-        if BYPASS_VECTOR_SEARCH:
+        # NOTE: Reload config at runtime to support dynamic bypass changes (e.g. tests)
+        if os.getenv("BYPASS_VECTOR_SEARCH", "false").lower() == "true":
             logger.debug("Vector search bypassed")
             return False
         
