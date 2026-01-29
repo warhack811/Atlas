@@ -21,9 +21,10 @@ async def test_synthesizer_topic_transition_injection():
         current_topic = "Nükleer Fizik"
         
         # Sentezleyiciyi çağır
-        await Synthesizer.synthesize(
-            raw_results, session_id, current_topic=current_topic
-        )
+        with patch("Atlas.key_manager.KeyManager.get_best_key", return_value="dummy_key"):
+            await Synthesizer.synthesize(
+                raw_results, session_id, current_topic=current_topic
+            )
         
         # Call parameters check
         call_args = mock_post.call_args
@@ -44,9 +45,10 @@ async def test_synthesizer_no_transition_on_same():
         }
         mock_post.return_value = mock_response
         
-        await Synthesizer.synthesize(
-            [{"model": "x", "output": "y"}], "test", current_topic="SAME"
-        )
+        with patch("Atlas.key_manager.KeyManager.get_best_key", return_value="dummy_key"):
+            await Synthesizer.synthesize(
+                [{"model": "x", "output": "y"}], "test", current_topic="SAME"
+            )
         
         system_prompt = mock_post.call_args.kwargs["json"]["messages"][0]["content"]
         assert "[KONU DEĞİŞİMİ]" not in system_prompt
@@ -62,9 +64,10 @@ async def test_synthesizer_no_transition_on_none():
         }
         mock_post.return_value = mock_response
         
-        await Synthesizer.synthesize(
-            [{"model": "x", "output": "y"}], "test", current_topic=None
-        )
+        with patch("Atlas.key_manager.KeyManager.get_best_key", return_value="dummy_key"):
+            await Synthesizer.synthesize(
+                [{"model": "x", "output": "y"}], "test", current_topic=None
+            )
         
         system_prompt = mock_post.call_args.kwargs["json"]["messages"][0]["content"]
         assert "[KONU DEĞİŞİMİ]" not in system_prompt

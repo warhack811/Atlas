@@ -37,14 +37,20 @@ async def test_build_chat_context_temporal_injection():
         mock_get.return_value = mock_facts
         with patch("Atlas.memory.neo4j_manager.neo4j_manager.get_user_memory_mode", new_callable=AsyncMock) as mock_mode:
             mock_mode.return_value = "STANDARD"
-            with patch("Atlas.memory.intent.classify_intent_tr", return_value="general"):
-                # Mock MessageBuffer to avoid errors
-                with patch("Atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[]):
-                    ctx = await build_chat_context_v1(user_id, session_id, message)
-                    
-                    assert "[ZAMAN FİLTRESİ]" in ctx
-                    assert "Mami SEVER Kahve" in ctx
-                    mock_get.assert_called_once()
+            with patch("Atlas.memory.neo4j_manager.neo4j_manager.get_recent_turns", new_callable=AsyncMock) as mock_recent:
+                mock_recent.return_value = []
+                with patch("Atlas.memory.neo4j_manager.neo4j_manager.query_graph", new_callable=AsyncMock) as mock_query:
+                    mock_query.return_value = []
+                    with patch("Atlas.memory.intent.classify_intent_tr", return_value="general"):
+                        # Mock MessageBuffer to avoid errors
+                        with patch("Atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[]):
+                            mock_embedder = AsyncMock()
+                            mock_embedder.embed.return_value = [0.1] * 768
+                            ctx = await build_chat_context_v1(user_id, session_id, message, embedder=mock_embedder)
+
+                            assert "[ZAMAN FİLTRESİ]" in ctx
+                            assert "Mami SEVER Kahve" in ctx
+                            mock_get.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_multi_hop_query_structure():
@@ -81,14 +87,15 @@ async def test_metacognition_synthesizer_rules():
     
     with patch("Atlas.style_injector.STYLE_PRESETS", {"standard": mock_profile}):
         with patch("Atlas.memory.MessageBuffer.get_llm_messages", return_value=[]):
-             with patch("httpx.AsyncClient.post") as mock_post:
-                 mock_post.return_value = MagicMock(status_code=200, json=lambda: {"choices": [{"message": {"content": "Ok"}}]})
-                 await synthesizer.synthesize(raw_results, "sess", user_message="test", mode="standard")
-                 
-                 # messages[0]["content"] (system prompt) kontrolü
-                 sent_messages = mock_post.call_args.kwargs["json"]["messages"]
-                 sys_prompt = sent_messages[0]["content"]
-                 
-                 # [MEMORY_VOICE] ve meta-biliş kuralları olmalı
-                 assert "Bir süre önceki kayıtlara göre" in sys_prompt
-                 assert "Emin olmamakla birlikte" in sys_prompt
+            with patch("Atlas.key_manager.KeyManager.get_best_key", return_value="dummy_key"):
+                 with patch("httpx.AsyncClient.post") as mock_post:
+                     mock_post.return_value = MagicMock(status_code=200, json=lambda: {"choices": [{"message": {"content": "Ok"}}]})
+                     await synthesizer.synthesize(raw_results, "sess", user_message="test", mode="standard")
+
+                     # messages[0]["content"] (system prompt) kontrolü
+                     sent_messages = mock_post.call_args.kwargs["json"]["messages"]
+                     sys_prompt = sent_messages[0]["content"]
+
+                     # [MEMORY_VOICE] ve meta-biliş kuralları olmalı
+                     assert "Bir süre önceki kayıtlara göre" in sys_prompt
+                     assert "Emin olmamakla birlikte" in sys_prompt

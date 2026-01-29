@@ -50,6 +50,7 @@ async def test_hybrid_retrieval_integration_mocked(monkeypatch):
     with patch("Atlas.memory.context._build_hybrid_candidates_vector") as mock_v, \
          patch("Atlas.memory.context._build_hybrid_candidates_graph") as mock_g, \
          patch("Atlas.memory.neo4j_manager.neo4j_manager.get_recent_turns", AsyncMock(return_value=[])), \
+         patch("Atlas.memory.neo4j_manager.neo4j_manager.query_graph", AsyncMock(return_value=[])), \
          patch("Atlas.memory.neo4j_manager.neo4j_manager.get_user_memory_mode", AsyncMock(return_value="STD")):
         
         # Ensure 'timestamp' is present to avoid KeyError in fuse

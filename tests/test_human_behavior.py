@@ -11,16 +11,25 @@ async def test_emotion_extraction_feels():
     user_id = "test_user_emotion"
     text = "Bugün çok yorgunum ve dinlenmek istiyorum."
     
-    with patch("Atlas.memory.extractor.httpx.AsyncClient.post") as mock_post:
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = {
+    with patch("Atlas.memory.extractor.httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
             "choices": [{
                 "message": {
                     "content": '[{"subject": "test_user", "predicate": "HİSSEDİYOR", "object": "Yorgun", "category": "personal", "confidence": 0.9}]'
                 }
             }]
         }
-        with patch("Atlas.memory.extractor.decide") as mock_decide:
+        mock_post.return_value = mock_response
+
+        with patch("Atlas.memory.mwg.decide") as mock_decide, \
+             patch("Atlas.config.Config.get_random_groq_key", return_value="dummy_key"), \
+             patch("Atlas.memory.neo4j_manager.neo4j_manager.get_user_names", new_callable=AsyncMock) as mock_names, \
+             patch("Atlas.memory.neo4j_manager.neo4j_manager.store_triplets", new_callable=AsyncMock) as mock_store:
+
+            mock_names.return_value = []
+
             from Atlas.memory.mwg import Decision
             mock_decide.return_value = MagicMock()
             mock_decide.return_value.decision = Decision.LONG_TERM
@@ -38,12 +47,18 @@ async def test_mirroring_behavior_logic():
     raw_results = [{"model": "expert", "output": "Halsizlik hissediliyor."}]
     
     # We need to mock MessageBuffer.get_llm_messages for synthesizer too
-    with patch("Atlas.synthesizer.MessageBuffer.get_llm_messages", return_value=[]):
-        _, _, prompt, _ = await synth.synthesize(raw_results, "session_1", user_message=user_message, mode="standard")
-        
-        assert "[MIRRORING]" in prompt
-        assert "yorgun" in prompt.lower()
-        assert "empatik" in prompt.lower()
+    with patch("Atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[]):
+        with patch("Atlas.key_manager.KeyManager.get_best_key", return_value="dummy_key"):
+            with patch("httpx.AsyncClient.post") as mock_post:
+                mock_post.return_value = MagicMock(status_code=200, json=lambda: {"choices": [{"message": {"content": "Ok"}}]})
+
+                await synth.synthesize(raw_results, "session_1", user_message=user_message, mode="standard")
+
+                # Check system prompt in mock call args
+                system_prompt = mock_post.call_args.kwargs["json"]["messages"][0]["content"]
+                assert "[MIRRORING]" in system_prompt
+                assert "yorgun" in system_prompt.lower()
+                assert "empatik" in system_prompt.lower()
 
 @pytest.mark.asyncio
 async def test_conflict_notification_orchestrator():
@@ -53,11 +68,21 @@ async def test_conflict_notification_orchestrator():
     message = "Nasılsın?"
     
     mock_context_builder = MagicMock()
-    mock_context_builder._neo4j_context = "[GRAF | Skor: 0.9]: Özne HİSSEDİYOR Nesne (status: CONFLICTED)"
+    # Mock build() to return the string orchestrator looks for
+    mock_context_builder.build.return_value = [{"role": "system", "content": "[ÇÖZÜLMESİ GEREKEN DURUM]"}]
     
-    with patch("Atlas.orchestrator.MessageBuffer.get_llm_messages", return_value=[]), \
-         patch("Atlas.orchestrator.Orchestrator._call_brain") as mock_brain:
+    with patch("Atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[]), \
+         patch("Atlas.orchestrator.Orchestrator._call_brain") as mock_brain, \
+         patch("Atlas.memory.neo4j_manager.neo4j_manager.get_active_conflicts", new_callable=AsyncMock) as mock_conflicts, \
+         patch("Atlas.memory.neo4j_manager.neo4j_manager.get_recent_turns", new_callable=AsyncMock) as mock_turns, \
+         patch("Atlas.memory.neo4j_manager.neo4j_manager.get_last_active_entity", new_callable=AsyncMock) as mock_entity, \
+         patch("Atlas.memory.neo4j_manager.neo4j_manager.query_graph", new_callable=AsyncMock) as mock_query:
         
+        mock_conflicts.return_value = [{"subject": "s", "predicate": "p", "value": "v"}]
+        mock_turns.return_value = []
+        mock_entity.return_value = None
+        mock_query.return_value = []  # Generic query mock
+
         # Mock brain needs to return "user_thought" so the code can append to it
         mock_brain.return_value = (
             {
