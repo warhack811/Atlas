@@ -873,18 +873,9 @@ async def build_chat_context_v1(
         except Exception as e:
             logger.error(f"DST resolution failed: {e}")
 
-    # --- Phase 2.5: Temporal Awareness ---
-    temporal_context = ""
-    date_range = extract_date_range(user_message)
-    if date_range:
-        start_dt, end_dt = date_range
-        logger.info(f"Temporal Match: {start_dt} - {end_dt}")
-        temporal_facts = await neo4j_manager.get_facts_by_date_range(user_id, start_dt, end_dt)
-        if temporal_facts:
-            temporal_context = f"\n[ZAMAN FİLTRESİ]: Kullanıcının belirttiği tarih aralığındaki ({start_dt.date()} - {end_dt.date()}) kayıtlar:\n"
-            for f in temporal_facts[:10]:
-                temporal_context += f"- {f['subject']} {f['predicate']} {f['object']} (Tarih: {f.get('ts','')})\n"
-            temporal_context += "\n"
+    # --- Phase 2.5: Temporal Awareness (Strategy Pattern) ---
+    from Atlas.memory.context_strategies import TemporalContextStrategy
+    temporal_context = await TemporalContextStrategy().get_context(user_id, session_id, user_message)
 
     # 3. Niyet ve Bütçe (RC-8)
     if trace is None:
@@ -937,42 +928,22 @@ async def build_chat_context_v1(
     else:
         transcript_text = "\n".join(transcript_lines)
 
-    # B. Episodic Memory (RC-3/RC-8/RC-10)
+    # B. Episodic Memory (Strategy Pattern)
+    from Atlas.memory.context_strategies import EpisodicContextStrategy
     episodic_budget = budgeter.get_layer_budget("episodic")
-    episodic_text = ""
-    if mode != "OFF" and episodic_budget > 0:
-        query = """
-        MATCH (u:User {id: $uid})-[:HAS_SESSION]->(s:Session)-[:HAS_EPISODE]->(e:Episode {status: "READY"})
-        WHERE s.id <> $sid
-        RETURN e.summary as summary, e.embedding as embedding, e.kind as kind, 
-               e.start_turn_index as start, e.end_turn_index as end, e.id as id
-        LIMIT 10
-        """
-        results = await neo4j_manager.query_graph(query, {"uid": user_id, "sid": session_id})
-        scored_episodes = []
-        query_emb = await embedder.embed(user_message)
-        for res in results:
-            score = 0.0
-            if res.get("embedding"):
-                score = calculate_cosine_similarity(query_emb, res.get("embedding"))
-            if res.get("kind") == "CONSOLIDATED": score *= 1.1 
-            scored_episodes.append((score, res))
-        scored_episodes.sort(key=lambda x: x[0], reverse=True)
-        selected_ep_lines = []
-        curr_ep_size = 0
-        for score, ep in scored_episodes:
-            line = f"- {ep['summary']} (Turn {ep.get('start', 0)}-{ep.get('end', 0)})"
-            if is_duplicate(line, all_context_texts): continue
-            if curr_ep_size + len(line) + 1 <= episodic_budget:
-                selected_ep_lines.append(line)
-                curr_ep_size += len(line) + 1
-                all_context_texts.append(line)
-        episodic_text = "\n".join(selected_ep_lines)
-        if episodic_text and trace:
-            trace.active_tiers.append("Episodic")
+    episodic_text = await EpisodicContextStrategy().get_context(
+        user_id, session_id, user_message,
+        budget=episodic_budget, mode=mode, embedder=embedder, dedupe_pool=all_context_texts
+    )
+    if episodic_text and trace:
+        trace.active_tiers.append("Episodic")
 
-    # C. Semantic V3
-    memory_v3 = await build_memory_context_v3(user_id, user_message, session_id=session_id, stats=stats, intent=intent, trace=trace)
+    # C. Semantic V3 (Strategy Pattern)
+    from Atlas.memory.context_strategies import SemanticContextStrategy
+    memory_v3 = await SemanticContextStrategy().get_context(
+        user_id, session_id, user_message,
+        stats=stats, intent=intent, trace=trace
+    )
 
     # D. Hybrid Retrieval (V4)
     hybrid_context = ""
@@ -980,7 +951,7 @@ async def build_chat_context_v1(
         try:
             v_candidates = await _build_hybrid_candidates_vector(user_id, user_message, embedder)
             g_candidates = await _build_hybrid_candidates_graph(user_id)
-            fused = _score_fuse_candidates(v_candidates + g_candidates)
+            fused = _score_fuse_candidates(v_candidates + g_candidates, query_text=user_message)
             unique_hybrid = _dedupe_top_k(fused, all_context_texts)
             if unique_hybrid:
                 h_lines = [f"- [{u['source'].upper()} | Skor: {u['final_score']:.2f}]: {u['text'][:200]}" for u in unique_hybrid]
@@ -1110,19 +1081,28 @@ async def _build_hybrid_candidates_graph(user_id: str) -> List[Dict]:
         logger.warning(f"Graph retrieval failed: {e}")
         return []
 
-def _score_fuse_candidates(candidates: List[Dict]) -> List[Dict]:
-    """Applies weight fusion and recency decay to candidates."""
+def _score_fuse_candidates(candidates: List[Dict], query_text: Optional[str] = None) -> List[Dict]:
+    """
+    Applies weight fusion and recency decay to candidates.
+    Also applies a lightweight keyword density reranking if query_text is provided.
+    """
     from Atlas.config import (
         HYBRID_WEIGHT_VECTOR, HYBRID_WEIGHT_GRAPH, HYBRID_WEIGHT_RECENCY,
         HYBRID_RECENCY_HALFLIFE_DAYS
     )
     import math
-    from datetime import datetime
+    from datetime import datetime, timezone
     
     def get_recency(ts_str):
         if not ts_str: return 0.0
         try:
-            delta = datetime.utcnow() - datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+            # Use timezone-aware UTC now
+            now = datetime.now(timezone.utc)
+            ts = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+
+            delta = now - ts
             days = delta.total_seconds() / 86400
             # FAZ-Y: math.exp tabanlı exponential decay (halflife=7 gün)
             halflife = 7.0 # ROADMAP ADIM 2.1
@@ -1130,11 +1110,28 @@ def _score_fuse_candidates(candidates: List[Dict]) -> List[Dict]:
             return math.exp(-decay_constant * days)
         except: return 0.0
 
+    def calculate_keyword_density(text: str, query: str) -> float:
+        if not query or not text: return 0.0
+        q_tokens = set(query.lower().split())
+        t_lower = text.lower()
+        match_count = sum(1 for t in q_tokens if t in t_lower)
+        return match_count / len(q_tokens) if q_tokens else 0.0
+
     for c in candidates:
         r_score = get_recency(c.get("timestamp"))
-        c["final_score"] = (HYBRID_WEIGHT_VECTOR * c["vector_score"] + 
-                            HYBRID_WEIGHT_GRAPH * c["graph_score"] + 
-                            HYBRID_WEIGHT_RECENCY * r_score)
+
+        base_score = (HYBRID_WEIGHT_VECTOR * c["vector_score"] +
+                      HYBRID_WEIGHT_GRAPH * c["graph_score"] +
+                      HYBRID_WEIGHT_RECENCY * r_score)
+
+        # Keyword Reranking Boost
+        if query_text:
+            density = calculate_keyword_density(c.get("text", ""), query_text)
+            # Boost score by up to 20% based on exact keyword matches
+            base_score *= (1.0 + (density * 0.2))
+
+        c["final_score"] = base_score
+
     return candidates
 
 def _dedupe_top_k(candidates: List[Dict], existing_texts: List[str], top_k: int = 10) -> List[Dict]:

@@ -180,11 +180,16 @@ class DAGExecutor:
         try:
             params = task.params or {}
             result = await tool.execute(**params)
+
+            # Phase 2: Token Optimization via Summarizer
+            from Atlas.tools.summarizer import summarize_tool_output
+            summary = summarize_tool_output(task.tool_name, str(result))
+
             return {
                 "task_id": task.id,
                 "type": "tool",
                 "tool_name": task.tool_name,
-                "output": result,
+                "output": summary,
                 "status": "success"
             }
         except Exception as e:
