@@ -270,7 +270,8 @@ Eğer bir predicate yukarıdaki listede yoksa, o triplet'i üretme.
 ÖRNEK:
 Kullanıcı: "Ben Ali, İstanbul'da yaşıyorum ve her şeyi unutmanı istiyorum."
 Çıktı: [
-  {"subject": "Ali", "predicate": "YAŞAR_YER", "object": "İstanbul", "category": "personal"}
+  {"subject": "KULLANICI", "predicate": "İSİM", "object": "Ali", "category": "personal"},
+  {"subject": "KULLANICI", "predicate": "YAŞAR_YER", "object": "İstanbul", "category": "personal"}
 ]
 (Not: "her şeyi unutmanı istiyorum" bir komuttur, İSTİYOR yüklemiyle dahi ÇIKARILMAZ.)
 """
