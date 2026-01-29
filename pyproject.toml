@@ -1,29 +1,50 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "Atlas"
-version = "1.0.0"
-description = "ATLAS AI Sandbox Router - Proper Python Package"
+version = "0.1.0"
+description = "Akıllı Yapay Zeka Asistanı Platformu"
+readme = "README.md"
 requires-python = ">=3.10"
-
 dependencies = [
     "fastapi",
-    "pydantic>=2.0.0",
-    "httpx>=0.24.0",
-    "python-dotenv",
     "uvicorn",
+    "httpx",
+    "python-dotenv",
     "google-genai",
     "neo4j",
+    "pydantic",
+    "pydantic-settings",
+    "python-multipart",
     "jinja2",
     "aiofiles",
-    "python-multipart",
-    "marked",
-    "apscheduler",
+    "google-api-core",
+    "pytz",
     "pyyaml",
+    "apscheduler",
     "dateparser",
+    "numpy",
+    "itsdangerous",
+    "qdrant-client>=1.7.0,<2.0.0",
+    "redis[asyncio]>=5.0.0,<6.0.0",
+    "opentelemetry-api",
+    "opentelemetry-sdk",
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "mypy"
+]
 
-[tool.hatch.build.targets.wheel]
-packages = ["Atlas"]
+[tool.pytest.ini_options]
+addopts = "-v --tb=short"
+markers = [
+    "integration",
+    "slow",
+    "unit"
+]
