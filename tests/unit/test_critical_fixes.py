@@ -7,7 +7,7 @@ Tests for topic reset fix and memory cleanup mechanism.
 import pytest
 from unittest.mock import MagicMock
 from datetime import datetime, timedelta
-from Atlas.memory.state import SessionState, StateManager
+from atlas.memory.state import SessionState, StateManager
 
 
 class TestTopicResetFix:

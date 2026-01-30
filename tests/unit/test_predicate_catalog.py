@@ -6,7 +6,7 @@ Tests for dynamic predicate catalog integration and ASCII/Unicode fix.
 
 import pytest
 from unittest.mock import MagicMock
-from Atlas.memory.predicate_catalog import PredicateCatalog
+from atlas.memory.predicate_catalog import PredicateCatalog
 
 
 class TestPredicateCatalogDynamic:

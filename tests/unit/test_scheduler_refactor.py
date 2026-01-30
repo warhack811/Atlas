@@ -1,8 +1,8 @@
 import pytest
 import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch, ANY
-from Atlas.tasks import TaskRegistry, BaseJob
-from Atlas.scheduler import coordinator, SchedulerCoordinator
+from atlas.tasks import TaskRegistry, BaseJob
+from atlas.core.scheduler import coordinator, SchedulerCoordinator
 
 @pytest.mark.asyncio
 async def test_task_registry_registration():
@@ -68,11 +68,11 @@ async def test_leadership_promotion_demotion():
 @pytest.mark.asyncio
 async def test_leader_election_trigger():
     """LeaderElectionJob'ın coordinator'ı tetiklediğini doğrula."""
-    from Atlas.tasks.system import LeaderElectionJob
+    from atlas.tasks.system import LeaderElectionJob
     
     job = LeaderElectionJob()
     mock_coordinator = AsyncMock()
     
-    with patch("Atlas.memory.neo4j_manager.neo4j_manager.try_acquire_lock", return_value=True):
+    with patch("atlas.memory.neo4j_manager.neo4j_manager.try_acquire_lock", return_value=True):
         await job.run(scheduler_coordinator=mock_coordinator)
         mock_coordinator.update_leadership.assert_called_with(True, ANY)

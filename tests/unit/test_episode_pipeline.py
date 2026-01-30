@@ -13,7 +13,7 @@ import os
 from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime
 
-from Atlas.memory.episode_pipeline import finalize_episode_with_vectors
+from atlas.memory.episode_pipeline import finalize_episode_with_vectors
 
 
 @pytest.mark.asyncio
@@ -24,10 +24,10 @@ async def test_finalize_episode_success():
     WHY: Validates end-to-end pipeline with all components working.
     """
     # Mock dependencies
-    with patch('Atlas.memory.episode_pipeline.GeminiEmbedder') as MockEmbedder, \
-         patch('Atlas.memory.episode_pipeline.QdrantManager') as MockQdrant, \
-         patch('Atlas.memory.episode_pipeline.Neo4jManager') as MockNeo4j, \
-         patch('Atlas.memory.episode_pipeline.BYPASS_VECTOR_SEARCH', False):
+    with patch('atlas.memory.episode_pipeline.GeminiEmbedder') as MockEmbedder, \
+         patch('atlas.memory.episode_pipeline.QdrantManager') as MockQdrant, \
+         patch('atlas.memory.episode_pipeline.Neo4jManager') as MockNeo4j, \
+         patch('atlas.memory.episode_pipeline.BYPASS_VECTOR_SEARCH', False):
         
         # Setup mocks
         mock_embedder = MockEmbedder.return_value
@@ -73,7 +73,7 @@ async def test_finalize_episode_short_summary():
     
     WHY: Edge case - graceful handling of insufficient content.
     """
-    with patch('Atlas.memory.episode_pipeline.Neo4jManager') as MockNeo4j:
+    with patch('atlas.memory.episode_pipeline.Neo4jManager') as MockNeo4j:
         mock_neo4j = MockNeo4j.return_value
         mock_neo4j.mark_episode_ready = AsyncMock()
         
@@ -103,9 +103,9 @@ async def test_finalize_episode_embedding_failure():
     
     WHY: Production resilience - don't block episode completion on vector errors.
     """
-    with patch('Atlas.memory.episode_pipeline.GeminiEmbedder') as MockEmbedder, \
-         patch('Atlas.memory.episode_pipeline.Neo4jManager') as MockNeo4j, \
-         patch('Atlas.memory.episode_pipeline.BYPASS_VECTOR_SEARCH', False):
+    with patch('atlas.memory.episode_pipeline.GeminiEmbedder') as MockEmbedder, \
+         patch('atlas.memory.episode_pipeline.Neo4jManager') as MockNeo4j, \
+         patch('atlas.memory.episode_pipeline.BYPASS_VECTOR_SEARCH', False):
         
         # Embedding fails
         mock_embedder_instance = MockEmbedder.return_value
@@ -139,10 +139,10 @@ async def test_finalize_episode_qdrant_failure():
     
     WHY: Graceful degradation - vector search unavailable, fallback to graph retrieval.
     """
-    with patch('Atlas.memory.episode_pipeline.GeminiEmbedder') as MockEmbedder, \
-         patch('Atlas.memory.episode_pipeline.QdrantManager') as MockQdrant, \
-         patch('Atlas.memory.episode_pipeline.Neo4jManager') as MockNeo4j, \
-         patch('Atlas.memory.episode_pipeline.BYPASS_VECTOR_SEARCH', False):
+    with patch('atlas.memory.episode_pipeline.GeminiEmbedder') as MockEmbedder, \
+         patch('atlas.memory.episode_pipeline.QdrantManager') as MockQdrant, \
+         patch('atlas.memory.episode_pipeline.Neo4jManager') as MockNeo4j, \
+         patch('atlas.memory.episode_pipeline.BYPASS_VECTOR_SEARCH', False):
         
         # Embedding succeeds
         mock_embedder = MockEmbedder.return_value
@@ -182,8 +182,8 @@ async def test_finalize_episode_bypass_mode():
     
     WHY: Feature flag for gradual rollout / emergency disable.
     """
-    with patch('Atlas.memory.episode_pipeline.Neo4jManager') as MockNeo4j, \
-         patch('Atlas.memory.episode_pipeline.BYPASS_VECTOR_SEARCH', True):
+    with patch('atlas.memory.episode_pipeline.Neo4jManager') as MockNeo4j, \
+         patch('atlas.memory.episode_pipeline.BYPASS_VECTOR_SEARCH', True):
         
         mock_neo4j = MockNeo4j.return_value
         mock_neo4j.mark_episode_ready = AsyncMock()

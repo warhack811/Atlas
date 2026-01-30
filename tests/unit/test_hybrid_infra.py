@@ -2,16 +2,16 @@ import pytest
 import os
 from datetime import datetime
 from unittest.mock import AsyncMock, patch, MagicMock
-from Atlas.memory.context import build_chat_context_v1, _score_fuse_candidates
-import Atlas.config
+from atlas.memory.context import build_chat_context_v1, _score_fuse_candidates
+import atlas.config
 
 @pytest.mark.asyncio
 async def test_hybrid_fusion_logic_unit(monkeypatch):
     """Verify weighted score fusion and recency decay (Unit)."""
-    monkeypatch.setattr(Atlas.config, "HYBRID_WEIGHT_VECTOR", 0.4)
-    monkeypatch.setattr(Atlas.config, "HYBRID_WEIGHT_GRAPH", 0.4)
-    monkeypatch.setattr(Atlas.config, "HYBRID_WEIGHT_RECENCY", 0.2)
-    monkeypatch.setattr(Atlas.config, "HYBRID_RECENCY_HALFLIFE_DAYS", 30.0)
+    monkeypatch.setattr(atlas.config, "HYBRID_WEIGHT_VECTOR", 0.4)
+    monkeypatch.setattr(atlas.config, "HYBRID_WEIGHT_GRAPH", 0.4)
+    monkeypatch.setattr(atlas.config, "HYBRID_WEIGHT_RECENCY", 0.2)
+    monkeypatch.setattr(atlas.config, "HYBRID_RECENCY_HALFLIFE_DAYS", 30.0)
     
     # Current time for recency
     now_iso = datetime.utcnow().isoformat()
@@ -42,16 +42,16 @@ async def test_hybrid_fusion_logic_unit(monkeypatch):
 @pytest.mark.asyncio
 async def test_hybrid_retrieval_integration_mocked(monkeypatch):
     """Verify build_chat_context_v1 calls both sources and fuses result (Deterministic)."""
-    monkeypatch.setattr(Atlas.config, "ENABLE_HYBRID_RETRIEVAL", True)
+    monkeypatch.setattr(atlas.config, "ENABLE_HYBRID_RETRIEVAL", True)
     
     mock_embedder = MagicMock()
     mock_embedder.embed = AsyncMock(return_value=[0.1]*768)
     
-    with patch("Atlas.memory.context._build_hybrid_candidates_vector") as mock_v, \
-         patch("Atlas.memory.context._build_hybrid_candidates_graph") as mock_g, \
-         patch("Atlas.memory.neo4j_manager.neo4j_manager.get_recent_turns", AsyncMock(return_value=[])), \
-         patch("Atlas.memory.neo4j_manager.neo4j_manager.query_graph", AsyncMock(return_value=[])), \
-         patch("Atlas.memory.neo4j_manager.neo4j_manager.get_user_memory_mode", AsyncMock(return_value="STD")):
+    with patch("atlas.memory.context._build_hybrid_candidates_vector") as mock_v, \
+         patch("atlas.memory.context._build_hybrid_candidates_graph") as mock_g, \
+         patch("atlas.memory.neo4j_manager.neo4j_manager.get_recent_turns", AsyncMock(return_value=[])), \
+         patch("atlas.memory.neo4j_manager.neo4j_manager.query_graph", AsyncMock(return_value=[])), \
+         patch("atlas.memory.neo4j_manager.neo4j_manager.get_user_memory_mode", AsyncMock(return_value="STD")):
         
         # Ensure 'timestamp' is present to avoid KeyError in fuse
         mock_v.return_value = [{

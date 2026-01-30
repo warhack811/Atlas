@@ -1,8 +1,8 @@
 import pytest
 import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
-from Atlas.orchestrator import Orchestrator
-from Atlas.memory.state import state_manager
+from atlas.core.orchestrator import Orchestrator
+from atlas.memory.state import state_manager
 
 @pytest.mark.skip(reason="Legacy test broken by refactor")
 @pytest.mark.asyncio
@@ -19,14 +19,14 @@ async def test_topic_update_on_new_topic():
         "tasks": []
     }
     
-    with patch("Atlas.orchestrator.Orchestrator._call_brain", new_callable=AsyncMock) as mock_brain:
+    with patch("atlas.core.orchestrator.Orchestrator._call_brain", new_callable=AsyncMock) as mock_brain:
         mock_brain.return_value = (plan_data, "prompt", "model")
         
         # Neo4j çağrısını mock'la (async task olduğu için beklememize gerek yok ama hata vermesin)
-        with patch("Atlas.memory.neo4j_manager.neo4j_manager.update_session_topic", new_callable=AsyncMock) as mock_neo4j:
-            with patch("Atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[]):
+        with patch("atlas.memory.neo4j_manager.neo4j_manager.update_session_topic", new_callable=AsyncMock) as mock_neo4j:
+            with patch("atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[]):
                 # Ensure context builder mocks don't leak into state
-                with patch("Atlas.memory.context.ContextBuilder.get_neo4j_context", new_callable=AsyncMock) as mock_ctx:
+                with patch("atlas.memory.context.ContextBuilder.get_neo4j_context", new_callable=AsyncMock) as mock_ctx:
                     mock_ctx.return_value = ""
                     await Orchestrator.plan(session_id, "Python öğrenmek istiyorum")
             
@@ -47,7 +47,7 @@ async def test_no_topic_update_on_same():
         "tasks": []
     }
     
-    with patch("Atlas.orchestrator.Orchestrator._call_brain", new_callable=AsyncMock) as mock_brain:
+    with patch("atlas.core.orchestrator.Orchestrator._call_brain", new_callable=AsyncMock) as mock_brain:
         mock_brain.return_value = (plan_data, "prompt", "model")
         
         await Orchestrator.plan(session_id, "Devam et")
@@ -69,7 +69,7 @@ async def test_no_topic_update_on_chitchat():
         "tasks": []
     }
     
-    with patch("Atlas.orchestrator.Orchestrator._call_brain", new_callable=AsyncMock) as mock_brain:
+    with patch("atlas.core.orchestrator.Orchestrator._call_brain", new_callable=AsyncMock) as mock_brain:
         mock_brain.return_value = (plan_data, "prompt", "model")
         
         await Orchestrator.plan(session_id, "Naber?")

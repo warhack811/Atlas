@@ -3,7 +3,7 @@ FAZ-Y Tests - Gemini Embedder
 """
 import pytest
 import asyncio
-from Atlas.memory.gemini_embedder import GeminiEmbedder
+from atlas.memory.gemini_embedder import GeminiEmbedder
 
 
 @pytest.mark.skip(reason="Legacy test broken by refactor")

@@ -1,23 +1,20 @@
-fastapi
-uvicorn
-httpx
-python-dotenv
-google-genai
-neo4j
-pydantic
-pydantic-settings
-python-multipart
-jinja2
 aiofiles
-google-api-core
-pytz
-pyyaml
 apscheduler
 dateparser
-numpy
+fastapi
+google-api-core
+google-genai
+httpx
 itsdangerous
-
-# FAZ-Y: Vector Database & Cache
-qdrant-client>=1.7.0,<2.0.0  # Vector database - search() API required
-redis[asyncio]>=5.0.0,<6.0.0  # Semantic cache
+jinja2
+neo4j
+numpy
+pydantic
 pydantic-settings>=2.0.0
+python-dotenv
+python-multipart
+pytz
+pyyaml
+qdrant-client>=1.7.0,<2.0.0
+redis[asyncio]>=5.0.0,<6.0.0
+uvicorn

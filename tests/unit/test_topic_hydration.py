@@ -108,13 +108,13 @@ class TestOrchestratorIntegration:
     @pytest.mark.asyncio
     async def test_orchestrator_plan_hydrates_state(self):
         """Test 3: Full orchestrator integration test with cache verification"""
-        from Atlas.orchestrator import Orchestrator
+        from atlas.core.orchestrator import Orchestrator
         
         # Mock dependencies
-        with patch('Atlas.orchestrator.MessageBuffer') as mock_buffer, \
-             patch('Atlas.orchestrator.state_manager') as mock_state_mgr, \
-             patch('Atlas.orchestrator.time_context') as mock_time, \
-             patch('Atlas.memory.neo4j_manager.neo4j_manager') as mock_neo4j:
+        with patch('atlas.core.orchestrator.MessageBuffer') as mock_buffer, \
+             patch('atlas.core.orchestrator.state_manager') as mock_state_mgr, \
+             patch('atlas.core.orchestrator.time_context') as mock_time, \
+             patch('atlas.memory.neo4j_manager.neo4j_manager') as mock_neo4j:
             
             # Setup mocks
             mock_buffer.get_llm_messages.return_value = []

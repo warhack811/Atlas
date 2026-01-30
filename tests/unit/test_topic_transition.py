@@ -1,7 +1,7 @@
 import pytest
 import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
-from Atlas.synthesizer import Synthesizer
+from atlas.services.synthesizer import Synthesizer
 
 @pytest.mark.asyncio
 async def test_synthesizer_topic_transition_injection():
@@ -21,8 +21,8 @@ async def test_synthesizer_topic_transition_injection():
         current_topic = "Nükleer Fizik"
 
         # Sentezleyiciyi çağır
-        with patch("Atlas.key_manager.KeyManager.get_best_key", return_value="dummy_key"):
-            with patch("Atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[]):
+        with patch("atlas.services.key_manager.KeyManager.get_best_key", return_value="dummy_key"):
+            with patch("atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[]):
                 await Synthesizer.synthesize(
                     raw_results, session_id, current_topic=current_topic
                 )
@@ -58,8 +58,8 @@ async def test_synthesizer_topic_transition_injection():
         session_id = "test_sess_trans"
         current_topic = "Nükleer Fizik"
 
-        with patch("Atlas.key_manager.KeyManager.get_best_key", return_value="dummy_key"):
-            with patch("Atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[]):
+        with patch("atlas.services.key_manager.KeyManager.get_best_key", return_value="dummy_key"):
+            with patch("atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[]):
                 await Synthesizer.synthesize(
                     raw_results, session_id, current_topic=current_topic
                 )
@@ -83,8 +83,8 @@ async def test_synthesizer_no_transition_on_same():
         mock_response.json.return_value = {"choices": [{"message": {"content": "Test"}}]}
         mock_instance.post.return_value = mock_response
 
-        with patch("Atlas.key_manager.KeyManager.get_best_key", return_value="dummy_key"):
-            with patch("Atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[]):
+        with patch("atlas.services.key_manager.KeyManager.get_best_key", return_value="dummy_key"):
+            with patch("atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[]):
                 await Synthesizer.synthesize(
                     [{"model": "x", "output": "y"}], "test", current_topic="SAME"
                 )
@@ -104,8 +104,8 @@ async def test_synthesizer_no_transition_on_none():
         mock_response.json.return_value = {"choices": [{"message": {"content": "Test"}}]}
         mock_instance.post.return_value = mock_response
 
-        with patch("Atlas.key_manager.KeyManager.get_best_key", return_value="dummy_key"):
-            with patch("Atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[]):
+        with patch("atlas.services.key_manager.KeyManager.get_best_key", return_value="dummy_key"):
+            with patch("atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[]):
                 await Synthesizer.synthesize(
                     [{"model": "x", "output": "y"}], "test", current_topic=None
                 )

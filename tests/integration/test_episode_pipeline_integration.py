@@ -19,8 +19,8 @@ import time
 import hashlib
 from unittest.mock import AsyncMock
 
-from Atlas.memory.episode_pipeline import finalize_episode_with_vectors
-from Atlas.memory.qdrant_manager import QdrantManager
+from atlas.memory.episode_pipeline import finalize_episode_with_vectors
+from atlas.memory.qdrant_manager import QdrantManager
 
 
 class DeterministicMockEmbedder:
@@ -77,7 +77,7 @@ async def test_finalize_episode_real_qdrant_integration():
     await qdrant_manager.delete_by_user(user_id)
     
     # Mock Neo4j (integration test focuses on Qdrant)
-    from Atlas.memory.neo4j_manager import Neo4jManager
+    from atlas.memory.neo4j_manager import Neo4jManager
     mock_neo4j = AsyncMock(spec=Neo4jManager)
     mock_neo4j.mark_episode_ready = AsyncMock()
     
@@ -150,7 +150,7 @@ async def test_finalize_episode_real_qdrant_integration():
     assert call_args.kwargs["vector_status"] == "READY"
     
     # Verify STORE_EPISODE_EMBEDDING_IN_NEO4J flag (default true)
-    from Atlas.config import STORE_EPISODE_EMBEDDING_IN_NEO4J
+    from atlas.config import STORE_EPISODE_EMBEDDING_IN_NEO4J
     if STORE_EPISODE_EMBEDDING_IN_NEO4J:
         assert call_args.kwargs["embedding"] is not None
         assert len(call_args.kwargs["embedding"]) == 768
@@ -247,7 +247,7 @@ async def test_finalize_episode_real_gemini_nightly():
         pytest.skip("Nightly test requires GEMINI_API_KEY")
     
     # Real Gemini embedder (API call)
-    from Atlas.memory.gemini_embedder import GeminiEmbedder
+    from atlas.memory.gemini_embedder import GeminiEmbedder
     embedder = GeminiEmbedder()
     
     # Real Qdrant

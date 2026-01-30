@@ -5,7 +5,7 @@ Tests cross-session memory persistence using SessionState cache pattern.
 """
 
 import pytest
-from Atlas.memory.state import SessionState, state_manager
+from atlas.memory.state import SessionState, state_manager
 
 
 def test_session_state_has_identity_fields():

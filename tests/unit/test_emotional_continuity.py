@@ -14,14 +14,14 @@ mock_embedder = AsyncMock()
 # Patch modules
 @pytest.fixture(autouse=True)
 def mock_dependencies():
-    with patch("Atlas.memory.context.neo4j_manager", mock_neo4j), \
-         patch("Atlas.memory.context.state_manager", mock_state_manager), \
-         patch("Atlas.synthesizer.MODEL_GOVERNANCE", {"synthesizer": ["mock-model"]}), \
-         patch("Atlas.synthesizer.KeyManager", MagicMock()):
+    with patch("atlas.memory.context.neo4j_manager", mock_neo4j), \
+         patch("atlas.memory.context.state_manager", mock_state_manager), \
+         patch("atlas.services.synthesizer.MODEL_GOVERNANCE", {"synthesizer": ["mock-model"]}), \
+         patch("atlas.services.synthesizer.KeyManager", MagicMock()):
         yield
 
-from Atlas.memory.context import build_chat_context_v1
-from Atlas.synthesizer import synthesizer
+from atlas.memory.context import build_chat_context_v1
+from atlas.services.synthesizer import synthesizer
 
 @pytest.mark.skip(reason="Legacy test broken by refactor")
 @pytest.mark.asyncio
@@ -111,7 +111,7 @@ async def test_synthesizer_stream_instruction():
     raw_data = [{"output": "[ÖNCEKİ DUYGU DURUMU]: Kullanıcı son görüşmenizde 'Gergin' hissediyordu."}]
     
     # Mock generate_stream
-    with patch("Atlas.generator.generate_stream") as mock_gen_stream:
+    with patch("atlas.services.generator.generate_stream") as mock_gen_stream:
         mock_gen_stream.return_value = iter(["chunk"])
         
         # Consume generator

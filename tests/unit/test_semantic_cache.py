@@ -3,7 +3,7 @@ FAZ-Y Tests - Semantic Cache
 """
 import pytest
 import os
-from Atlas.memory.semantic_cache import SemanticCache
+from atlas.memory.semantic_cache import SemanticCache
 
 
 @pytest.mark.skipif(
@@ -119,7 +119,7 @@ async def test_bypass_mode():
         
         # Force config reload
         from importlib import reload
-        import Atlas.config as config_module
+        import atlas.config as config_module
         reload(config_module)
         
         cache = SemanticCache()
@@ -140,7 +140,7 @@ async def test_bypass_mode():
             os.environ.pop("BYPASS_SEMANTIC_CACHE", None)
         
         from importlib import reload
-        import Atlas.config as config_module
+        import atlas.config as config_module
         reload(config_module)
 
 

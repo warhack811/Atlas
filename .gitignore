@@ -1,75 +1,11 @@
-# Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Environments
+*.pyc
 .env
-.venv
-env/
-venv/
-ENV/
-
-# IDEs
-.vscode/
-.idea/
-
-# Database / Data
-data/
-*.db
-*.log
-rdr_records/
-
-# Project Specific
-standalone_router/benchmark/
-tests/__pycache__/
-
-# Temporary Artifacts
-temp_*.py
-temp_*.txt
-*_test_output.txt
-*_audit_results.json
-debug_context*.txt
-test_output*.txt
-RC11_PROOF_PACK.md
-merge_golden.py
-check_sig.py
-
-# Debug & Logs
-*_log*.txt
-*.log
-ci_log*.txt
-new_ci_log*.txt
-pr*_failed_log*.txt
-test_err*.txt
-test_error*.txt
-test_results*.txt
-pytest_full*.txt
-debug_*.py
-test_debug.txt
-
-# Environments (Hardened)
-.venv*
-test_venv/
-venv*/
-.*venv*/
-
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.DS_Store
 

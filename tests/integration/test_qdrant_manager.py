@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 # CRITICAL: Load environment variables before importing modules
 load_dotenv()
 
-from Atlas.memory.qdrant_manager import QdrantManager
+from atlas.memory.qdrant_manager import QdrantManager
 
 
 # ============================================================================
@@ -430,7 +430,7 @@ async def test_bypass_mode():
                  pytest.skip("Skipping bypass test in CI due to singleton mocking conflicts")
 
         from importlib import reload
-        import Atlas.config as config_module
+        import atlas.config as config_module
         reload(config_module)
         
         success = await manager.upsert_episode(
@@ -452,7 +452,7 @@ async def test_bypass_mode():
             os.environ.pop("BYPASS_VECTOR_SEARCH", None)
         
         from importlib import reload
-        import Atlas.config as config_module
+        import atlas.config as config_module
         reload(config_module)
 
 

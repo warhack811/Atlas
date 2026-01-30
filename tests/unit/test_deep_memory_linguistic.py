@@ -1,8 +1,8 @@
 import pytest
 import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
-from Atlas.memory.context import is_reference_needed, build_chat_context_v1
-from Atlas.memory import MessageBuffer
+from atlas.memory.context import is_reference_needed, build_chat_context_v1
+from atlas.memory import MessageBuffer
 
 @pytest.mark.parametrize("text,expected", [
     ("Onu bana ver.", True),
@@ -32,9 +32,9 @@ async def test_context_conflict_injection():
     
     mock_embedder = AsyncMock()
     
-    with patch("Atlas.memory.context.neo4j_manager", mock_neo4j), \
-         patch("Atlas.memory.intent.classify_intent_tr", return_value="general"), \
-         patch("Atlas.memory.context.build_memory_context_v3", return_value=""):
+    with patch("atlas.memory.context.neo4j_manager", mock_neo4j), \
+         patch("atlas.memory.intent.classify_intent_tr", return_value="general"), \
+         patch("atlas.memory.context.build_memory_context_v3", return_value=""):
         
         context = await build_chat_context_v1(
             user_id="user123",
@@ -59,10 +59,10 @@ async def test_dst_reference_resolution_injection():
     mock_embedder = AsyncMock()
     
     # MessageBuffer'da isim bulma simülasyonu
-    with patch("Atlas.memory.context.neo4j_manager", mock_neo4j), \
-         patch("Atlas.memory.intent.classify_intent_tr", return_value="general"), \
-         patch("Atlas.memory.context.build_memory_context_v3", return_value=""), \
-         patch("Atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[
+    with patch("atlas.memory.context.neo4j_manager", mock_neo4j), \
+         patch("atlas.memory.intent.classify_intent_tr", return_value="general"), \
+         patch("atlas.memory.context.build_memory_context_v3", return_value=""), \
+         patch("atlas.memory.buffer.MessageBuffer.get_llm_messages", return_value=[
              {"role": "user", "content": "Mami nerede?"}
          ]):
         
