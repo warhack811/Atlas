@@ -22,6 +22,7 @@ import traceback
 from datetime import datetime
 from typing import Optional
 from pathlib import Path
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks, File, UploadFile, Request, Response, Depends, Cookie
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
@@ -61,10 +62,32 @@ logger = logging.getLogger("api")
 from Atlas import rdr
 from Atlas.auth import create_session_token, decode_session_token, verify_credentials
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Uygulama yaşam döngüsü yönetimi."""
+    # STARTUP LOGGING FIX: Ensure logs are visible in terminal
+    import sys
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        stream=sys.stdout,
+        force=True
+    )
+    logger.info("ATLAS API Starting up... logging configured.")
+
+    from Atlas.scheduler import start_scheduler, stop_scheduler
+    await start_scheduler()
+
+    yield
+
+    stop_scheduler()
+    logger.info("ATLAS API Shutting down...")
+
 app = FastAPI(
     title="ATLAS Router Sandbox",
     description="4-Tier Intent Classification + Model Routing Test Environment",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS Ayarları: Farklı kökenlerden gelen isteklere izin verir
@@ -155,21 +178,6 @@ class MemoryCorrectionRequest(BaseModel):
 
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Uygulama başladığında çalışacak görevler."""
-    # STARTUP LOGGING FIX: Ensure logs are visible in terminal
-    import sys
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        stream=sys.stdout,
-        force=True
-    )
-    logger.info("ATLAS API Starting up... logging configured.")
-    
-    from Atlas.scheduler import start_scheduler
-    await start_scheduler()
 
 
 # --- AUTH & SESSION ---
