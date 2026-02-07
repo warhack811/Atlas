@@ -50,10 +50,10 @@ async def test_leadership_promotion_demotion():
     test_coordinator.scheduler = MagicMock()
     
     # 1. Promote to Leader
-    with patch.object(test_coordinator, "sync_user_jobs", new_callable=AsyncMock) as mock_sync:
+    with patch.object(test_coordinator, "refresh_jobs", new_callable=AsyncMock) as mock_refresh:
         await test_coordinator.update_leadership(True, "test_inst")
         assert test_coordinator.is_leader == True
-        mock_sync.assert_called_once()
+        mock_refresh.assert_called_once()
     
     # 2. Demote to Follower
     # Mock active jobs to remove
