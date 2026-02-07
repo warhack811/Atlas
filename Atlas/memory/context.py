@@ -506,7 +506,7 @@ async def _retrieve_hard_facts(user_id: str, user_anchor: str, catalog) -> list:
     
     # Neo4j'den çek
     query = """
-    MATCH (s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity)
+    MATCH (u:User {id: $uid})-[:KNOWS]->(s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity)
     WHERE (r.status IS NULL OR r.status = 'ACTIVE')
       AND r.predicate IN $predicates
     RETURN s.name as subject, r.predicate as predicate, o.name as object, r.updated_at as updated_at
@@ -550,7 +550,7 @@ async def _retrieve_soft_signals(user_id: str, catalog) -> list:
     
     # Neo4j'den çek
     query = """
-    MATCH (s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity)
+    MATCH (u:User {id: $uid})-[:KNOWS]->(s:Entity)-[r:FACT {user_id: $uid}]->(o:Entity)
     WHERE (r.status IS NULL OR r.status = 'ACTIVE')
       AND r.predicate IN $predicates
     RETURN s.name as subject, r.predicate as predicate, o.name as object, r.updated_at as updated_at
