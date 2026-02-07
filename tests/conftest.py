@@ -64,8 +64,9 @@ modules_to_mock = [
     'apscheduler.triggers',
     'apscheduler.triggers.interval',
     'apscheduler.triggers.cron',
-    'google',
-    'google.genai',
+    'google.genai', # Only mock this specific subpackage, NOT the entire 'google' namespace
+    'qdrant_client',
+    'qdrant_client.models', # Need this explicitly for 'from qdrant_client.models import ...'
     'pydantic_settings',
     'dateparser',
     'dateparser.search',
@@ -74,10 +75,6 @@ modules_to_mock = [
 
 # Apply external mocks
 for name in modules_to_mock:
-    # Important: Do not overwrite existing modules if they are real packages?
-    # Actually, for CI stability, overwriting might be safer if deps are missing/broken.
-    # But for 'google.genai' specifically, we want to force overwrite.
-
     _register_mock(name)
 
 
