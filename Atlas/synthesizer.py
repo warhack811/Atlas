@@ -14,6 +14,7 @@ Temel Sorumluluklar:
 """
 
 from typing import List, Dict, Any, Optional
+import re
 import httpx
 from Atlas.config import API_CONFIG, MODEL_GOVERNANCE, STYLE_TEMPERATURE_MAP
 from Atlas.key_manager import KeyManager
@@ -98,7 +99,6 @@ class Synthesizer:
         emotional_instruction = ""
         if "[ÖNCEKİ DUYGU DURUMU]" in formatted_data or "[ÖNCEKİ DUYGU DURUMU]" in history_text:
             # Mood extraction from context
-            import re
             mood_match = re.search(r"ÖNCEKİ DUYGU DURUMU.*?'([^']+)'", formatted_data + history_text)
             if mood_match:
                 mood = mood_match.group(1)
@@ -238,7 +238,6 @@ class Synthesizer:
         # FAZ-β: Emotional Continuity for stream
         emotional_instruction = ""
         if "[ÖNCEKİ DUYGU DURUMU]" in formatted_data or "[ÖNCEKİ DUYGU DURUMU]" in history_text:
-            import re
             mood_match = re.search(r"ÖNCEKİ DUYGU DURUMU.*?'([^']+)'", formatted_data + history_text)
             if mood_match:
                 mood = mood_match.group(1)
@@ -273,7 +272,6 @@ class Synthesizer:
     @staticmethod
     def _sanitize_response(text: str) -> str:
         """Metni temizler: CJK karakterlerini ve teknik etiketleri (THOUGHT vb.) siler."""
-        import re
         cjk_pattern = r'[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]'
         sanitized = re.sub(cjk_pattern, '', text)
         
