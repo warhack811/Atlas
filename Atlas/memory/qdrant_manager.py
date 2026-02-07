@@ -8,8 +8,9 @@ Singleton pattern ile tek instance yönetimi.
 import os
 import logging
 import uuid
+import asyncio
 from typing import List, Dict, Optional
-from qdrant_client import QdrantClient
+from qdrant_client import QdrantClient, AsyncQdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 
 logger = logging.getLogger(__name__)
@@ -47,9 +48,10 @@ class QdrantManager:
         self.collection_name = "episodes"
         self.dimension = 768
         self._client_init_attempted = False
+        self._lock = asyncio.Lock()
         self._initialized = True
     
-    def _ensure_client(self) -> bool:
+    async def _ensure_client(self) -> bool:
         """
         Lazy client initialization - called on first use.
         
@@ -64,56 +66,61 @@ class QdrantManager:
         if self.client is not None:
             return True
         
-        if self._client_init_attempted:
-            return False
-        
-        self._client_init_attempted = True
-        
-        # Detect test mode with production-safe guards
-        # 1. Explicit test mode flag (set by test framework)
-        test_mode = os.getenv("QDRANT_TEST_MODE", "").lower()
-        # 2. Pytest is running (PYTEST_CURRENT_TEST is set by pytest)
-        is_pytest_running = "PYTEST_CURRENT_TEST" in os.environ
-        # 3. Local mode requires BOTH conditions for safety
-        is_local_mode = (test_mode == "local" and is_pytest_running)
-        
-        # Load credentials at runtime
-        self.url = os.getenv("QDRANT_URL")
-        self.api_key = os.getenv("QDRANT_API_KEY")
-        
-        # Local test mode: Docker Qdrant without authentication
-        if is_local_mode:
-            # Default to localhost if URL not set
-            if not self.url:
-                self.url = "http://localhost:6333"
+        async with self._lock:
+            # Double-checked locking
+            if self.client is not None:
+                return True
+
+            if self._client_init_attempted:
+                return False
+
+            self._client_init_attempted = True
+
+            # Detect test mode with production-safe guards
+            # 1. Explicit test mode flag (set by test framework)
+            test_mode = os.getenv("QDRANT_TEST_MODE", "").lower()
+            # 2. Pytest is running (PYTEST_CURRENT_TEST is set by pytest)
+            is_pytest_running = "PYTEST_CURRENT_TEST" in os.environ
+            # 3. Local mode requires BOTH conditions for safety
+            is_local_mode = (test_mode == "local" and is_pytest_running)
             
-            # Local Qdrant doesn't require API key
-            logger.info(f"Local test mode: Connecting to {self.url} (no auth)")
+            # Load credentials at runtime
+            self.url = os.getenv("QDRANT_URL")
+            self.api_key = os.getenv("QDRANT_API_KEY")
+
+            # Local test mode: Docker Qdrant without authentication
+            if is_local_mode:
+                # Default to localhost if URL not set
+                if not self.url:
+                    self.url = "http://localhost:6333"
+
+                # Local Qdrant doesn't require API key
+                logger.info(f"Local test mode: Connecting to {self.url} (no auth)")
+
+                try:
+                    self.client = AsyncQdrantClient(url=self.url)
+                    await self._ensure_collection()
+                    self._validate_client_api()  # CRITICAL: Check API compatibility
+                    logger.info(f"Qdrant client initialized (local mode): {self.url}")
+                    return True
+                except Exception as e:
+                    logger.error(f"Failed to initialize local Qdrant client: {e}")
+                    return False
+
+            # Production/Cloud mode: Require URL and API key
+            if not self.url or not self.api_key:
+                logger.warning("Qdrant credentials not configured (cloud/prod mode requires both URL and API key)")
+                return False
             
             try:
-                self.client = QdrantClient(url=self.url)
-                self._ensure_collection()
+                self.client = AsyncQdrantClient(url=self.url, api_key=self.api_key)
+                await self._ensure_collection()
                 self._validate_client_api()  # CRITICAL: Check API compatibility
-                logger.info(f"Qdrant client initialized (local mode): {self.url}")
+                logger.info(f"Qdrant client initialized (cloud mode): {self.url}")
                 return True
             except Exception as e:
-                logger.error(f"Failed to initialize local Qdrant client: {e}")
+                logger.error(f"Failed to initialize Qdrant client: {e}")
                 return False
-        
-        # Production/Cloud mode: Require URL and API key
-        if not self.url or not self.api_key:
-            logger.warning("Qdrant credentials not configured (cloud/prod mode requires both URL and API key)")
-            return False
-        
-        try:
-            self.client = QdrantClient(url=self.url, api_key=self.api_key)
-            self._ensure_collection()
-            self._validate_client_api()  # CRITICAL: Check API compatibility
-            logger.info(f"Qdrant client initialized (cloud mode): {self.url}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to initialize Qdrant client: {e}")
-            return False
     
     def _validate_client_api(self):
         """Validate qdrant-client API compatibility."""
@@ -133,17 +140,18 @@ class QdrantManager:
         api_method = 'query_points' if has_query_points else 'search_points'
         logger.debug(f"✅ Qdrant API validation: {api_method} available")
     
-    def _ensure_collection(self):
+    async def _ensure_collection(self):
         """Create collection if not exists (idempotent)"""
         if not self.client:
             return
         
         try:
-            collections = self.client.get_collections().collections
+            collections_response = await self.client.get_collections()
+            collections = collections_response.collections
             exists = any(c.name == self.collection_name for c in collections)
             
             if not exists:
-                self.client.create_collection(
+                await self.client.create_collection(
                     collection_name=self.collection_name,
                     vectors_config=VectorParams(
                         size=self.dimension,
@@ -156,12 +164,12 @@ class QdrantManager:
 
             # Ensure payload indexes for filtering (Critical for delete operations)
             try:
-                self.client.create_payload_index(
+                await self.client.create_payload_index(
                     collection_name=self.collection_name,
                     field_name="user_id",
                     field_schema="keyword"
                 )
-                self.client.create_payload_index(
+                await self.client.create_payload_index(
                     collection_name=self.collection_name,
                     field_name="session_id",
                     field_schema="keyword"
@@ -208,7 +216,7 @@ class QdrantManager:
             return False
         
         # Lazy client initialization
-        if not self._ensure_client():
+        if not await self._ensure_client():
             logger.debug("Client not available")
             return False
         
@@ -232,7 +240,7 @@ class QdrantManager:
             
             # Try with wait parameter (qdrant-client >= 1.7.0)
             try:
-                self.client.upsert(
+                await self.client.upsert(
                     collection_name=self.collection_name,
                     points=[point],
                     wait=wait
@@ -240,7 +248,7 @@ class QdrantManager:
             except TypeError:
                 # Fallback for older qdrant-client versions that don't support wait parameter
                 logger.warning("qdrant-client version does not support 'wait' parameter, using default behavior")
-                self.client.upsert(
+                await self.client.upsert(
                     collection_name=self.collection_name,
                     points=[point]
                 )
@@ -278,7 +286,7 @@ class QdrantManager:
             return []
         
         # Lazy client initialization
-        if not self._ensure_client():
+        if not await self._ensure_client():
             logger.debug("Client not available")
             return []
         
@@ -300,7 +308,7 @@ class QdrantManager:
                 # query_points signature: collection_name, query, query_filter, limit, 
                 #                         score_threshold, with_payload, with_vectors
                 try:
-                    response = self.client.query_points(
+                    response = await self.client.query_points(
                         collection_name=self.collection_name,
                         query=query_embedding,
                         query_filter=user_filter,
@@ -331,7 +339,7 @@ class QdrantManager:
             # Fallback: search_points (older API, qdrant-client >= 1.0)
             elif hasattr(self.client, 'search_points'):
                 try:
-                    search_results = self.client.search_points(
+                    search_results = await self.client.search_points(
                         collection_name=self.collection_name,
                         query_vector=query_embedding,
                         query_filter=user_filter,
@@ -389,11 +397,11 @@ class QdrantManager:
             True if successful
         """
         # Lazy client initialization
-        if not self._ensure_client():
+        if not await self._ensure_client():
             return False
         
         try:
-            self.client.delete(
+            await self.client.delete(
                 collection_name=self.collection_name,
                 points_selector=Filter(
                     must=[
@@ -419,11 +427,11 @@ class QdrantManager:
             True if healthy
         """
         # Lazy client initialization
-        if not self._ensure_client():
+        if not await self._ensure_client():
             return False
         
         try:
-            self.client.get_collections()
+            await self.client.get_collections()
             return True
         except Exception as e:
             logger.error(f"Qdrant health check failed: {e}")
@@ -437,11 +445,11 @@ class QdrantManager:
             Collection info dict or None
         """
         # Lazy client initialization
-        if not self._ensure_client():
+        if not await self._ensure_client():
             return None
         
         try:
-            info = self.client.get_collection(self.collection_name)
+            info = await self.client.get_collection(self.collection_name)
             return {
                 "name": info.config.params.vectors.size if hasattr(info.config.params, 'vectors') else self.collection_name,
                 "vectors_count": info.points_count,
