@@ -40,6 +40,13 @@ class Config:
         keys = get_groq_api_keys()
         return random.choice(keys) if keys else ""
 
+    @classmethod
+    def get_random_gemini_key(cls) -> str:
+        """Gemini API anahtarları arasından rastgele birini seçer."""
+        import random
+        keys = get_gemini_api_keys()
+        return random.choice(keys) if keys else ""
+
 def get_groq_api_keys() -> list[str]:
     """Sistem yapılandırmasından veya ortam değişkenlerinden Groq API anahtarlarını çeker."""
     import os
@@ -289,16 +296,6 @@ QDRANT_API_KEY = getenv("QDRANT_API_KEY", None)
 # Redis (Upstash) Settings
 REDIS_URL = getenv("REDIS_URL", None)
 
-# Helper method to get random Gemini key
-@classmethod
-def get_random_gemini_key(cls) -> str:
-    """Gemini API anahtarları arasından rastgele birini seçer."""
-    import random
-    keys = get_gemini_api_keys()
-    return random.choice(keys) if keys else ""
-
-# Add to Config class
-Config.get_random_gemini_key = get_random_gemini_key
 
 # Style Profile → Temperature Mapping (Optimized for persona consistency)
 STYLE_TEMPERATURE_MAP = {
