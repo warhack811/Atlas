@@ -8,6 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
 
@@ -716,7 +717,7 @@
                     showBatchJudgeButton(prompt, results, category);
                 } catch (e) {
                     console.error(e);
-                    loadingDiv.innerHTML = `<div class="text-red-400 bg-red-900/20 p-4 rounded-lg border border-red-800 text-sm">❌ Hata: ${e.message}</div>`;
+                    loadingDiv.innerHTML = `<div class="text-red-400 bg-red-900/20 p-4 rounded-lg border border-red-800 text-sm">❌ Hata: ${escapeHtml(e.message)}</div>`;
                 } finally {
                     isRunning = false;
                 }
@@ -799,7 +800,12 @@
                 clone.querySelector('.tps-stat').innerText = `${res.tokens_per_sec.toFixed(1)} t/s`;
 
                 const contentDiv = clone.querySelector('.markdown-body');
-                contentDiv.innerHTML = res.error ? `<span class="text-red-400">Hata: ${res.error}</span>` : marked.parse(res.response);
+                if (res.error) {
+                    contentDiv.innerHTML = `<span class="text-red-400">Hata: ${escapeHtml(res.error)}</span>`;
+                } else {
+                    const cleanHtml = DOMPurify.sanitize(marked.parse(res.response));
+                    contentDiv.innerHTML = cleanHtml;
+                }
 
                 const buttonsContainer = clone.querySelector('.score-buttons');
                 for (let i = 1; i <= 10; i++) {
@@ -854,11 +860,11 @@
                 <div class="flex items-center justify-between bg-slate-800/40 p-2 rounded-lg border border-slate-700 text-xs">
                     <div class="flex items-center gap-2 overflow-hidden">
                         <span class="w-4 text-slate-500 font-bold">${i + 1}</span>
-                        <span class="truncate text-slate-300" title="${m.id}">${m.id.split('/').pop()}</span>
+                        <span class="truncate text-slate-300" title="${escapeHtml(m.id)}">${escapeHtml(m.id.split('/').pop())}</span>
                     </div>
                     <div class="flex gap-2">
-                        <span class="text-blue-400 font-bold">${m.h_avg}</span>
-                        <span class="text-indigo-400 font-bold">${m.a_avg}</span>
+                        <span class="text-blue-400 font-bold">${escapeHtml(m.h_avg)}</span>
+                        <span class="text-indigo-400 font-bold">${escapeHtml(m.a_avg)}</span>
                     </div>
                 </div>
             `).join('') || '<div class="text-center text-slate-600 text-xs py-4">Veri yok.</div>';
@@ -879,9 +885,9 @@
                         </div>
                         <div id="cat-${cat}" class="hidden mt-1 space-y-1">
                             ${qList.map(q => `
-                                <div onclick="setPrompt('${q.text.replace(/'/g, "\\'")}', '${q.category}')" class="p-2 hover:bg-slate-800 rounded cursor-pointer border border-transparent hover:border-slate-700 text-[11px]">
-                                    <div class="font-bold text-slate-300 truncate">${q.title}</div>
-                                    <div class="text-slate-500 truncate">${q.text}</div>
+                                <div onclick="setPrompt(this.getAttribute('data-prompt'), '${escapeHtml(q.category)}')" data-prompt="${escapeHtml(q.text)}" class="p-2 hover:bg-slate-800 rounded cursor-pointer border border-transparent hover:border-slate-700 text-[11px]">
+                                    <div class="font-bold text-slate-300 truncate">${escapeHtml(q.title)}</div>
+                                    <div class="text-slate-500 truncate">${escapeHtml(q.text)}</div>
                                 </div>
                             `).join('')}
                         </div>
@@ -909,6 +915,15 @@
                 console.log("Judge verification saved locally.");
             }
 
+            function escapeHtml(unsafe) {
+                if (typeof unsafe !== 'string') return unsafe;
+                return unsafe
+                     .replace(/&/g, "&amp;")
+                     .replace(/</g, "&lt;")
+                     .replace(/>/g, "&gt;")
+                     .replace(/"/g, "&quot;")
+                     .replace(/'/g, "&#039;");
+            }
             function uuidv4() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => (Math.random() * 16 | 0).toString(16)); }
             async function resetAllScores() { if (confirm("Tüm skorlar silinsin mi?")) { await fetch('/api/arena/reset', { method: 'DELETE' }); loadLeaderboard(); } }
             function copyResponse(btn) {
