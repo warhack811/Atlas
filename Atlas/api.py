@@ -31,7 +31,7 @@ import hashlib
 import asyncio
 from Atlas.memory.semantic_cache import semantic_cache
 from Atlas.memory.text_normalize import normalize_text_for_dedupe
-from Atlas.config import ENABLE_SEMANTIC_CACHE
+from Atlas.config import ENABLE_SEMANTIC_CACHE, SESSION_COOKIE_SECURE
 
 # --- FAZ-Y: Single-flight protection for cache stampede mitigation ---
 # Bounded lock map to prevent memory leaks
@@ -207,7 +207,7 @@ async def login(request: LoginRequest, response: Response):
         expires=604800,
         path="/",
         samesite="lax",
-        secure=False  # Local test için False, prod'da HTTPS varsa True yapılabilir
+        secure=SESSION_COOKIE_SECURE
     )
     return {"message": "Giriş başarılı", "username": request.username, "role": role}
 

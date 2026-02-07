@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # Environment
     ENV: str = "development"
     DEBUG: bool = False
+    SESSION_COOKIE_SECURE: bool = False
 
     class Config:
         env_file = ".env"
