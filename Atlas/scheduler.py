@@ -8,10 +8,10 @@ from Atlas.tasks import TaskRegistry
 import Atlas.tasks.maintenance
 import Atlas.tasks.system
 import Atlas.tasks.cognitive
+import Atlas.tasks.batch_jobs
 
 from Atlas.memory.neo4j_manager import neo4j_manager
-from Atlas.observer import observer
-from Atlas.memory.due_scanner import scan_due_tasks
+# observer ve scan_due_tasks artık batch_jobs içinde kullanılıyor
 
 logger = logging.getLogger(__name__)
 
@@ -78,47 +78,8 @@ class SchedulerCoordinator:
                 replace_existing=True
             )
 
-        # Dynamic User Jobs (Sadece Liderse)
-        if self.is_leader:
-            await self.sync_user_jobs()
-
-    async def sync_user_jobs(self):
-        """Kullanıcı bazlı job'ları (observer, due_scanner) senkronize eder."""
-        query = "MATCH (u:User) WHERE u.notifications_enabled = true RETURN u.id as id"
-        try:
-            results = await neo4j_manager.query_graph(query)
-            active_uids = {res["id"] for res in results}
-            
-            current_job_ids = {j.id for j in self.scheduler.get_jobs()}
-            
-            for uid in active_uids:
-                # Observer (15dk)
-                obs_id = f"U:obs:{uid}"
-                if obs_id not in current_job_ids:
-                    self.scheduler.add_job(
-                        observer.check_triggers,
-                        trigger=IntervalTrigger(minutes=15, jitter=60),
-                        args=[uid],
-                        id=obs_id
-                    )
-                # Due Scanner (5dk)
-                due_id = f"U:due:{uid}"
-                if due_id not in current_job_ids:
-                    self.scheduler.add_job(
-                        scan_due_tasks,
-                        trigger=IntervalTrigger(minutes=5, jitter=30),
-                        args=[uid],
-                        id=due_id
-                    )
-            
-            # Cleanup inactive
-            for jid in current_job_ids:
-                if jid.startswith("U:"):
-                    uid_part = jid.split(":")[-1]
-                    if uid_part not in active_uids:
-                        self.scheduler.remove_job(jid)
-        except Exception as e:
-            logger.error(f"User job sync error: {e}")
+        # Dynamic User Jobs Logic replaced by Batch Jobs (See Atlas.tasks.batch_jobs)
+        pass
 
 # Global Nesne
 coordinator = SchedulerCoordinator()
