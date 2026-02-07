@@ -1030,8 +1030,9 @@ async def correct_memory(request: MemoryCorrectionRequest):
     from Atlas.memory.predicate_catalog import get_catalog
     
     # 1. Policy Control
-    mode = await neo4j_manager.get_user_memory_mode(uid)
-    if mode == "OFF":
+    from Atlas.memory.memory_policy import load_policy_for_user
+    policy = await load_policy_for_user(uid)
+    if policy.mode == "OFF":
         raise HTTPException(
             status_code=403, 
             detail="Kişisel hafıza kapalıyken düzeltme yapılamaz. Lütfen önce hafıza modunu açın."

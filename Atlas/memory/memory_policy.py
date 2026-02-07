@@ -124,7 +124,7 @@ def get_default_policy(mode: str = "STANDARD") -> MemoryPolicy:
     return policies.get(mode.upper(), POLICY_STANDARD)
 
 
-def load_policy_for_user(user_id: str) -> MemoryPolicy:
+async def load_policy_for_user(user_id: str) -> MemoryPolicy:
     """
     Kullanıcı için politika yükle.
     
@@ -142,15 +142,16 @@ def load_policy_for_user(user_id: str) -> MemoryPolicy:
     UI Bağlama Noktası:
         Neo4j'ye User node'a memory_mode property eklenebilir:
         MATCH (u:User {id: $uid}) SET u.memory_mode = 'FULL'
-    
-    TODO: Neo4j'den mode okuma (get_user_memory_mode helper ile)
     """
-    # TODO: Neo4j'den kullanıcı modunu çek
-    # from Atlas.memory.neo4j_manager import neo4j_manager
-    # mode = await neo4j_manager.get_user_memory_mode(user_id)
-    # if mode:
-    #     return get_default_policy(mode)
+    try:
+        from Atlas.memory.neo4j_manager import neo4j_manager
+        mode = await neo4j_manager.get_user_memory_mode(user_id)
+        if mode:
+            return get_default_policy(mode)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Error loading policy for user {user_id}: {e}")
     
-    # Şimdilik: Environment variable + default
+    # Fallback: Environment variable + default
     mode = os.getenv("ATLAS_DEFAULT_MEMORY_MODE", "STANDARD")
     return get_default_policy(mode)

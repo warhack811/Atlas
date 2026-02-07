@@ -292,10 +292,8 @@ async def build_memory_context_v3(
 ) -> str:
     # Policy kontrolü
     if policy is None:
-        from Atlas.memory.neo4j_manager import neo4j_manager
-        mode = await neo4j_manager.get_user_memory_mode(user_id)
-        from Atlas.memory.memory_policy import get_default_policy
-        policy = get_default_policy(mode)
+        from Atlas.memory.memory_policy import load_policy_for_user
+        policy = await load_policy_for_user(user_id)
     
     # RC-1/RC-7/RC-8: MemoryPolicy.OFF ise kişisel hafıza kapalı uyarısı her zaman dönmeli
     if policy.mode == "OFF":
@@ -894,7 +892,9 @@ async def build_chat_context_v1(
     if stats is not None: stats["intent"] = intent
     trace.intent = intent
 
-    mode = await neo4j_manager.get_user_memory_mode(user_id)
+    from Atlas.memory.memory_policy import load_policy_for_user
+    policy = await load_policy_for_user(user_id)
+    mode = policy.mode
     trace.memory_mode = mode
     
     budgeter = ContextBudgeter(mode=mode, intent=intent if not BYPASS_ADAPTIVE_BUDGET else "MIXED")

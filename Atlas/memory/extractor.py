@@ -287,7 +287,7 @@ async def extract_and_save(text: str, user_id: str, source_turn_id: str | None =
                     from Atlas.memory.mwg import decide, Decision
                     from Atlas.memory.prospective_store import create_task
                     
-                    policy = load_policy_for_user(user_id)
+                    policy = await load_policy_for_user(user_id)
                     long_term_triplets = []
                     
                     for triplet in cleaned_triplets:
