@@ -28,7 +28,6 @@ from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import hashlib
-import asyncio
 from Atlas.memory.semantic_cache import semantic_cache
 from Atlas.memory.text_normalize import normalize_text_for_dedupe
 from Atlas.config import ENABLE_SEMANTIC_CACHE
