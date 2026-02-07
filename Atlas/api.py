@@ -28,7 +28,7 @@ from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import hashlib
-import asyncio
+from neo4j.exceptions import ServiceUnavailable, SessionExpired
 from Atlas.memory.semantic_cache import semantic_cache
 from Atlas.memory.text_normalize import normalize_text_for_dedupe
 from Atlas.config import ENABLE_SEMANTIC_CACHE
@@ -470,8 +470,15 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Dep
             rdr=record.to_dict(),
             debug_trace=serialize_neo4j_value(trace.to_dict()) if trace else None
         )
+    except asyncio.CancelledError:
+        raise
+    except HTTPException as e:
+        raise e
+    except (ServiceUnavailable, SessionExpired) as e:
+        logger.error(f"Veritabanı bağlantı hatası: {e}")
+        raise HTTPException(status_code=503, detail="Veritabanı servisine erişilemiyor.")
     except Exception as e:
-        logger.error(f"Sohbet hatası: {e}")
+        logger.error(f"Sohbet hatası: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
