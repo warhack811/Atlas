@@ -91,23 +91,15 @@ class Neo4jManager:
             return 0
         
         # FAZ5: Lifecycle engine - EXCLUSIVE/ADDITIVE conflict resolution
-        from Atlas.memory.lifecycle_engine import resolve_conflicts, supersede_relationship
+        from Atlas.memory.lifecycle_engine import resolve_conflicts, supersede_relationships_batch
         from Atlas.memory.predicate_catalog import get_catalog
         
         catalog = get_catalog()
         new_triplets, supersede_ops = await resolve_conflicts(triplets, user_id, source_turn_id, catalog)
         
         # Execute supersede/conflict operations first
-        for op in supersede_ops:
-            # V4.3: Physical delete replaced with status='SUPERSEDED' in supersede_relationship
-            await supersede_relationship(
-                op["user_id"],
-                op["subject"],
-                op["predicate"],
-                op["old_object"],
-                op["new_turn_id"],
-                op.get("type", "SUPERSEDE")
-            )
+        # V4.3: Physical delete replaced with status='SUPERSEDED' in supersede_relationship
+        await supersede_relationships_batch(supersede_ops)
         
         # Then write new triplets
         if not new_triplets:

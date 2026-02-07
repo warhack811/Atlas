@@ -210,3 +210,31 @@ async def supersede_relationship(
         logger.info(f"Lifecycle: {count} ilişki {status} olarak işaretlendi")
     except Exception as e:
         logger.error(f"Supersede relationship hatası: {e}")
+
+
+async def supersede_relationships_batch(operations: List[Dict]) -> int:
+    """
+    Toplu olarak ilişkileri SUPERSEDED veya CONFLICTED olarak işaretle.
+    """
+    if not operations:
+        return 0
+
+    query = """
+    UNWIND $ops AS op
+    MATCH (s:Entity {name: op.subject})-[r:FACT {predicate: op.predicate, user_id: op.user_id}]->(o:Entity {name: op.old_object})
+    WHERE r.status IS NULL OR r.status = 'ACTIVE'
+    SET r.status = CASE WHEN op.type = 'CONFLICT' THEN 'CONFLICTED' ELSE 'SUPERSEDED' END,
+        r.superseded_by_turn_id = op.new_turn_id,
+        r.valid_until = datetime(),
+        r.updated_at = datetime()
+    RETURN count(r) as count
+    """
+
+    try:
+        result = await neo4j_manager.query_graph(query, {"ops": operations})
+        count = result[0]["count"] if result else 0
+        logger.info(f"Lifecycle: Batch supersede executed for {len(operations)} operations. Modified {count} relationships.")
+        return count
+    except Exception as e:
+        logger.error(f"Batch supersede relationship hatası: {e}")
+        return 0
