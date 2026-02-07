@@ -34,6 +34,11 @@ class Config:
     # Mevcut anahtarlar (Backward compatibility için)
     GEMINI_API_KEY = getenv("GEMINI_API_KEY", "")
 
+    # CORS Settings
+    # Use environment variable ATLAS_CORS_ORIGINS (comma-separated) or default to safe local origins
+    _cors_origins_raw = getenv("ATLAS_CORS_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000")
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in _cors_origins_raw.split(",") if origin.strip()]
+
     @classmethod
     def get_random_groq_key(cls) -> str:
         """Groq API anahtarları arasından rastgele birini seçer."""
