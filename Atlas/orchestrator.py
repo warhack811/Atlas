@@ -17,6 +17,7 @@ import logging
 import json
 import time
 import os
+import asyncio
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 import httpx
@@ -25,6 +26,7 @@ from Atlas.config import API_CONFIG, MODEL_GOVERNANCE
 from Atlas.memory import MessageBuffer
 from Atlas.memory.state import state_manager
 from Atlas.time_context import time_context
+from Atlas.memory.neo4j_manager import neo4j_manager
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +71,6 @@ class Orchestrator:
         # FAZ-α Final: State Hydration (Optimized)
         # Sadece konu 'Genel' ise VE daha önce kontrol edilmemişse DB'ye sor.
         if state.current_topic == "Genel" and not state._hydrated:
-            from Atlas.memory.neo4j_manager import neo4j_manager
             try:
                 saved_topic = await neo4j_manager.get_session_topic(session_id)
                 if saved_topic:
@@ -128,8 +129,6 @@ class Orchestrator:
         
         # Eğer konu değiştiyse Neo4j'ye asenkron (fire-and-forget) yaz
         if state.current_topic != old_topic:
-            import asyncio
-            from Atlas.memory.neo4j_manager import neo4j_manager
             # DÜZELTME: user_id'yi context_builder'dan veya history'den alabiliriz. 
             # Genelde RDR veya context için session_id yeterli ama Neo4j user_id ister.
             # Şimdilik context_builder objesinin user_id'si varsa kullanalım.
@@ -194,7 +193,6 @@ class Orchestrator:
 
                         client = genai.Client(api_key=gemini_key)
                         
-                        import asyncio
                         # Yeni SDK kullanarak asenkron çağrı (Timeout Korumalı)
                         response = await asyncio.wait_for(
                             client.aio.models.generate_content(
