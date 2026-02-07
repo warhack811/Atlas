@@ -19,6 +19,7 @@ load_dotenv()
 
 class Config:
     """Merkezi konfigürasyon yönetimi."""
+    ATLAS_ENV = getenv("ATLAS_ENV", "development").lower()
     SERPER_API_KEY = getenv("SERPER_API_KEY", "")
     FLUX_API_URL = getenv("FLUX_API_URL", "http://localhost:7860/sdapi/v1/txt2img") # Varsayılan Forge/A1111 URL
     ATLAS_SESSION_SECRET = getenv("ATLAS_SESSION_SECRET", None)
