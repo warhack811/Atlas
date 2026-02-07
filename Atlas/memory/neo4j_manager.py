@@ -44,7 +44,11 @@ class Neo4jManager:
         """Sınıf başlatıldığında (eğer daha önce başlatılmadıysa) bağlantıyı kurar."""
         if self._initialized:
             return
-        self._connect()
+        try:
+            self._connect()
+        except Exception:
+            # Hata zaten _connect içinde loglandı
+            pass
 
     def _connect(self):
         """Sürücü bağlantısını kurar veya yeniler."""
@@ -66,6 +70,7 @@ class Neo4jManager:
         except Exception as e:
             self._initialized = False
             logger.error(f"Neo4j sürücüsü başlatılamadı: {str(e)}")
+            raise e
 
     async def close(self):
         """Veritabanı bağlantı sürücüsünü güvenli bir şekilde kapatır."""
@@ -121,7 +126,10 @@ class Neo4jManager:
                     return result
             except (ServiceUnavailable, SessionExpired, ConnectionResetError) as e:
                 logger.warning(f"Neo4j bağlantı hatası (Deneme {attempt+1}/{max_retries}): {str(e)}")
-                self._connect()
+                try:
+                    self._connect()
+                except Exception:
+                    pass
                 await asyncio.sleep(1) # Kısa bir bekleme
             except Exception as e:
                 logger.error(f"Neo4j kayıt hatası: {str(e)}")
@@ -439,7 +447,10 @@ class Neo4jManager:
                     return records
             except (ServiceUnavailable, SessionExpired, ConnectionResetError) as e:
                 logger.warning(f"Neo4j sorgu hatası (Deneme {attempt+1}/{max_retries}): {str(e)}")
-                self._connect()
+                try:
+                    self._connect()
+                except Exception:
+                    pass
                 await asyncio.sleep(1)
                 if attempt == max_retries - 1:
                     logger.error(f"Neo4j critical failure after {max_retries} retries: {e}")
