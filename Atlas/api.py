@@ -31,7 +31,7 @@ from pydantic import BaseModel
 import hashlib
 from Atlas.memory.semantic_cache import semantic_cache
 from Atlas.memory.text_normalize import normalize_text_for_dedupe
-from Atlas.config import ENABLE_SEMANTIC_CACHE
+from Atlas.config import ENABLE_SEMANTIC_CACHE, Config
 
 # --- FAZ-Y: Single-flight protection for cache stampede mitigation ---
 # Bounded lock map to prevent memory leaks
@@ -89,10 +89,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Ayarları: Farklı kökenlerden gelen isteklere izin verir
+# CORS Ayarları: Sadece güvenli ve tanımlı kökenlerden gelen isteklere izin verir
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=Config.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
