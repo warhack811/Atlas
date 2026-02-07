@@ -188,16 +188,6 @@ async def get_current_user(atlas_session: Optional[str] = Cookie(None)):
     user_data = decode_session_token(atlas_session)
     return user_data
 
-async def get_current_user_optional(atlas_session: Optional[str] = Cookie(None)):
-    """Cookie'den kullanıcı bilgisini çözer, yoksa None döner (Hata fırlatmaz)."""
-    if not atlas_session:
-        return None
-    try:
-        user_data = decode_session_token(atlas_session)
-        return user_data
-    except:
-        return None
-
 @app.post("/api/auth/login")
 async def login(request: LoginRequest, response: Response):
     role = verify_credentials(request.username, request.password)
@@ -562,7 +552,7 @@ from Atlas.memory.request_context import AtlasRequestContext
 from Atlas.memory.trace import ContextTrace
 
 @app.post("/api/chat/stream")
-async def stream_chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Depends(get_current_user_optional)):
+async def stream_chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Depends(get_current_user)):
     """
     Yapay zeka yanıtını akan metin (stream) olarak döndürür.
     """
