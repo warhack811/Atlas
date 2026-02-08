@@ -11,15 +11,19 @@ sys.path.append(os.getcwd())
 def test_auth_secret_production_enforcement():
     """Test that ATLAS_SESSION_SECRET is required in production."""
 
-    # Mock Config.ATLAS_ENV and Config.ATLAS_SESSION_SECRET
-    # We need to patch where they are defined: Atlas.config.Config
+    # Reload Atlas.config to clear any previous cached values if needed, or just patch
+    # The issue in CI is likely that patch replaces with a MagicMock if not specified, or the attribute
+    # access on the class is different from instance.
+    # However, Atlas.auth uses `from Atlas.config import Config` or `Config.ATLAS_SESSION_SECRET`.
 
-    with patch("Atlas.config.Config.ATLAS_ENV", "production"), \
-         patch("Atlas.config.Config.ATLAS_SESSION_SECRET", None):
+    # We'll use os.environ to be sure, and reload Config, then reload Auth.
 
-        # Reloading Atlas.auth will execute the module-level code
-        # Use sys.modules to handle both fresh import and reload scenarios
+    with patch.dict(os.environ, {"ATLAS_ENV": "production", "ATLAS_SESSION_SECRET": ""}):
+        # Reload config to pick up env vars
+        import Atlas.config
+        importlib.reload(Atlas.config)
 
+        # Now reload auth to trigger the check
         with pytest.raises(ValueError, match="ATLAS_SESSION_SECRET environment variable is required in production"):
             if "Atlas.auth" in sys.modules:
                 importlib.reload(sys.modules["Atlas.auth"])
@@ -29,21 +33,26 @@ def test_auth_secret_production_enforcement():
 def test_auth_secret_development_fallback():
     """Test that ATLAS_SESSION_SECRET falls back to random in development."""
 
-    with patch("Atlas.config.Config.ATLAS_ENV", "development"), \
-         patch("Atlas.config.Config.ATLAS_SESSION_SECRET", None):
+    with patch.dict(os.environ, {"ATLAS_ENV": "development", "ATLAS_SESSION_SECRET": ""}):
+        import Atlas.config
+        importlib.reload(Atlas.config)
 
         import Atlas.auth
         importlib.reload(Atlas.auth)
 
+        # In dev mode, if secret is empty, it generates a random one
         assert len(Atlas.auth.ATLAS_SESSION_SECRET) == 64  # 32 bytes hex
-        assert Atlas.auth.ATLAS_SESSION_SECRET != "fixed_secret"
+
+        # Verify it's a string, not a mock
+        assert isinstance(Atlas.auth.ATLAS_SESSION_SECRET, str)
 
 def test_auth_secret_provided():
     """Test that ATLAS_SESSION_SECRET is used if provided."""
 
     fixed_secret = "my_fixed_secret_12345"
-    with patch("Atlas.config.Config.ATLAS_ENV", "production"), \
-         patch("Atlas.config.Config.ATLAS_SESSION_SECRET", fixed_secret):
+    with patch.dict(os.environ, {"ATLAS_ENV": "production", "ATLAS_SESSION_SECRET": fixed_secret}):
+        import Atlas.config
+        importlib.reload(Atlas.config)
 
         import Atlas.auth
         importlib.reload(Atlas.auth)
