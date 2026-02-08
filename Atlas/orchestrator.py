@@ -156,12 +156,25 @@ class Orchestrator:
         )
 
     @staticmethod
+    async def plan_iterative(session_id: str, message: str, user_id: str = "admin") -> OrchestrationPlan:
+        """
+        [FAZ 2.0] ReAct (Reasoning + Acting) Döngüsü için iteratif planlama metodu.
+        Statik DAG yerine, dinamik bir döngü başlatır.
+        """
+        # Şimdilik mevcut plan() metodunu sarmalıyor, ileride ReAct mantığı eklenecek.
+        return await Orchestrator.plan(session_id, message, user_id)
+
+    @staticmethod
     async def _call_brain(message: str, history: str, context: str) -> tuple[Dict, str, str]:
         """
         Orkestrasyon kararı için modelli çağrı yapar. 
         Gemini 2.0 Flash birincil tercihtir; başarısızlık durumunda Llama modellerine döner.
         """
         from Atlas.key_manager import KeyManager
+        from Atlas.tools.registry import ToolRegistry
+
+        registry = ToolRegistry()
+        tools_schema = registry.get_openai_schemas()
         
         models = MODEL_GOVERNANCE.get("orchestrator", [
             "llama-3.3-70b-versatile",

@@ -108,7 +108,12 @@ class DAGExecutor:
         start_t = time.time()
         
         if task.type == "tool":
+            # Tool çağrısı sırasında 'thought' (düşünce) akışı sağla
             res = await self._execute_tool(task)
+            # Eğer tool başarılıysa ve output varsa, bunu bir thought olarak da döndürebiliriz
+            if res.get("status") == "success" and not res.get("thought"):
+                output_preview = str(res.get("output"))[:100]
+                res["output"] = {"output": res["output"], "thought": f"Araç Çıktısı: {output_preview}..."}
         elif task.type == "generation" or task.type == "context_clarification":
             # Prompt enjeksiyonu yap
             processed_prompt = self._inject_dependencies(task.prompt or "", executed_tasks)

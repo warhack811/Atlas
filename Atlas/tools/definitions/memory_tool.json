@@ -1,0 +1,6 @@
+{
+    "name": "retrieve_memory",
+    "description": "Kullanıcı hakkında geçmiş bilgileri hafızadan sorgular.",
+    "handler_module": "memory_tool",
+    "handler_class": "MemoryTool"
+}
