@@ -385,15 +385,26 @@ async def test_bypass_mode():
     """Test that bypass flag works"""
     original_bypass = os.getenv("BYPASS_VECTOR_SEARCH")
     
+    # Ensure Atlas.config is in sys.modules
+    import Atlas.config as config_module
+
     try:
         os.environ["BYPASS_VECTOR_SEARCH"] = "true"
         
         from importlib import reload
-        import Atlas.config as config_module
         reload(config_module)
         
+        # Re-import QdrantManager to pick up new config values if necessary
+        from Atlas.memory.qdrant_manager import QdrantManager
         manager = QdrantManager()
         
+        # We need to manually set the bypass flag on the instance if it was initialized before config reload
+        # or if the module level variable was already imported.
+        # But QdrantManager reads config at module level or init.
+        # Let's check how QdrantManager uses config.
+        # It seems it uses Atlas.config.BYPASS_VECTOR_SEARCH directly.
+        # Reloading config module should update it.
+
         success = await manager.upsert_episode(
             episode_id="bypass_test",
             embedding=[0.1] * 768,
@@ -413,7 +424,6 @@ async def test_bypass_mode():
             os.environ.pop("BYPASS_VECTOR_SEARCH", None)
         
         from importlib import reload
-        import Atlas.config as config_module
         reload(config_module)
 
 

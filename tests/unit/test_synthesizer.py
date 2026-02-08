@@ -37,10 +37,18 @@ def mock_generate_stream():
         mock.side_effect = async_gen
         yield mock
 
+# Define local mock_httpx fixture if not available globally or to ensure it works
+@pytest.fixture
+def mock_httpx_local():
+    with patch("httpx.AsyncClient") as mock:
+        yield mock
+
 @pytest.mark.asyncio
-async def test_synthesize_basic(mock_key_manager, mock_message_buffer, mock_style_injector, mock_httpx):
+async def test_synthesize_basic(mock_key_manager, mock_message_buffer, mock_style_injector, mock_httpx_local):
+    mock_httpx = mock_httpx_local
     # Ensure client context manager returns the client itself
-    mock_httpx.__aenter__.return_value = mock_httpx
+    mock_instance = mock_httpx.return_value
+    mock_instance.__aenter__.return_value = mock_instance
 
     # Setup mock_httpx response for synthesize
     mock_response = MagicMock()
@@ -48,7 +56,12 @@ async def test_synthesize_basic(mock_key_manager, mock_message_buffer, mock_styl
     mock_response.json.return_value = {
         "choices": [{"message": {"content": "Synthesized Response"}}]
     }
-    mock_httpx.post.return_value = mock_response
+
+    # httpx.post is async, so it must return an awaitable that yields the response
+    async def mock_post(*args, **kwargs):
+        return mock_response
+
+    mock_instance.post.side_effect = mock_post
 
     raw_results = [{"model": "expert1", "output": "Expert Output 1"}]
     result, model, prompt, metadata = await Synthesizer.synthesize(
@@ -60,30 +73,37 @@ async def test_synthesize_basic(mock_key_manager, mock_message_buffer, mock_styl
 
     # Check if system prompt contains instructions
     # Synthesizer sends messages list to httpx.post
-    call_args = mock_httpx.post.call_args
+    call_args = mock_instance.post.call_args
     assert call_args is not None
     messages = call_args[1]['json']['messages']
     system_msg = next(m for m in messages if m['role'] == 'system')
     assert "System Instruction" in system_msg['content']
 
 @pytest.mark.asyncio
-async def test_synthesize_mirroring(mock_key_manager, mock_message_buffer, mock_style_injector, mock_httpx):
+async def test_synthesize_mirroring(mock_key_manager, mock_message_buffer, mock_style_injector, mock_httpx_local):
+    mock_httpx = mock_httpx_local
     # Ensure client context manager returns the client itself
-    mock_httpx.__aenter__.return_value = mock_httpx
+    mock_instance = mock_httpx.return_value
+    mock_instance.__aenter__.return_value = mock_instance
 
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
         "choices": [{"message": {"content": "Response"}}]
     }
-    mock_httpx.post.return_value = mock_response
+
+    # httpx.post is async
+    async def mock_post(*args, **kwargs):
+        return mock_response
+
+    mock_instance.post.side_effect = mock_post
 
     # "yorgun" triggers mirroring
     await Synthesizer.synthesize(
         [], "session1", "general", "Ben çok yorgun hissediyorum"
     )
 
-    call_args = mock_httpx.post.call_args
+    call_args = mock_instance.post.call_args
     messages = call_args[1]['json']['messages']
     system_msg = next(m for m in messages if m['role'] == 'system')
     assert "[MIRRORING]" in system_msg['content']
