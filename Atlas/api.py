@@ -29,6 +29,7 @@ from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import hashlib
+from neo4j.exceptions import ServiceUnavailable, SessionExpired
 from Atlas.memory.semantic_cache import semantic_cache
 from Atlas.memory.text_normalize import normalize_text_for_dedupe
 from Atlas.config import ENABLE_SEMANTIC_CACHE
@@ -187,6 +188,16 @@ async def get_current_user(atlas_session: Optional[str] = Cookie(None)):
         return None
     user_data = decode_session_token(atlas_session)
     return user_data
+
+async def get_current_user_optional(atlas_session: Optional[str] = Cookie(None)):
+    """Cookie'den kullanıcı bilgisini çözer, yoksa None döner (Hata fırlatmaz)."""
+    if not atlas_session:
+        return None
+    try:
+        user_data = decode_session_token(atlas_session)
+        return user_data
+    except:
+        return None
 
 @app.post("/api/auth/login")
 async def login(request: LoginRequest, response: Response):
@@ -467,8 +478,15 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Dep
             rdr=record.to_dict(),
             debug_trace=serialize_neo4j_value(trace.to_dict()) if trace else None
         )
+    except asyncio.CancelledError:
+        raise
+    except HTTPException as e:
+        raise e
+    except (ServiceUnavailable, SessionExpired) as e:
+        logger.error(f"Veritabanı bağlantı hatası: {e}")
+        raise HTTPException(status_code=503, detail="Veritabanı servisine erişilemiyor.")
     except Exception as e:
-        logger.error(f"Sohbet hatası: {e}")
+        logger.error(f"Sohbet hatası: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -552,7 +570,7 @@ from Atlas.memory.request_context import AtlasRequestContext
 from Atlas.memory.trace import ContextTrace
 
 @app.post("/api/chat/stream")
-async def stream_chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Depends(get_current_user)):
+async def stream_chat(request: ChatRequest, background_tasks: BackgroundTasks, user=Depends(get_current_user_optional)):
     """
     Yapay zeka yanıtını akan metin (stream) olarak döndürür.
     """

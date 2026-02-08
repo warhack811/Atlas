@@ -101,8 +101,7 @@ class TimeContext:
         Returns:
             (acil_mi, bulunan_kelimeler)
         """
-        # Türkçe karakter duyarlılığı (İ -> i dönüşümü)
-        message_lower = message.replace("İ", "i").lower()
+        message_lower = message.lower()
         found_keywords = []
         
         for keyword in self.URGENCY_KEYWORDS:

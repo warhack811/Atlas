@@ -114,7 +114,7 @@ class TestOrchestratorIntegration:
         with patch('Atlas.orchestrator.MessageBuffer') as mock_buffer, \
              patch('Atlas.orchestrator.state_manager') as mock_state_mgr, \
              patch('Atlas.orchestrator.time_context') as mock_time, \
-             patch('Atlas.orchestrator.neo4j_manager') as mock_neo4j:
+             patch('Atlas.memory.neo4j_manager.neo4j_manager') as mock_neo4j:
             
             # Setup mocks
             mock_buffer.get_llm_messages.return_value = []

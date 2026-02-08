@@ -17,7 +17,6 @@ import logging
 import json
 import time
 import os
-import asyncio
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 import httpx
@@ -26,7 +25,6 @@ from Atlas.config import API_CONFIG, MODEL_GOVERNANCE
 from Atlas.memory import MessageBuffer
 from Atlas.memory.state import state_manager
 from Atlas.time_context import time_context
-from Atlas.memory.neo4j_manager import neo4j_manager
 
 logger = logging.getLogger(__name__)
 
@@ -71,13 +69,14 @@ class Orchestrator:
         # FAZ-α Final: State Hydration (Optimized)
         # Sadece konu 'Genel' ise VE daha önce kontrol edilmemişse DB'ye sor.
         if state.current_topic == "Genel" and not state._hydrated:
+            from Atlas.memory.neo4j_manager import neo4j_manager
             try:
                 saved_topic = await neo4j_manager.get_session_topic(session_id)
                 if saved_topic:
                     state.current_topic = saved_topic
-                    logger.info(f"[STATE HYDRATION]: Konu '{saved_topic}' olarak geri yüklendi.")
+                    print(f"[STATE HYDRATION]: Konu '{saved_topic}' olarak geri yüklendi.")
             except Exception as e:
-                logger.error(f"[STATE HYDRATION ERROR]: {e}")
+                print(f"[STATE HYDRATION ERROR]: {e}")
             finally:
                 # Başarılı veya başarısız, bir daha sorma (Session boyunca RAM geçerli)
                 state._hydrated = True
@@ -92,12 +91,12 @@ class Orchestrator:
         if context_builder and hasattr(context_builder, "_neo4j_context") and context_builder._neo4j_context:
             full_context += "\n\n[GRAFİK BELLEK BAĞLAMI]\n" + context_builder._neo4j_context
         
-        logger.debug(f"[HATA AYIKLAMA] Orkestratör Geçmişi: {len(history)} mesaj. Aktif Alan: {state.active_domain}")
+        print(f"[HATA AYIKLAMA] Orkestratör Geçmişi: {len(history)} mesaj. Aktif Alan: {state.active_domain}")
 
         # 4. Beyin (LLM) Çağrısı: Mevcut bilgilerle en uygun planı oluşturması için modele danışılır
         plan_data, used_prompt, used_model = await Orchestrator._call_brain(message, history_text, full_context)
         
-        logger.debug(f"[HATA AYIKLAMA] Orkestratör Plan Verisi: {json.dumps(plan_data, ensure_ascii=False)}")
+        print(f"[HATA AYIKLAMA] Orkestratör Plan Verisi: {json.dumps(plan_data, ensure_ascii=False)}")
         
         # 4. Plan İşleme ve Niyet Kalıtımı (Intent Inheritance)
         if plan_data.get("is_follow_up") and plan_data.get("intent") == "general":
@@ -129,12 +128,14 @@ class Orchestrator:
         
         # Eğer konu değiştiyse Neo4j'ye asenkron (fire-and-forget) yaz
         if state.current_topic != old_topic:
+            import asyncio
+            from Atlas.memory.neo4j_manager import neo4j_manager
             # DÜZELTME: user_id'yi context_builder'dan veya history'den alabiliriz. 
             # Genelde RDR veya context için session_id yeterli ama Neo4j user_id ister.
             # Şimdilik context_builder objesinin user_id'si varsa kullanalım.
             user_id = getattr(context_builder, "user_id", "anonymous")
             asyncio.create_task(neo4j_manager.update_session_topic(user_id, session_id, state.current_topic))
-            logger.info(f"[KONU DEĞİŞTİ]: {old_topic} -> {state.current_topic}")
+            print(f"[KONU DEĞİŞTİ]: {old_topic} -> {state.current_topic}")
         
         return OrchestrationPlan(
             tasks=plan_data.get("tasks", []),
@@ -177,7 +178,7 @@ class Orchestrator:
                 break
                 
             try:
-                logger.debug(f"[HATA AYIKLAMA] Beyin Model Deniyor: {model}")
+                print(f"[HATA AYIKLAMA] Beyin Model Deniyor: {model}")
                 
                 # --- GEMINI YOLU (Modern Google SDK v1.0) ---
                 if "gemini" in model.lower():
@@ -188,11 +189,12 @@ class Orchestrator:
                         
                         gemini_key = get_gemini_api_key()
                         if not gemini_key:
-                            logger.error(f"[HATA] {model} için Gemini API Anahtarı eksik")
+                            print(f"[HATA] {model} için Gemini API Anahtarı eksik")
                             continue
 
                         client = genai.Client(api_key=gemini_key)
                         
+                        import asyncio
                         # Yeni SDK kullanarak asenkron çağrı (Timeout Korumalı)
                         response = await asyncio.wait_for(
                             client.aio.models.generate_content(
@@ -207,7 +209,7 @@ class Orchestrator:
                         
                         raw_content = response.text
                         data = json.loads(raw_content)
-                        logger.info(f"[HATA AYIKLAMA] Beyin Gemini ile Başarılı ({model})")
+                        print(f"[HATA AYIKLAMA] Beyin Gemini ile Başarılı ({model})")
                         
                         data["_resilience"] = {
                             "attempts": attempt_count,
@@ -216,7 +218,7 @@ class Orchestrator:
                         return data, prompt, model
 
                     except Exception as ge:
-                        logger.error(f"[HATA] Gemini çağrısı başarısız: {ge}")
+                        print(f"[HATA] Gemini çağrısı başarısız: {ge}")
                         continue 
 
                 # --- GROQ YOLU: Gemini API başarısızsa veya listede Groq modelleri varsa kullanılır ---
@@ -237,21 +239,21 @@ class Orchestrator:
                         raw_content = response.json()["choices"][0]["message"]["content"]
                         try:
                             data = json.loads(raw_content) if isinstance(raw_content, str) else raw_content
-                            logger.info(f"[HATA AYIKLAMA] Beyin {model} ile Başarılı")
+                            print(f"[HATA AYIKLAMA] Beyin {model} ile Başarılı")
                             data["_resilience"] = {
                                 "attempts": attempt_count,
                                 "models": used_models
                             }
                             return data, prompt, model
                         except Exception as je:
-                            logger.error(f"[HATA] {model} için JSON ayrıştırma başarısız: {je}")
+                            print(f"[HATA] {model} için JSON ayrıştırma başarısız: {je}")
                             continue
                     else:
                         KeyManager.report_error(api_key, status_code=response.status_code)
-                        logger.error(f"[HATA] Beyin çağrısı {model} için başarısız: HTTP {response.status_code}")
+                        print(f"[HATA] Beyin çağrısı {model} için başarısız: HTTP {response.status_code}")
                         continue
             except Exception as e:
-                logger.error(f"[HATA] {model} için beyin istisnası: {e}")
+                print(f"[HATA] {model} için beyin istisnası: {e}")
                 continue
                 
         # Tüm modeller başarısız olursa güvenli bir varsayılan plan döner

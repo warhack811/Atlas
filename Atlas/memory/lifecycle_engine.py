@@ -13,7 +13,7 @@ Bu modül, FACT relationship'leri yazarken temporal conflict resolution sağlar:
 """
 
 import logging
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 from Atlas.config import Config, MEMORY_CONFIDENCE_SETTINGS
 from Atlas.memory.neo4j_manager import neo4j_manager
 
@@ -50,25 +50,6 @@ async def resolve_conflicts(
     new_triplets = []
     supersede_operations = []
     
-    # Phase 1: Pre-fetch EXCLUSIVE relationships to avoid N+1 queries
-    exclusive_pairs = []
-    if catalog:
-        for triplet in triplets:
-            predicate = triplet.get("predicate", "")
-            subject = triplet.get("subject", "")
-
-            # Resolve predicate
-            pred_key = catalog.resolve_predicate(predicate)
-            if pred_key and catalog.get_type(pred_key) == "EXCLUSIVE":
-                 exclusive_pairs.append({
-                     "subject": subject,
-                     "predicate": predicate
-                 })
-
-    # Batch fetch
-    existing_exclusive_map = await _batch_find_active_relationships(user_id, exclusive_pairs)
-
-    # Phase 2: Process triplets
     for triplet in triplets:
         predicate = triplet.get("predicate", "")
         subject = triplet.get("subject", "")
@@ -91,9 +72,7 @@ async def resolve_conflicts(
         
         if pred_type == "EXCLUSIVE":
             # EXCLUSIVE: Check for existing ACTIVE relationship with same subject+predicate
-            # Use pre-fetched map instead of querying DB
-            key = (subject, predicate)
-            existing = existing_exclusive_map.get(key)
+            existing = await _find_active_relationship(user_id, subject, predicate)
             
             if existing:
                 existing_object = existing.get("object")
@@ -193,43 +172,6 @@ async def _find_active_relationship(user_id: str, subject: str, predicate: str) 
         logger.warning(f"_find_active_relationship hatası: {e}")
         return None
 
-async def _batch_find_active_relationships(user_id: str, pairs: List[Dict[str, str]]) -> Dict[Tuple[str, str], Dict]:
-    """
-    Batch find active relationships for multiple subject-predicate pairs.
-    Returns a dict: (subject, predicate) -> relationship_data
-    """
-    if not pairs:
-        return {}
-
-    # Global neo4j_manager kullanılıyor (test mocking için)
-    # UNWIND ile toplu sorgu
-    query = """
-    UNWIND $pairs as pair
-    MATCH (s:Entity {name: pair.subject})-[r:FACT {predicate: pair.predicate, user_id: $uid}]->(o:Entity)
-    WHERE r.status IS NULL OR r.status = 'ACTIVE'
-    RETURN pair.subject as subject, pair.predicate as predicate, o.name as object, r.source_turn_id_last as turn_id, r.confidence as confidence
-    """
-
-    try:
-        results = await neo4j_manager.query_graph(query, {
-            "uid": user_id,
-            "pairs": pairs
-        })
-
-        lookup = {}
-        if results:
-            for row in results:
-                key = (row["subject"], row["predicate"])
-                # If multiple exist, latest one overwrites (arbitrary but acceptable given EXCLUSIVE constraint)
-                lookup[key] = {
-                    "object": row["object"],
-                    "turn_id": row["turn_id"],
-                    "confidence": row["confidence"]
-                }
-        return lookup
-    except Exception as e:
-        logger.warning(f"_batch_find_active_relationships error: {e}")
-        return {}
 
 async def supersede_relationship(
     user_id: str,
@@ -268,31 +210,3 @@ async def supersede_relationship(
         logger.info(f"Lifecycle: {count} ilişki {status} olarak işaretlendi")
     except Exception as e:
         logger.error(f"Supersede relationship hatası: {e}")
-
-
-async def supersede_relationships_batch(operations: List[Dict]) -> int:
-    """
-    Toplu olarak ilişkileri SUPERSEDED veya CONFLICTED olarak işaretle.
-    """
-    if not operations:
-        return 0
-
-    query = """
-    UNWIND $ops AS op
-    MATCH (s:Entity {name: op.subject})-[r:FACT {predicate: op.predicate, user_id: op.user_id}]->(o:Entity {name: op.old_object})
-    WHERE r.status IS NULL OR r.status = 'ACTIVE'
-    SET r.status = CASE WHEN op.type = 'CONFLICT' THEN 'CONFLICTED' ELSE 'SUPERSEDED' END,
-        r.superseded_by_turn_id = op.new_turn_id,
-        r.valid_until = datetime(),
-        r.updated_at = datetime()
-    RETURN count(r) as count
-    """
-
-    try:
-        result = await neo4j_manager.query_graph(query, {"ops": operations})
-        count = result[0]["count"] if result else 0
-        logger.info(f"Lifecycle: Batch supersede executed for {len(operations)} operations. Modified {count} relationships.")
-        return count
-    except Exception as e:
-        logger.error(f"Batch supersede relationship hatası: {e}")
-        return 0

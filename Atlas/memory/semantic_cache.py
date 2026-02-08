@@ -64,8 +64,6 @@ class SemanticCache:
         Returns: {"response": str|None, "similarity": float, "latency_ms": int}
         """
         from Atlas.config import BYPASS_SEMANTIC_CACHE
-        from Atlas.memory.qdrant_manager import qdrant_manager
-
         start_t = time.time()
         
         if BYPASS_SEMANTIC_CACHE or not self.client:
@@ -74,30 +72,32 @@ class SemanticCache:
         try:
             normalized_query = normalize_text_for_dedupe(query)
             query_emb = await self.embedder.embed(normalized_query)
-            threshold = getattr(self, "similarity_threshold", 0.92)
             
-            # Use Vector Search (Qdrant) instead of SCAN
-            results = await qdrant_manager.search_cache(
-                query_embedding=query_emb,
-                user_id=user_id,
-                score_threshold=threshold,
-                top_k=1
-            )
+            # Use SCAN to find candidate keys for THIS user
+            match_pattern = f"cache:{user_id}:*"
+            keys = []
+            async for key in self.client.scan_iter(match=match_pattern, count=self.max_scan_keys):
+                keys.append(key)
+                if len(keys) >= self.max_scan_keys:
+                    break
             
             best_match = None
             best_similarity = 0.0
+            threshold = getattr(self, "similarity_threshold", 0.92)
             
-            if results:
-                result = results[0]
-                key = result.get("key")
-                best_similarity = result.get("score", 0.0)
-
-                # Fetch full response from Redis
-                if key:
+            for key in keys:
+                try:
                     raw_cached = await self.client.get(key)
-                    if raw_cached:
-                        data = json.loads(raw_cached)
+                    if not raw_cached: continue
+                    data = json.loads(raw_cached)
+                    cached_emb = data.get("embedding", [])
+                    if not cached_emb or len(cached_emb) != len(query_emb): continue
+
+                    similarity = self._cosine_similarity(query_emb, cached_emb)
+                    if similarity >= threshold and similarity > best_similarity:
+                        best_similarity = similarity
                         best_match = data.get("response")
+                except: continue
 
             latency = int((time.time() - start_t) * 1000)
             if best_match:
@@ -117,8 +117,6 @@ class SemanticCache:
         Caches a query-response pair with user isolation and TTL.
         """
         from Atlas.config import BYPASS_SEMANTIC_CACHE
-        from Atlas.memory.qdrant_manager import qdrant_manager
-
         if BYPASS_SEMANTIC_CACHE or not self.client:
             return False
         
@@ -130,29 +128,17 @@ class SemanticCache:
             query_hash = hashlib.md5(normalized.encode()).hexdigest()
             key = f"cache:{user_id}:{query_hash}"
             
-            # Store in Redis with TTL
             await self.client.setex(
                 key,
                 self.ttl,
                 json.dumps({
                     "query": query[:500],
-                    "embedding": query_emb, # Optional: keep embedding in Redis as backup/verification
+                    "embedding": query_emb,
                     "response": response,
                     "user_id": user_id,
                     "timestamp": datetime.utcnow().isoformat()
                 })
             )
-
-            # Upsert to Qdrant for vector search
-            import time
-            expiry = int(time.time()) + self.ttl
-            await qdrant_manager.upsert_cache(
-                key=key,
-                embedding=query_emb,
-                user_id=user_id,
-                expiry=expiry
-            )
-
             return True
         except Exception as e:
             logger.error(f"Semantic cache set failed: {e}")
@@ -160,28 +146,19 @@ class SemanticCache:
 
     async def clear_user(self, user_id: str) -> int:
         """Kullanıcıya ait tüm cache kayıtlarını temizler."""
-        from Atlas.memory.qdrant_manager import qdrant_manager
-
         if not self.client:
             return 0
         try:
-            # Clear from Redis
             match_pattern = f"cache:{user_id}:*"
             keys = []
             async for key in self.client.scan_iter(match=match_pattern):
                 keys.append(key)
             
-            count = 0
             if keys:
                 await self.client.delete(*keys)
-                count = len(keys)
-
-            # Clear from Qdrant
-            await qdrant_manager.delete_cache_for_user(user_id)
-
-            if count > 0:
-                logger.info(f"Semantic cache: {count} keys cleared for user {user_id}")
-            return count
+                logger.info(f"Semantic cache: {len(keys)} keys cleared for user {user_id}")
+                return len(keys)
+            return 0
         except Exception as e:
             logger.error(f"Semantic cache clear_user failed: {e}")
             return 0

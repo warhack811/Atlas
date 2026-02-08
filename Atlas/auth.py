@@ -5,27 +5,17 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict
 
 from itsdangerous import URLSafeTimedSerializer
-from Atlas.config import Config
+from Atlas.config import getenv
 
 logger = logging.getLogger(__name__)
 
 # Session Secret Key
-ATLAS_SESSION_SECRET = Config.ATLAS_SESSION_SECRET
-
+ATLAS_SESSION_SECRET = getenv("ATLAS_SESSION_SECRET", None)
 if not ATLAS_SESSION_SECRET:
-    # Check if we are in production
-    if Config.ATLAS_ENV == "production":
-        logger.critical("ATLAS_SESSION_SECRET is missing in production environment!")
-        raise ValueError(
-            "ATLAS_SESSION_SECRET environment variable is required in production. "
-            "Please set it to a secure random string."
-        )
-
-    # In development/test, fallback to random but warn
     ATLAS_SESSION_SECRET = secrets.token_hex(32)
     logger.warning(
-        f"ATLAS_SESSION_SECRET not found! Generated temporary secret for {Config.ATLAS_ENV} mode. "
-        f"Set ATLAS_SESSION_SECRET for persistence and security."
+        f"ATLAS_SESSION_SECRET env'de bulunamadı! Dev modu için geçici secret üretildi. "
+        f"Production'da kalıcı bir secret set edin."
     )
 
 # Serializer for signed cookies

@@ -19,7 +19,6 @@ load_dotenv()
 
 class Config:
     """Merkezi konfigürasyon yönetimi."""
-    ATLAS_ENV = getenv("ATLAS_ENV", "development").lower()
     SERPER_API_KEY = getenv("SERPER_API_KEY", "")
     FLUX_API_URL = getenv("FLUX_API_URL", "http://localhost:7860/sdapi/v1/txt2img") # Varsayılan Forge/A1111 URL
     ATLAS_SESSION_SECRET = getenv("ATLAS_SESSION_SECRET", None)
@@ -39,13 +38,6 @@ class Config:
         """Groq API anahtarları arasından rastgele birini seçer."""
         import random
         keys = get_groq_api_keys()
-        return random.choice(keys) if keys else ""
-
-    @classmethod
-    def get_random_gemini_key(cls) -> str:
-        """Gemini API anahtarları arasından rastgele birini seçer."""
-        import random
-        keys = get_gemini_api_keys()
         return random.choice(keys) if keys else ""
 
 def get_groq_api_keys() -> list[str]:
@@ -297,6 +289,16 @@ QDRANT_API_KEY = getenv("QDRANT_API_KEY", None)
 # Redis (Upstash) Settings
 REDIS_URL = getenv("REDIS_URL", None)
 
+# Helper method to get random Gemini key
+@classmethod
+def get_random_gemini_key(cls) -> str:
+    """Gemini API anahtarları arasından rastgele birini seçer."""
+    import random
+    keys = get_gemini_api_keys()
+    return random.choice(keys) if keys else ""
+
+# Add to Config class
+Config.get_random_gemini_key = get_random_gemini_key
 
 # Style Profile → Temperature Mapping (Optimized for persona consistency)
 STYLE_TEMPERATURE_MAP = {

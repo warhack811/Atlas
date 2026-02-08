@@ -110,12 +110,9 @@ async def test_synthesizer_stream_instruction():
     """Synthesizer Stream mood instruction'ı doğru oluşturmalı."""
     raw_data = [{"output": "[ÖNCEKİ DUYGU DURUMU]: Kullanıcı son görüşmenizde 'Gergin' hissediyordu."}]
     
-    # Mock generate_stream - Patch where it's imported in synthesizer.py
-    with patch("Atlas.synthesizer.generate_stream") as mock_gen_stream:
-        # Since synthesize_stream awaits generate_stream (async generator), mock needs to be an async generator
-        async def async_gen(*args, **kwargs):
-            yield "chunk"
-        mock_gen_stream.side_effect = async_gen
+    # Mock generate_stream
+    with patch("Atlas.generator.generate_stream") as mock_gen_stream:
+        mock_gen_stream.return_value = iter(["chunk"])
         
         # Consume generator
         gen = synthesizer.synthesize_stream(
@@ -129,8 +126,6 @@ async def test_synthesizer_stream_instruction():
             pass
             
         # Verify call
-        # call_args might be None if not called, but failure showed it was None
-        assert mock_gen_stream.called, "generate_stream was not called"
         args, kwargs = mock_gen_stream.call_args
         override_prompt = kwargs.get("override_system_prompt", "")
         

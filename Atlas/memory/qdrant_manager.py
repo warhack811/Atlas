@@ -45,7 +45,6 @@ class QdrantManager:
         self.api_key = None
         self.client = None
         self.collection_name = "episodes"
-        self.semantic_collection_name = "semantic_cache"
         self.dimension = 768
         self._client_init_attempted = False
         self._initialized = True
@@ -171,48 +170,9 @@ class QdrantManager:
             except Exception as ie:
                 logger.warning(f"Failed to ensure Qdrant payload indexes: {ie}")
 
-            # Ensure semantic cache collection
-            self._ensure_semantic_collection()
-
         except Exception as e:
             logger.error(f"Failed to ensure collection: {e}")
             raise
-
-    def _ensure_semantic_collection(self):
-        """Create semantic cache collection if not exists"""
-        try:
-            collections = self.client.get_collections().collections
-            exists = any(c.name == self.semantic_collection_name for c in collections)
-
-            if not exists:
-                self.client.create_collection(
-                    collection_name=self.semantic_collection_name,
-                    vectors_config=VectorParams(
-                        size=self.dimension,
-                        distance=Distance.COSINE
-                    )
-                )
-                logger.info(f"Created Qdrant collection: {self.semantic_collection_name}")
-
-            # Indexes for semantic cache
-            try:
-                self.client.create_payload_index(
-                    collection_name=self.semantic_collection_name,
-                    field_name="user_id",
-                    field_schema="keyword"
-                )
-                self.client.create_payload_index(
-                    collection_name=self.semantic_collection_name,
-                    field_name="expiry",
-                    field_schema="integer"
-                )
-                logger.debug("Qdrant payload indexes ensured for semantic cache")
-            except Exception as ie:
-                logger.warning(f"Failed to ensure semantic cache payload indexes: {ie}")
-
-        except Exception as e:
-            logger.error(f"Failed to ensure semantic collection: {e}")
-            # Don't raise here to allow main app to continue if cache fails
     
     async def upsert_episode(
         self,
@@ -490,135 +450,6 @@ class QdrantManager:
         except Exception as e:
             logger.error(f"Failed to get collection info: {e}")
             return None
-
-    async def upsert_cache(
-        self,
-        key: str,
-        embedding: List[float],
-        user_id: str,
-        expiry: int,
-        wait: bool = True
-    ) -> bool:
-        """
-        Upsert cache entry
-        """
-        if not self._ensure_client():
-            return False
-
-        try:
-            # Generate deterministic UUID from key
-            point_id = uuid.uuid5(uuid.NAMESPACE_DNS, key)
-
-            point = PointStruct(
-                id=point_id,
-                vector=embedding,
-                payload={
-                    "key": key,
-                    "user_id": user_id,
-                    "expiry": expiry
-                }
-            )
-
-            try:
-                self.client.upsert(
-                    collection_name=self.semantic_collection_name,
-                    points=[point],
-                    wait=wait
-                )
-            except TypeError:
-                 self.client.upsert(
-                    collection_name=self.semantic_collection_name,
-                    points=[point]
-                )
-            return True
-        except Exception as e:
-            logger.error(f"Failed to upsert cache: {e}")
-            return False
-
-    async def search_cache(
-        self,
-        query_embedding: List[float],
-        user_id: str,
-        score_threshold: float = 0.9,
-        top_k: int = 1
-    ) -> List[Dict]:
-        """
-        Search semantic cache
-        """
-        if not self._ensure_client():
-            return []
-
-        try:
-            # Filter by user_id and expiry > now
-            import time
-            current_time = int(time.time())
-
-            search_filter = Filter(
-                must=[
-                    FieldCondition(
-                        key="user_id",
-                        match=MatchValue(value=user_id)
-                    ),
-                    FieldCondition(
-                        key="expiry",
-                        range={"gt": current_time}
-                    )
-                ]
-            )
-
-            results = []
-            if hasattr(self.client, 'query_points'):
-                response = self.client.query_points(
-                    collection_name=self.semantic_collection_name,
-                    query=query_embedding,
-                    query_filter=search_filter,
-                    limit=top_k,
-                    score_threshold=score_threshold,
-                    with_payload=True
-                )
-                if hasattr(response, 'points'):
-                    results = response.points
-            elif hasattr(self.client, 'search_points'):
-                results = self.client.search_points(
-                    collection_name=self.semantic_collection_name,
-                    query_vector=query_embedding,
-                    query_filter=search_filter,
-                    limit=top_k,
-                    score_threshold=score_threshold
-                )
-
-            return [
-                {
-                    "key": r.payload.get("key"),
-                    "score": r.score
-                }
-                for r in results
-            ]
-        except Exception as e:
-            logger.error(f"Cache search failed: {e}")
-            return []
-
-    async def delete_cache_for_user(self, user_id: str) -> bool:
-        """Delete cache entries for user"""
-        if not self._ensure_client():
-            return False
-
-        try:
-            self.client.delete(
-                collection_name=self.semantic_collection_name,
-                points_selector=Filter(
-                    must=[
-                        FieldCondition(
-                            key="user_id",
-                            match=MatchValue(value=user_id)
-                        )
-                    ]
-                )
-            )
-            return True
-        except Exception as e:
-            logger.error(f"Failed to delete cache for user {user_id}: {e}")
-            return False
 
 
 # Singleton instance
