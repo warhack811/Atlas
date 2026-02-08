@@ -218,6 +218,9 @@ def test_auto_initialize_mock():
     KeyManager._initialized = False
     KeyManager._pools = {"groq": {}, "gemini": {}}
 
+    # Ensure Atlas.config is loaded so patch works on the module
+    import Atlas.config
+
     with patch("Atlas.config.get_groq_api_keys", return_value=["auto_key"]), \
          patch("Atlas.config.get_gemini_api_keys", return_value=[]):
 

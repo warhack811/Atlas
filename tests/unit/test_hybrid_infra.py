@@ -35,9 +35,14 @@ async def test_hybrid_fusion_logic_unit(monkeypatch):
     ]
     
     fused = _score_fuse_candidates(candidates)
+
+    # Ensure final_score is a float, not a mock or other object
+    score1 = float(fused[1]["final_score"])
+    score0 = float(fused[0]["final_score"])
+
     # Graph score: 0.8*0.4 + 1.0*0.2 = 0.32 + 0.2 = 0.52
     # Vector score: 0.9*0.4 + ~0*0.2 = 0.36
-    assert fused[1]["final_score"] > fused[0]["final_score"]
+    assert score1 > score0
 
 @pytest.mark.asyncio
 async def test_hybrid_retrieval_integration_mocked(monkeypatch):
