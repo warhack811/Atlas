@@ -7,6 +7,7 @@ import os
 import asyncio
 import time
 from typing import Optional, List, Dict
+import sys
 from dotenv import load_dotenv
 
 # CRITICAL: Load environment variables before importing modules
@@ -390,6 +391,18 @@ async def test_bypass_mode():
         
         from importlib import reload
         import Atlas.config as config_module
+
+        # Ensure module is in sys.modules before reloading
+        if "Atlas.config" not in sys.modules:
+            import Atlas.config
+            config_module = Atlas.config
+
+
+        # Ensure module is in sys.modules before reloading
+        if "Atlas.config" not in sys.modules:
+            import Atlas.config
+            config_module = Atlas.config
+
         reload(config_module)
         
         manager = QdrantManager()

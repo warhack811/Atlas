@@ -35,13 +35,6 @@ class Config:
     GEMINI_API_KEY = getenv("GEMINI_API_KEY", "")
 
     @classmethod
-    def get_random_groq_key(cls) -> str:
-        """Groq API anahtarları arasından rastgele birini seçer."""
-        import random
-        keys = get_groq_api_keys()
-        return random.choice(keys) if keys else ""
-
-    @classmethod
     def get_random_gemini_key(cls) -> str:
         """Gemini API anahtarları arasından rastgele birini seçer."""
         import random

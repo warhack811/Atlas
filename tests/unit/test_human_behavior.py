@@ -25,7 +25,7 @@ async def test_emotion_extraction_feels():
         mock_post.return_value = mock_response
 
         with patch("Atlas.memory.mwg.decide") as mock_decide, \
-             patch("Atlas.config.Config.get_random_groq_key", return_value="dummy_key"), \
+             patch("Atlas.key_manager.KeyManager.get_best_key", return_value="dummy_key"), \
              patch("Atlas.memory.neo4j_manager.neo4j_manager.get_user_names", new_callable=AsyncMock) as mock_names, \
              patch("Atlas.memory.neo4j_manager.neo4j_manager.store_triplets", new_callable=AsyncMock) as mock_store:
 

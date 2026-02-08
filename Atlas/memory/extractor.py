@@ -15,6 +15,7 @@ import httpx
 import logging
 from typing import List, Dict, Any
 from Atlas.config import Config, API_CONFIG, MEMORY_CONFIDENCE_SETTINGS
+from Atlas.key_manager import KeyManager
 from Atlas.prompts import EXTRACTOR_SYSTEM_PROMPT
 from Atlas.memory.neo4j_manager import neo4j_manager
 from Atlas.memory.predicate_catalog import get_catalog
@@ -230,7 +231,7 @@ async def extract_and_save(text: str, user_id: str, source_turn_id: str | None =
         return []
 
     # Groq API üzerinden model çağrısı için rastgele bir anahtar seç
-    api_key = Config.get_random_groq_key()
+    api_key = KeyManager.get_best_key(EXTRACTION_MODEL)
     if not api_key:
         logger.error("Groq API anahtarı bulunamadı. Bilgi çıkarımı atlanıyor.")
         return []
