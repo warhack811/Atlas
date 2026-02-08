@@ -38,8 +38,9 @@ def mock_generate_stream():
         yield mock
 
 @pytest.mark.asyncio
-async def test_synthesize_basic(mock_key_manager, mock_message_buffer, mock_style_injector, mock_httpx):
+async def test_synthesize_basic(mock_key_manager, mock_message_buffer, mock_style_injector, mock_httpx_fixture):
     # Ensure client context manager returns the client itself
+    mock_httpx = mock_httpx_fixture
     mock_httpx.__aenter__.return_value = mock_httpx
 
     # Setup mock_httpx response for synthesize
@@ -67,8 +68,9 @@ async def test_synthesize_basic(mock_key_manager, mock_message_buffer, mock_styl
     assert "System Instruction" in system_msg['content']
 
 @pytest.mark.asyncio
-async def test_synthesize_mirroring(mock_key_manager, mock_message_buffer, mock_style_injector, mock_httpx):
+async def test_synthesize_mirroring(mock_key_manager, mock_message_buffer, mock_style_injector, mock_httpx_fixture):
     # Ensure client context manager returns the client itself
+    mock_httpx = mock_httpx_fixture
     mock_httpx.__aenter__.return_value = mock_httpx
 
     mock_response = MagicMock()

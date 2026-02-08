@@ -1,5 +1,6 @@
 import pytest
 import os
+import sys
 from datetime import datetime
 from unittest.mock import AsyncMock, patch, MagicMock
 from Atlas.memory.context import build_chat_context_v1, _score_fuse_candidates
@@ -8,10 +9,14 @@ import Atlas.config
 @pytest.mark.asyncio
 async def test_hybrid_fusion_logic_unit(monkeypatch):
     """Verify weighted score fusion and recency decay (Unit)."""
-    monkeypatch.setattr(Atlas.config, "HYBRID_WEIGHT_VECTOR", 0.4)
-    monkeypatch.setattr(Atlas.config, "HYBRID_WEIGHT_GRAPH", 0.4)
-    monkeypatch.setattr(Atlas.config, "HYBRID_WEIGHT_RECENCY", 0.2)
-    monkeypatch.setattr(Atlas.config, "HYBRID_RECENCY_HALFLIFE_DAYS", 30.0)
+    # Force load config if not present
+    if 'Atlas.config' not in sys.modules:
+        import Atlas.config
+
+    monkeypatch.setattr(sys.modules['Atlas.config'], "HYBRID_WEIGHT_VECTOR", 0.4)
+    monkeypatch.setattr(sys.modules['Atlas.config'], "HYBRID_WEIGHT_GRAPH", 0.4)
+    monkeypatch.setattr(sys.modules['Atlas.config'], "HYBRID_WEIGHT_RECENCY", 0.2)
+    monkeypatch.setattr(sys.modules['Atlas.config'], "HYBRID_RECENCY_HALFLIFE_DAYS", 30.0)
     
     # Current time for recency
     now_iso = datetime.utcnow().isoformat()
@@ -37,12 +42,17 @@ async def test_hybrid_fusion_logic_unit(monkeypatch):
     fused = _score_fuse_candidates(candidates)
     # Graph score: 0.8*0.4 + 1.0*0.2 = 0.32 + 0.2 = 0.52
     # Vector score: 0.9*0.4 + ~0*0.2 = 0.36
-    assert fused[1]["final_score"] > fused[0]["final_score"]
+    # Ensure scores are floats, not Mocks (if fusion logic returns mocks for some reason)
+    score1 = float(fused[1]["final_score"])
+    score0 = float(fused[0]["final_score"])
+    assert score1 > score0
 
 @pytest.mark.asyncio
 async def test_hybrid_retrieval_integration_mocked(monkeypatch):
     """Verify build_chat_context_v1 calls both sources and fuses result (Deterministic)."""
-    monkeypatch.setattr(Atlas.config, "ENABLE_HYBRID_RETRIEVAL", True)
+    if 'Atlas.config' not in sys.modules:
+        import Atlas.config
+    monkeypatch.setattr(sys.modules['Atlas.config'], "ENABLE_HYBRID_RETRIEVAL", True)
     
     mock_embedder = MagicMock()
     mock_embedder.embed = AsyncMock(return_value=[0.1]*768)

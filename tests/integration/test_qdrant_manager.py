@@ -389,6 +389,10 @@ async def test_bypass_mode():
         os.environ["BYPASS_VECTOR_SEARCH"] = "true"
         
         from importlib import reload
+        import sys
+        if 'Atlas.config' not in sys.modules:
+             import Atlas.config
+
         import Atlas.config as config_module
         reload(config_module)
         
