@@ -1117,12 +1117,15 @@ def _score_fuse_candidates(candidates: List[Dict]) -> List[Dict]:
         HYBRID_RECENCY_HALFLIFE_DAYS
     )
     import math
-    from datetime import datetime
+    from datetime import datetime, timezone
     
     def get_recency(ts_str):
         if not ts_str: return 0.0
         try:
-            delta = datetime.utcnow() - datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+            ts = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            delta = datetime.now(timezone.utc) - ts
             days = delta.total_seconds() / 86400
             # FAZ-Y: math.exp tabanlı exponential decay (halflife=7 gün)
             halflife = 7.0 # ROADMAP ADIM 2.1

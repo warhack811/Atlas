@@ -1,33 +1,4 @@
-import sys
-from unittest.mock import MagicMock
 import pytest
-
-# Conditional mocking to support environments with missing dependencies
-# This ensures tests can run in restricted environments without polluting
-# the global namespace if the real modules are available.
-def _ensure_mocked(module_name):
-    if module_name not in sys.modules:
-        try:
-            __import__(module_name)
-        except ImportError:
-            sys.modules[module_name] = MagicMock()
-
-# List of dependencies that might be missing
-_dependencies = [
-    "neo4j", "neo4j.exceptions",
-    "httpx",
-    "fastapi",
-    "pydantic", "pydantic_settings",
-    "dotenv",
-    "qdrant_client", "qdrant_client.http", "qdrant_client.http.models",
-    "dateparser", "dateparser.search",
-    "redis", "redis.asyncio"
-]
-
-for dep in _dependencies:
-    _ensure_mocked(dep)
-
-# Now import the function to test
 from Atlas.memory.text_normalize import normalize_text_for_dedupe
 
 def test_normalize_empty_input():

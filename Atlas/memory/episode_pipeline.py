@@ -24,7 +24,7 @@ import logging
 import asyncio
 import random
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from Atlas.config import (
     BYPASS_VECTOR_SEARCH,
@@ -186,7 +186,7 @@ async def finalize_episode_with_vectors(
                 embedding=None,
                 embedding_model=None,
                 vector_status="SKIPPED",
-                vector_updated_at=datetime.utcnow().isoformat(),
+                vector_updated_at=datetime.now(timezone.utc).isoformat(),
                 vector_error="Summary too short for embedding"
             )
             return result
@@ -204,7 +204,7 @@ async def finalize_episode_with_vectors(
                 embedding=None,
                 embedding_model=None,
                 vector_status="SKIPPED",
-                vector_updated_at=datetime.utcnow().isoformat(),
+                vector_updated_at=datetime.now(timezone.utc).isoformat(),
                 vector_error="BYPASS_VECTOR_SEARCH enabled"
             )
             return result
@@ -246,7 +246,7 @@ async def finalize_episode_with_vectors(
                 embedding=None,  # No embedding generated
                 embedding_model=None,
                 vector_status="FAILED",
-                vector_updated_at=datetime.utcnow().isoformat(),
+                vector_updated_at=datetime.now(timezone.utc).isoformat(),
                 vector_error=vector_error
             )
             return result
@@ -261,7 +261,7 @@ async def finalize_episode_with_vectors(
                 user_id=user_id,
                 session_id=session_id,
                 text=summary,
-                timestamp=datetime.utcnow().isoformat(),
+                timestamp=datetime.now(timezone.utc).isoformat(),
                 wait=wait_for_qdrant
             )
             if not success:
@@ -300,7 +300,7 @@ async def finalize_episode_with_vectors(
                 embedding=embedding_to_store,
                 embedding_model=embedding_model,
                 vector_status="FAILED",
-                vector_updated_at=datetime.utcnow().isoformat(),
+                vector_updated_at=datetime.now(timezone.utc).isoformat(),
                 vector_error=vector_error
             )
             return result
@@ -318,7 +318,7 @@ async def finalize_episode_with_vectors(
             embedding=embedding_to_store,
             embedding_model=embedding_model,
             vector_status="READY",
-            vector_updated_at=datetime.utcnow().isoformat(),
+            vector_updated_at=datetime.now(timezone.utc).isoformat(),
             vector_error=None
         )
         

@@ -120,6 +120,18 @@ def mock_httpx_fixture():
         try:
              import httpx
              mock_client = AsyncMock()
+
+             # Configure standard response structure to avoid coroutine warnings
+             # and simulate sync methods correctly
+             mock_response = AsyncMock()
+             mock_response.raise_for_status = MagicMock()
+             mock_response.json = MagicMock(return_value={})
+
+             mock_client.post.return_value = mock_response
+             mock_client.get.return_value = mock_response
+             mock_client.put.return_value = mock_response
+             mock_client.delete.return_value = mock_response
+
              with pytest.MonkeyPatch.context() as m:
                 if hasattr(httpx, 'AsyncClient'):
                     m.setattr("httpx.AsyncClient", MagicMock(return_value=mock_client))
