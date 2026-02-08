@@ -23,4 +23,8 @@ class OrchestrationPlan(BaseModel):
     intent: str
     detected_topic: Optional[str] = Field(default="SAME", description="Algılanan konuşma konusu")
     rewritten_query: Optional[str] = None
+    user_thought: Optional[str] = None
+    reasoning: Optional[str] = None
+    orchestrator_prompt: Optional[str] = None
+    orchestrator_model: Optional[str] = None
     tasks: List[TaskSpec]

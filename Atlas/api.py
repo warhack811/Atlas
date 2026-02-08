@@ -645,31 +645,48 @@ async def stream_chat(request: ChatRequest, background_tasks: BackgroundTasks, u
             if request_context.neo4j_context_str:
                 record.full_context_injection = f"[NEO4J MEMORY]: {request_context.neo4j_context_str}"
             
-            yield f"data: {json.dumps({'type': 'plan', 'intent': plan.active_intent, 'model': plan.orchestrator_model}, default=str)}\n\n"
-
+            # --- AGENTIC LOOP BAŞLANGICI ---
+            from Atlas.agent_runner import agent_runner
             exec_start = time.time()
             raw_results = []
-            # Pass request_context to dag_executor for downstream propagation
-            async for event in dag_executor.dag_executor.execute_plan_stream(plan, session_id, request.message, request_context=request_context):
+            final_plan_for_synthesis = None
 
+            async for event in agent_runner.run_loop(
+                session_id,
+                request.message,
+                user_id,
+                context_builder=cb,
+                request_context=request_context
+            ):
                 if event["type"] == "thought":
-                    # Dinamik başlık belirle (Task ID veya tipinden)
-                    task_id = event.get("task_id", "")
-                    task = next((t for t in plan.tasks if t.id == task_id), None)
-                    
-                    title = "Operasyonel Adım"
-                    if task:
-                        if task.type == "tool":
-                            title = f"🛠️ {task.tool_name.replace('_', ' ').title()}"
-                        elif task.type == "generation":
-                            spec_titles = {"logic": "🧠 Mantıksal Analiz", "coding": "💻 Kod Yapılandırma", "search": "🔍 Bilgi Tarama", "tr_creative": "🎭 Yaratıcı Yazım"}
-                            title = spec_titles.get(task.specialist, "⚙️ Derin Düşünce")
-                    
-                    thought_step = {"title": title, "content": event["thought"]}
+                    # ReAct Thought (Düşünce Adımı)
+                    thought_step = event["step"]
                     record.reasoning_steps.append(thought_step)
                     yield f"data: {json.dumps({'type': 'thought', 'step': thought_step}, default=str)}\n\n"
+
                 elif event["type"] == "task_result":
-                    raw_results.append(event["result"])
+                    # Araç veya Alt Görev Sonucu (Hala kaydediyoruz ama loop bitmeden synthesis yapmayız)
+                    # Buradan gelen 'thought' varsa zaten yukarıda thought event olarak gelmeliydi,
+                    # ama DAG executor direkt task_result içinde thought yollayabilir.
+                    if event["result"].get("thought"):
+                         pass # Zaten thought olarak gelmiştir veya DAG executor handle etmiştir
+
+                elif event["type"] == "loop_done":
+                    # Döngü bitti, sonuçları al
+                    raw_results = event["results"]
+                    final_plan_for_synthesis = event["plan"] # Son döngüdeki plan (intent vb. için)
+
+                elif event["type"] == "error":
+                    yield f"data: {json.dumps({'type': 'error', 'content': event['content']}, default=str)}\n\n"
+
+            # Fallback if loop didn't yield plan
+            if not final_plan_for_synthesis:
+                # Should not happen typically
+                final_plan_for_synthesis = plan
+
+            # Intent güncelle (Son karara göre)
+            plan = final_plan_for_synthesis
+            record.intent = plan.active_intent
             
             exec_ms = int((time.time() - exec_start) * 1000)
             

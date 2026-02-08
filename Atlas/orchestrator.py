@@ -159,9 +159,10 @@ class Orchestrator:
     async def plan_iterative(session_id: str, message: str, user_id: str = "admin") -> OrchestrationPlan:
         """
         [FAZ 2.0] ReAct (Reasoning + Acting) Döngüsü için iteratif planlama metodu.
-        Statik DAG yerine, dinamik bir döngü başlatır.
         """
-        # Şimdilik mevcut plan() metodunu sarmalıyor, ileride ReAct mantığı eklenecek.
+        # Bu metod artık AgentRunner tarafından dolaylı olarak kullanılıyor.
+        # AgentRunner, standart plan() metodunu loop bağlamıyla çağırıyor.
+        # İleride buraya özel logic (örn: sadece bir sonraki adımı planla) eklenebilir.
         return await Orchestrator.plan(session_id, message, user_id)
 
     @staticmethod
