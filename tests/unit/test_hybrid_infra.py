@@ -8,6 +8,14 @@ import Atlas.config
 @pytest.mark.asyncio
 async def test_hybrid_fusion_logic_unit(monkeypatch):
     """Verify weighted score fusion and recency decay (Unit)."""
+    # Use patch.dict instead of monkeypatch for cleaner config mocking if monkeypatch fails
+    # But monkeypatch works if Atlas.config is imported
+    # The issue in CI might be that config attributes are mocks if not imported correctly
+
+    # Ensure Atlas.config is available
+    import Atlas.config
+
+    # We patch the attributes on the module itself
     monkeypatch.setattr(Atlas.config, "HYBRID_WEIGHT_VECTOR", 0.4)
     monkeypatch.setattr(Atlas.config, "HYBRID_WEIGHT_GRAPH", 0.4)
     monkeypatch.setattr(Atlas.config, "HYBRID_WEIGHT_RECENCY", 0.2)
@@ -35,6 +43,11 @@ async def test_hybrid_fusion_logic_unit(monkeypatch):
     ]
     
     fused = _score_fuse_candidates(candidates)
+
+    # Ensure final_score is float, not mock
+    assert isinstance(fused[1]["final_score"], float)
+    assert isinstance(fused[0]["final_score"], float)
+
     # Graph score: 0.8*0.4 + 1.0*0.2 = 0.32 + 0.2 = 0.52
     # Vector score: 0.9*0.4 + ~0*0.2 = 0.36
     assert fused[1]["final_score"] > fused[0]["final_score"]

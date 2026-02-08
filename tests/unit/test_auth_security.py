@@ -21,6 +21,8 @@ def test_auth_secret_production_enforcement():
     with patch.dict(os.environ, {"ATLAS_ENV": "production", "ATLAS_SESSION_SECRET": ""}):
         # Reload config to pick up env vars
         import Atlas.config
+        if "Atlas.config" not in sys.modules:
+            sys.modules["Atlas.config"] = Atlas.config
         importlib.reload(Atlas.config)
 
         # Now reload auth to trigger the check
@@ -35,10 +37,15 @@ def test_auth_secret_development_fallback():
 
     with patch.dict(os.environ, {"ATLAS_ENV": "development", "ATLAS_SESSION_SECRET": ""}):
         import Atlas.config
+        if "Atlas.config" not in sys.modules:
+            sys.modules["Atlas.config"] = Atlas.config
         importlib.reload(Atlas.config)
 
         import Atlas.auth
-        importlib.reload(Atlas.auth)
+        if "Atlas.auth" in sys.modules:
+            importlib.reload(sys.modules["Atlas.auth"])
+        else:
+            importlib.import_module("Atlas.auth")
 
         # In dev mode, if secret is empty, it generates a random one
         assert len(Atlas.auth.ATLAS_SESSION_SECRET) == 64  # 32 bytes hex
@@ -52,9 +59,14 @@ def test_auth_secret_provided():
     fixed_secret = "my_fixed_secret_12345"
     with patch.dict(os.environ, {"ATLAS_ENV": "production", "ATLAS_SESSION_SECRET": fixed_secret}):
         import Atlas.config
+        if "Atlas.config" not in sys.modules:
+            sys.modules["Atlas.config"] = Atlas.config
         importlib.reload(Atlas.config)
 
         import Atlas.auth
-        importlib.reload(Atlas.auth)
+        if "Atlas.auth" in sys.modules:
+            importlib.reload(sys.modules["Atlas.auth"])
+        else:
+            importlib.import_module("Atlas.auth")
 
         assert Atlas.auth.ATLAS_SESSION_SECRET == fixed_secret

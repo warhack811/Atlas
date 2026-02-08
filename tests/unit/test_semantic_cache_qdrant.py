@@ -30,6 +30,7 @@ def mock_redis():
         yield "key2"
     mock_client.scan_iter = MagicMock(return_value=async_iter())
 
+    # We need to patch where SemanticCache imports redis
     with patch("Atlas.memory.semantic_cache.redis.from_url", return_value=mock_client):
         yield mock_client
 
@@ -54,14 +55,27 @@ def mock_embedder():
 
 @pytest.mark.asyncio
 async def test_set_cache(mock_redis, mock_qdrant, mock_embedder):
+    # SemanticCache might be instantiated at module level in Atlas.memory.semantic_cache
+    # So we need to ensure we are testing a fresh instance or the global one with replaced client.
+
+    # Reload module to ensure fresh instantiation with mocked redis.from_url
+    # But wait, mock_redis fixture patches redis.from_url.
+    # If we reload here, it should pick it up.
+
+    import Atlas.memory.semantic_cache
+    from importlib import reload
+    reload(Atlas.memory.semantic_cache)
+
+    from Atlas.memory.semantic_cache import SemanticCache
+
+    # If SemanticCache is a class, we instantiate it.
+    # If it's used as a singleton `semantic_cache` object, we need to access that.
+    # Looking at the code, it seems to be a class.
+
     cache = SemanticCache()
-    # We need to manually set client because __init__ might have failed or been mocked differently if we didn't patch redis.from_url globally enough
-    # But our fixture patches it for the duration of the test, so __init__ should use it.
 
-    # Force client to be our mock (in case __init__ happened before fixture patch took effect, though fixture runs before test)
-    # Actually SemanticCache is instantiated globally in the module, so __init__ ran at import time!
-    # We must patch the instance's client.
-
+    # Ensure client is our mock. Even if we reloaded, the patch should be active.
+    # But to be absolutely safe against module level instantiation:
     cache.client = mock_redis
     cache.embedder = mock_embedder
 

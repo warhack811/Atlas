@@ -218,8 +218,16 @@ def test_auto_initialize_mock():
     KeyManager._initialized = False
     KeyManager._pools = {"groq": {}, "gemini": {}}
 
-    with patch("Atlas.config.get_groq_api_keys", return_value=["auto_key"]), \
-         patch("Atlas.config.get_gemini_api_keys", return_value=[]):
+    # The issue in CI might be that Atlas.config is not imported or get_groq_api_keys is mocked incorrectly
+    # or get_best_key calls something else that isn't mocked.
+    # KeyManager.get_best_key calls KeyManager.initialize() if not initialized.
+    # KeyManager.initialize() calls config.get_groq_api_keys().
+
+    # We need to make sure we are patching where KeyManager imports it from.
+    # KeyManager imports via: from Atlas.config import get_groq_api_keys, get_gemini_api_keys
+
+    with patch("Atlas.key_manager.get_groq_api_keys", return_value=["auto_key"]), \
+         patch("Atlas.key_manager.get_gemini_api_keys", return_value=[]):
 
         best = KeyManager.get_best_key("llama3")
         assert best == "auto_key"

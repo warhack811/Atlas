@@ -387,6 +387,11 @@ async def test_bypass_mode():
     
     # Ensure Atlas.config is in sys.modules
     import Atlas.config as config_module
+    import sys
+
+    # Force registration in sys.modules if missing (CI fix)
+    if "Atlas.config" not in sys.modules:
+        sys.modules["Atlas.config"] = config_module
 
     try:
         os.environ["BYPASS_VECTOR_SEARCH"] = "true"
@@ -424,6 +429,9 @@ async def test_bypass_mode():
             os.environ.pop("BYPASS_VECTOR_SEARCH", None)
         
         from importlib import reload
+        # Ensure it's still in sys.modules before final reload
+        if "Atlas.config" not in sys.modules:
+            sys.modules["Atlas.config"] = config_module
         reload(config_module)
 
 
