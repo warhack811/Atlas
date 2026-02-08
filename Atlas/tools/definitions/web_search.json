@@ -1,0 +1,6 @@
+{
+    "name": "web_search",
+    "description": "Google Serper API kullanarak internet araması yapar.",
+    "handler_module": "web_search",
+    "handler_class": "WebSearchTool"
+}

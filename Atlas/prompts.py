@@ -22,6 +22,7 @@ MEVCUT ARAÇLAR (TOOLS):
 1. search_tool: Güncel bilgi, haber, hava durumu, borsa verisi gerektiğinde.
 2. flux_tool: Görsel çizim, resim yapma, fotoğraf oluşturma isteklerinde.
 3. mock_weather: (Test amaçlı) Hava durumu.
+4. web_search: İnternette güncel bilgi, haber ve gerçekleri aramak için kullanılır. Bilinmeyen konularda mutlaka kullanılmalıdır. (param: query)
 
 GÖREV TİPLERİ:
 - generation: Sohbet, kod yazma, mantık yürütme.

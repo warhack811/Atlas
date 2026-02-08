@@ -61,11 +61,16 @@ class Orchestrator:
                 context_focus=""
             )
 
-        # 1. Konuşma Geçmişi (History): Son 10 mesajı tampondan çeker
+        # 1. Araç Bilgisi: Tool Registry'den mevcut araçları çek
+        from Atlas.tools.registry import ToolRegistry
+        registry = ToolRegistry()
+        # tools_info = registry.list_tools() # İleride dinamik prompt için kullanılabilir
+
+        # 2. Konuşma Geçmişi (History): Son 10 mesajı tampondan çeker
         history = MessageBuffer.get_llm_messages(session_id, limit=10)
         history_text = "\n".join([f"{m['role']}: {m['content']}" for m in history])
         
-        # 2. Durum Bilgisi: Kullanıcının aktif alanı getirilir
+        # 3. Durum Bilgisi: Kullanıcının aktif alanı getirilir
         state = state_manager.get_state(session_id)
         
         # FAZ-α Final: State Hydration (Optimized)
