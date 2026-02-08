@@ -13,8 +13,9 @@ async def test_hybrid_fusion_logic_unit(monkeypatch):
     monkeypatch.setattr(Atlas.config, "HYBRID_WEIGHT_RECENCY", 0.2)
     monkeypatch.setattr(Atlas.config, "HYBRID_RECENCY_HALFLIFE_DAYS", 30.0)
     
-    # Current time for recency
-    now_iso = datetime.utcnow().isoformat()
+    from datetime import timezone
+    # Current time for recency (UTC aware)
+    now_iso = datetime.now(timezone.utc).isoformat()
     old_iso = "2020-01-01T00:00:00Z"
     
     candidates = [

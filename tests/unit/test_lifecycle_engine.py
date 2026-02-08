@@ -1,27 +1,39 @@
 
 import pytest
 import sys
+import importlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
-# Mock dependencies before import
-mock_neo4j_manager_module = MagicMock()
-mock_neo4j_manager_instance = AsyncMock()
-mock_neo4j_manager_module.neo4j_manager = mock_neo4j_manager_instance
-sys.modules['Atlas.memory.neo4j_manager'] = mock_neo4j_manager_module
+@pytest.fixture
+def lifecycle_engine_module():
+    # Mock dependencies before import
+    mock_neo4j_manager_module = MagicMock()
+    mock_neo4j_manager_instance = AsyncMock()
+    mock_neo4j_manager_module.neo4j_manager = mock_neo4j_manager_instance
 
-mock_config_module = MagicMock()
-mock_config_module.Config = MagicMock()
-mock_config_module.MEMORY_CONFIDENCE_SETTINGS = {"CONFLICT_THRESHOLD": 0.7}
-sys.modules['Atlas.config'] = mock_config_module
+    mock_config_module = MagicMock()
+    mock_config_module.Config = MagicMock()
+    mock_config_module.MEMORY_CONFIDENCE_SETTINGS = {"CONFLICT_THRESHOLD": 0.7}
 
-# Mock other dependencies that might be imported
-sys.modules['dateparser'] = MagicMock()
-sys.modules['dateparser.search'] = MagicMock()
-sys.modules['neo4j'] = MagicMock()
-sys.modules['pydantic'] = MagicMock()
-sys.modules['pydantic_settings'] = MagicMock()
+    modules_to_patch = {
+        'Atlas.memory.neo4j_manager': mock_neo4j_manager_module,
+        'Atlas.config': mock_config_module,
+        'dateparser': MagicMock(),
+        'dateparser.search': MagicMock(),
+        'neo4j': MagicMock(),
+        # Do NOT mock pydantic globally as it breaks other tests (fastapi)
+        # 'pydantic': MagicMock(),
+        # 'pydantic_settings': MagicMock()
+    }
 
-from Atlas.memory.lifecycle_engine import resolve_conflicts
+    with patch.dict(sys.modules, modules_to_patch):
+        # Import inside the patch context
+        if 'Atlas.memory.lifecycle_engine' in sys.modules:
+            importlib.reload(sys.modules['Atlas.memory.lifecycle_engine'])
+        else:
+            importlib.import_module('Atlas.memory.lifecycle_engine')
+
+        yield sys.modules['Atlas.memory.lifecycle_engine']
 
 @pytest.fixture
 def mock_catalog():
@@ -39,11 +51,14 @@ def mock_catalog():
     return catalog
 
 @pytest.fixture
-def mock_neo4j():
-    return mock_neo4j_manager_instance
+def mock_neo4j(lifecycle_engine_module):
+    # Access the mock injected into sys.modules
+    return sys.modules['Atlas.memory.neo4j_manager'].neo4j_manager
 
 @pytest.mark.asyncio
-async def test_resolve_conflicts_exclusive_no_existing(mock_catalog, mock_neo4j):
+async def test_resolve_conflicts_exclusive_no_existing(lifecycle_engine_module, mock_catalog, mock_neo4j):
+    resolve_conflicts = lifecycle_engine_module.resolve_conflicts
+
     # Setup
     triplets = [{
         "subject": "User",
@@ -64,7 +79,9 @@ async def test_resolve_conflicts_exclusive_no_existing(mock_catalog, mock_neo4j)
     assert new_triplets[0]["object"] == "NewVal"
 
 @pytest.mark.asyncio
-async def test_resolve_conflicts_exclusive_existing_same(mock_catalog, mock_neo4j):
+async def test_resolve_conflicts_exclusive_existing_same(lifecycle_engine_module, mock_catalog, mock_neo4j):
+    resolve_conflicts = lifecycle_engine_module.resolve_conflicts
+
     # Setup
     triplets = [{
         "subject": "User",
@@ -92,7 +109,9 @@ async def test_resolve_conflicts_exclusive_existing_same(mock_catalog, mock_neo4
     assert new_triplets[0]["object"] == "ExistingVal"
 
 @pytest.mark.asyncio
-async def test_resolve_conflicts_exclusive_existing_different_supersede(mock_catalog, mock_neo4j):
+async def test_resolve_conflicts_exclusive_existing_different_supersede(lifecycle_engine_module, mock_catalog, mock_neo4j):
+    resolve_conflicts = lifecycle_engine_module.resolve_conflicts
+
     # Setup
     triplets = [{
         "subject": "User",
@@ -121,7 +140,9 @@ async def test_resolve_conflicts_exclusive_existing_different_supersede(mock_cat
     assert new_triplets[0]["object"] == "NewVal"
 
 @pytest.mark.asyncio
-async def test_resolve_conflicts_exclusive_conflict(mock_catalog, mock_neo4j):
+async def test_resolve_conflicts_exclusive_conflict(lifecycle_engine_module, mock_catalog, mock_neo4j):
+    resolve_conflicts = lifecycle_engine_module.resolve_conflicts
+
     # Setup
     triplets = [{
         "subject": "User",

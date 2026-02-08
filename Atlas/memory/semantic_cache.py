@@ -10,7 +10,7 @@ import json
 import hashlib
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict
 import redis.asyncio as redis
 from Atlas.memory.gemini_embedder import GeminiEmbedder
@@ -139,7 +139,7 @@ class SemanticCache:
                     "embedding": query_emb, # Optional: keep embedding in Redis as backup/verification
                     "response": response,
                     "user_id": user_id,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 })
             )
 

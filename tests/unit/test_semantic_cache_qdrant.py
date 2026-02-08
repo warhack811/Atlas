@@ -3,18 +3,37 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import json
 import os
 import sys
+import importlib
 
-# Set dummy env vars before importing
-os.environ["REDIS_URL"] = "redis://localhost:6379"
-os.environ["GEMINI_API_KEY"] = "dummy"
+# Ensure we don't pollute global sys.modules with mocks
+# We will use patch.dict inside a fixture if we needed to mock modules globally,
+# but here we can rely on installed dependencies or mock locally.
 
-# Mock dependencies that might be missing in environment
-neo4j = MagicMock()
-sys.modules["neo4j"] = neo4j
-sys.modules["neo4j.exceptions"] = MagicMock()
-sys.modules["google.generativeai"] = MagicMock()
+@pytest.fixture
+def semantic_cache_class():
+    # Set dummy env vars
+    os.environ["REDIS_URL"] = "redis://localhost:6379"
+    os.environ["GEMINI_API_KEY"] = "dummy"
 
-from Atlas.memory.semantic_cache import SemanticCache
+    # If we need to mock neo4j or others, we should do it via patch.dict
+    modules_to_patch = {
+        "neo4j": MagicMock(),
+        "neo4j.exceptions": MagicMock(),
+        "google.generativeai": MagicMock()
+    }
+
+    # We only patch if they are NOT in sys.modules, or if we want to force mock.
+    # But since we have dependencies installed, maybe we don't need to mock neo4j module?
+    # However, if SemanticCache imports it, and we want to avoid real connection...
+    # SemanticCache imports redis.
+
+    with patch.dict(sys.modules, modules_to_patch):
+        if "Atlas.memory.semantic_cache" in sys.modules:
+            importlib.reload(sys.modules["Atlas.memory.semantic_cache"])
+        else:
+            importlib.import_module("Atlas.memory.semantic_cache")
+
+        yield sys.modules["Atlas.memory.semantic_cache"].SemanticCache
 
 @pytest.fixture
 def mock_redis():
@@ -41,6 +60,11 @@ def mock_qdrant():
     mock_qm.delete_cache_for_user.return_value = True
 
     # Patch the instance in the module where it is defined
+    # We need to patch it in the reloaded module!
+    # But the module is reloaded inside semantic_cache_class fixture.
+    # So we should patch it on the sys.modules['Atlas.memory.semantic_cache'] if possible,
+    # OR simpler: patch Atlas.memory.qdrant_manager.qdrant_manager
+
     with patch("Atlas.memory.qdrant_manager.qdrant_manager", mock_qm):
         yield mock_qm
 
@@ -53,19 +77,13 @@ def mock_embedder():
         yield mock_emb
 
 @pytest.mark.asyncio
-async def test_set_cache(mock_redis, mock_qdrant, mock_embedder):
-    cache = SemanticCache()
-    # We need to manually set client because __init__ might have failed or been mocked differently if we didn't patch redis.from_url globally enough
-    # But our fixture patches it for the duration of the test, so __init__ should use it.
-
-    # Force client to be our mock (in case __init__ happened before fixture patch took effect, though fixture runs before test)
-    # Actually SemanticCache is instantiated globally in the module, so __init__ ran at import time!
-    # We must patch the instance's client.
-
+async def test_set_cache(semantic_cache_class, mock_redis, mock_qdrant, mock_embedder):
+    cache = semantic_cache_class()
     cache.client = mock_redis
     cache.embedder = mock_embedder
 
-    await cache.set("user1", "query", "response")
+    with patch("Atlas.config.BYPASS_SEMANTIC_CACHE", False):
+        await cache.set("user1", "query", "response")
 
     # Verify Redis setex called
     mock_redis.setex.assert_called_once()
@@ -73,15 +91,14 @@ async def test_set_cache(mock_redis, mock_qdrant, mock_embedder):
     # Verify Qdrant upsert called
     mock_qdrant.upsert_cache.assert_called_once()
     # Check arguments
-    # upsert_cache(key=..., embedding=..., user_id=..., expiry=...)
     call_kwargs = mock_qdrant.upsert_cache.call_args.kwargs
     assert call_kwargs["user_id"] == "user1"
     assert "expiry" in call_kwargs
     assert "key" in call_kwargs
 
 @pytest.mark.asyncio
-async def test_get_cache_hit(mock_redis, mock_qdrant, mock_embedder):
-    cache = SemanticCache()
+async def test_get_cache_hit(semantic_cache_class, mock_redis, mock_qdrant, mock_embedder):
+    cache = semantic_cache_class()
     cache.client = mock_redis
     cache.embedder = mock_embedder
 
@@ -94,30 +111,31 @@ async def test_get_cache_hit(mock_redis, mock_qdrant, mock_embedder):
         "embedding": [0.1]*768
     })
 
-    # Note: SemanticCache.get calls get_with_meta
-    result = await cache.get("user1", "query")
+    with patch("Atlas.config.BYPASS_SEMANTIC_CACHE", False):
+        result = await cache.get("user1", "query")
 
     assert result == "cached_response"
     mock_qdrant.search_cache.assert_called_once()
     mock_redis.get.assert_called_with("cache:user1:hash")
 
 @pytest.mark.asyncio
-async def test_get_cache_miss_no_vector_match(mock_redis, mock_qdrant, mock_embedder):
-    cache = SemanticCache()
+async def test_get_cache_miss_no_vector_match(semantic_cache_class, mock_redis, mock_qdrant, mock_embedder):
+    cache = semantic_cache_class()
     cache.client = mock_redis
     cache.embedder = mock_embedder
 
     # Mock Qdrant finding NO match
     mock_qdrant.search_cache.return_value = []
 
-    result = await cache.get("user1", "query")
+    with patch("Atlas.config.BYPASS_SEMANTIC_CACHE", False):
+        result = await cache.get("user1", "query")
 
     assert result is None
     mock_redis.get.assert_not_called()
 
 @pytest.mark.asyncio
-async def test_get_cache_miss_redis_expired(mock_redis, mock_qdrant, mock_embedder):
-    cache = SemanticCache()
+async def test_get_cache_miss_redis_expired(semantic_cache_class, mock_redis, mock_qdrant, mock_embedder):
+    cache = semantic_cache_class()
     cache.client = mock_redis
     cache.embedder = mock_embedder
 
@@ -127,14 +145,15 @@ async def test_get_cache_miss_redis_expired(mock_redis, mock_qdrant, mock_embedd
     # Mock Redis returning None (expired)
     mock_redis.get.return_value = None
 
-    result = await cache.get("user1", "query")
+    with patch("Atlas.config.BYPASS_SEMANTIC_CACHE", False):
+        result = await cache.get("user1", "query")
 
     assert result is None
     mock_redis.get.assert_called_with("cache:user1:hash")
 
 @pytest.mark.asyncio
-async def test_clear_user(mock_redis, mock_qdrant):
-    cache = SemanticCache()
+async def test_clear_user(semantic_cache_class, mock_redis, mock_qdrant):
+    cache = semantic_cache_class()
     cache.client = mock_redis
 
     await cache.clear_user("user1")
